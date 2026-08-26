@@ -1,47 +1,75 @@
-# ArasClient
+<div align="center">
 
-A fast, modern VPN client for Android — powered by the Xray core.
+<img src="art/banner.svg" alt="ArasClient" width="100%"/>
 
-ArasClient supports VLESS, VMess, Trojan, Shadowsocks, SOCKS, HTTP, Hysteria2,
-WireGuard, proxy chains and policy groups, with a clean, smooth, fully reworked UI.
+# ⚡ ArasClient
 
-## Features
+**The fastest way to connect.** A modern VPN client for Android — pick a server, tap once, done.
 
-- **Smart Connect (⚡)** — pings all your servers at once and connects to the fastest one
-- **Auto-sort by ping** after speed tests, live re-sorting while tests run, auto-scroll to top
-- **Per-server test button** under each config card
-- **Anchored animated menus** (+ and ⋮ open smoothly right under their buttons)
-- **TXT & QR export** for single configs and whole subscriptions
-- **First-run setup dialog** with quick toggles, plus "Reset settings" in Settings
-- **Subscription management** with fast batch import and update
-- **Routing, per-app proxy, backup/restore**, multiple protocols editors
-- **Vazirmatn typography** and an Aras blue/cream theme with light & dark modes
+[![Release](https://img.shields.io/github/v/release/ArasTey/ArasClient?style=for-the-badge&logo=github&color=0284c7&labelColor=101418)](https://github.com/ArasTey/ArasClient/releases)
+[![License](https://img.shields.io/badge/GPL--3.0-licensed?style=for-the-badge&color=38bdf8&labelColor=101418)](LICENSE)
+[![Platform](https://img.shields.io/badge/Android-7.0%2B-3ddc84?style=for-the-badge&logo=android&labelColor=101418)]()
+[![Telegram](https://img.shields.io/badge/Telegram-%40imArasTey-26a5e4?style=for-the-badge&logo=telegram&labelColor=101418)](https://t.me/imArasTey)
 
-## Download
+</div>
 
-Grab the latest APK from the [Releases](https://github.com/ArasTey/ArasClient/releases) page:
+---
 
-| File | Use |
+## ✨ Why you'll like it
+
+| | |
+|:---:|---|
+| ⚡ | **Smart Connect** — pings *all* your servers at once and connects to the fastest one automatically |
+| 🔄 | **Live auto-sort** — the list re-sorts by ping while tests run, fastest always on top |
+| 🎯 | **One-tap testing** — a small test button right under every server card |
+| 📤 | **Share anything** — every config exports as QR **or** TXT, whole subscriptions too |
+| 🧭 | **Anchored menus** — smooth, animated menus that open exactly where you expect |
+| 🪶 | **Feather-light UI** — clean rounded cards, buttery scrolling, zero clutter |
+| 🌗 | **Light & dark** — Aras blue on warm cream, or a calm charcoal night mode |
+
+### Full protocol support
+`VLESS` · `VMess` · `Trojan` · `Shadowsocks` · `Hysteria2` · `WireGuard` · `SOCKS` · `HTTP` · proxy chains & policy groups
+
+---
+
+## 📥 Get it
+
+<div align="center">
+
+**→ [Download from Releases](https://github.com/ArasTey/ArasClient/releases) ←**
+
+</div>
+
+| File | For |
 |---|---|
-| `ArasClient-x.y-arm64-v8a.apk` | Most phones (recommended) |
-| `ArasClient-x.y-universal.apk` | Any device |
+| `arm64-v8a.apk` | ✅ Most phones — recommended |
+| `universal.apk` | Any other device |
 
-## Building
+> Install → open → the first-run wizard sets up sorting & preferences for you. That's it.
 
-Requirements: JDK 17+, Android SDK (platform 37, build-tools 36.0.0).
+---
 
-```bash
-./gradlew :app:assembleDebug
-./gradlew :app:assembleRelease
-```
+## 🔋 And there's more
 
-Output: `app/build/outputs/apk/<variant>/ArasClient_<version>_<abi>.apk`
+- 🚦 Per-app proxy & full routing rules
+- 💾 Backup & restore of everything
+- 📋 Subscription management with fast batch import
+- ♻️ "Reset settings" if you ever want a fresh start
 
-## Contact
+---
 
-- GitHub: [ArasTey](https://github.com/ArasTey)
-- Telegram: [@imArasTey](https://t.me/imArasTey)
+## 📬 Contact
 
-## License
+<div align="center">
 
-GPL-3.0 — see [LICENSE](LICENSE).
+[![GitHub](https://img.shields.io/badge/GitHub-ArasTey-181717?style=for-the-badge&logo=github)](https://github.com/ArasTey)
+[![Telegram](https://img.shields.io/badge/Telegram-imArasTey-26a5e4?style=for-the-badge&logo=telegram)](https://t.me/imArasTey)
+
+</div>
+
+---
+
+<div align="center">
+<img src="art/hero-dark.svg" width="260" alt=""/><br/>
+<sub>Built with ⚡ by ArasTey</sub>
+</div>

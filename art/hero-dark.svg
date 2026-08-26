@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="90" viewBox="0 0 420 90">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0284c7"/><stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="420" height="90" rx="18" fill="#101418"/>
+  <circle cx="55" cy="45" r="20" fill="none" stroke="url(#g)" stroke-width="5"/>
+  <path d="M60 30 L45 50 h11 l-6 18 l17 -24 h-12 z" fill="#ffd166"/>
+  <text x="95" y="57" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="34"
+        font-weight="bold" fill="#ffffff">Aras<tspan fill="#4fb3f0">Client</tspan></text>
+</svg>
