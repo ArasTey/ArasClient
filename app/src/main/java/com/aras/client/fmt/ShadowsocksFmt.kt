@@ -50,18 +50,36 @@ object ShadowsocksFmt : FmtBase() {
 
         if (!uri.rawQuery.isNullOrEmpty()) {
             val queryParam = getQueryParam(uri)
-            if (queryParam["plugin"]?.contains("obfs=http") == true) {
+            val plugin = queryParam["plugin"]
+            if (plugin != null) {
                 val queryPairs = HashMap<String, String>()
-                for (pair in queryParam["plugin"]?.split(";") ?: listOf()) {
-                    val idx = pair.split("=")
+                val flags = HashSet<String>()
+                for (pair in plugin.split(";")) {
+                    val idx = pair.split("=", limit = 2)
                     if (idx.count() == 2) {
                         queryPairs.put(idx.first(), idx.last())
+                    } else if (pair.isNotEmpty()) {
+                        flags.add(pair)
                     }
                 }
-                config.network = NetworkType.TCP.type
-                config.headerType = "http"
-                config.host = queryPairs["obfs-host"]
-                config.path = queryPairs["path"]
+                val mode = queryPairs["mode"]
+                if (flags.contains("v2ray-plugin") && (mode == null || mode == "websocket")) {
+                    // v2ray-plugin websocket mode (the default) maps to native SS + WS transport
+                    config.network = NetworkType.WS.type
+                    config.path = queryPairs["path"] ?: "/"
+                    config.host = queryPairs["host"]
+                    if (flags.contains("tls")) {
+                        config.security = AppConfig.TLS
+                        if (queryPairs["host"] != null && config.sni.isNullOrEmpty()) {
+                            config.sni = queryPairs["host"]
+                        }
+                    }
+                } else if (plugin.contains("obfs=http")) {
+                    config.network = NetworkType.TCP.type
+                    config.headerType = "http"
+                    config.host = queryPairs["obfs-host"]
+                    config.path = queryPairs["path"]
+                }
             }
         }
 
