@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
+import com.aras.client.handler.MmkvManager
 import com.aras.client.ui.compose.LocalDarkTheme
 import com.aras.client.ui.compose.QRCodeDialog
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -56,6 +58,9 @@ fun MainScreen(
     var showDelDuplicateConfirm by remember { mutableStateOf(false) }
     var showDelInvalidConfirm by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf<String?>(null) }
+    var autoScrollEnabled by remember {
+        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true))
+    }
 
     var shareTarget by remember { mutableStateOf<Triple<String, ProfileItem, Boolean>?>(null) }
     val removeServer: (String) -> Unit = { guid ->
@@ -141,6 +146,11 @@ fun MainScreen(
                     isLoading = isLoading,
                     showSearch = showSearch,
                     searchQuery = searchQuery,
+                    autoScrollEnabled = autoScrollEnabled,
+                    onToggleAutoScroll = { enabled ->
+                        autoScrollEnabled = enabled
+                        MmkvManager.encodeSettings(AppConfig.PREF_AUTO_SCROLL_TO_TOP, enabled)
+                    },
                     onSearchQueryChange = { query: String ->
                         searchQuery = query
                         onAction(MainAction.Search(query))
@@ -186,7 +196,7 @@ fun MainScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding)
+                        .padding(top = innerPadding.calculateTopPadding())
                 ) {
                     if (groups.size > 1) {
                         GroupTabBar(

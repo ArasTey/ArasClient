@@ -119,11 +119,9 @@ class MainViewModel(
                     val gid = testingGroupId ?: uiState.value.selectedGroupId
                     cacheMutex.withLock { groupDataCache.remove(gid) }
                     val loaded = loadGroup(gid, forceRefresh = true)
-                    // Re-sort continuously while results arrive, fastest first.
-                    val sorted = loaded.sortedWith(
-                        compareBy { if (it.testDelayMillis in 1..Long.MAX_VALUE) it.testDelayMillis else Long.MAX_VALUE }
-                    )
-                    updateGroupUi(gid, sorted)
+                    // Keep the original order while the round is running so the list
+                    // doesn't jump under the user's finger; sorting happens once at finish.
+                    updateGroupUi(gid, loaded)
                 }
             }
 

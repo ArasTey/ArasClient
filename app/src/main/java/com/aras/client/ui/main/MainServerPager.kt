@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aras.client.AppConfig
 import com.aras.client.R
@@ -255,15 +257,30 @@ private fun ServerListPage(
 @Composable
 private fun ScrollToTopEffect(scrollToTopTick: Int, state: LazyListState) {
     LaunchedEffect(scrollToTopTick) {
-        if (scrollToTopTick > 0 && !state.isScrollInProgress) state.scrollToItem(0)
+        // Wait for the user to release the list; never fight an active scroll.
+        state.waitForUserScrollToEnd()
+        if (scrollToTopTick > 0 && state.firstVisibleItemIndex > 0) {
+            state.animateScrollToItem(0)
+        }
     }
 }
 
 @Composable
 private fun ScrollToTopEffect(scrollToTopTick: Int, state: LazyGridState) {
     LaunchedEffect(scrollToTopTick) {
-        if (scrollToTopTick > 0 && !state.isScrollInProgress) state.scrollToItem(0)
+        state.waitForUserScrollToEnd()
+        if (scrollToTopTick > 0 && state.firstVisibleItemIndex > 0) {
+            state.animateScrollToItem(0)
+        }
     }
+}
+
+private suspend fun LazyListState.waitForUserScrollToEnd() {
+    snapshotFlow { isScrollInProgress }.first { !it }
+}
+
+private suspend fun LazyGridState.waitForUserScrollToEnd() {
+    snapshotFlow { isScrollInProgress }.first { !it }
 }
 
 @Composable

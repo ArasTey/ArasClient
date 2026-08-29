@@ -1,4 +1,4 @@
-package com.aras.client.service
+package com.aras.client
 
 import android.content.Context
 import android.os.ParcelFileDescriptor

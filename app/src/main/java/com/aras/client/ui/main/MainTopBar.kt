@@ -22,6 +22,8 @@ fun MainTopBar(
     isLoading: Boolean,
     showSearch: Boolean,
     searchQuery: String,
+    autoScrollEnabled: Boolean,
+    onToggleAutoScroll: (Boolean) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearchClose: () -> Unit,
     onSearchToggle: (Boolean) -> Unit,
@@ -86,6 +88,14 @@ fun MainTopBar(
         },
         actions = {
             if (!showSearch) {
+                IconButton(onClick = { onToggleAutoScroll(!autoScrollEnabled) }) {
+                    Icon(
+                        painterResource(R.drawable.ic_autoscroll_24dp),
+                        contentDescription = stringResource(R.string.acc_auto_scroll),
+                        tint = if (autoScrollEnabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 IconButton(onClick = { onSearchToggle(true) }) {
                     Icon(painterResource(R.drawable.ic_search_24dp), contentDescription = stringResource(R.string.acc_search))
                 }

@@ -59,7 +59,6 @@ fun MainBottomBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -67,7 +66,7 @@ fun MainBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(64.dp)
-                .shadow(elevation = 6.dp, shape = RoundedCornerShape(32.dp))
+                .shadow(elevation = 8.dp, shape = RoundedCornerShape(32.dp))
                 .clip(RoundedCornerShape(32.dp))
                 .background(barColor)
                 .clickable(onClick = { onAction(MainAction.TestCurrentServer) })

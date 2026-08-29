@@ -15,6 +15,7 @@ import com.aras.client.AppConfig
 import com.aras.client.AppConfig.LOOPBACK
 import com.aras.client.BuildConfig
 import com.aras.client.contracts.ServiceControl
+import com.aras.client.TProxyService
 import com.aras.client.contracts.Tun2SocksControl
 import com.aras.client.core.CoreServiceManager
 import com.aras.client.handler.AppLocaleManager

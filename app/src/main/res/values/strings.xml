@@ -522,6 +522,7 @@
     <string name="acc_stop">Stop service</string>
     <string name="acc_back">Back</string>
     <string name="acc_search">Search</string>
+    <string name="acc_auto_scroll">Auto-scroll to best server (toggle)</string>
     <string name="acc_add">Add configuration</string>
     <string name="acc_more">More options</string>
     <string name="acc_selected_server">Selected</string>
