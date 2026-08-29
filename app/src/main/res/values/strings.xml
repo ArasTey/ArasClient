@@ -184,6 +184,8 @@
     <string name="summary_pref_auto_remove_invalid_after_test">Test results may not be accurate; deleted config cannot be recovered.</string>
     <string name="title_pref_auto_sort_after_test">Auto sort after testing</string>
     <string name="summary_pref_auto_sort_after_test">Test results may not be accurate;</string>
+    <string name="title_pref_auto_scroll_to_top">Auto scroll to top after testing</string>
+    <string name="summary_pref_auto_scroll_to_top">Jump to the fastest server when tests finish (turn off to keep your place)</string>
 
     <string name="title_mux_settings">Mux Settings</string>
     <string name="title_pref_mux_enabled">Enable Mux</string>
@@ -552,6 +554,7 @@
     <string name="title_smart_connect">Connect to fastest</string>
     <string name="smart_connect_none">No reachable server found</string>
     <string name="bar_tap_to_connect">Tap to connect</string>
+    <string name="toast_connect_first_to_test">Connect first, then tap here to test the server</string>
     <string name="bar_test">Test</string>
     <string name="title_test_single">Test this server</string>
     <string name="setup_title">Welcome to ArasClient</string>

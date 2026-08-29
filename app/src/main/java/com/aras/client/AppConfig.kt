@@ -88,6 +88,7 @@ object AppConfig {
     const val PREF_AUTO_TEST_AFTER_UPDATE_SUBSCRIPTION = "pref_auto_test_after_update_subscription"
     const val PREF_AUTO_REMOVE_INVALID_AFTER_TEST = "pref_auto_remove_invalid_after_test"
     const val PREF_AUTO_SORT_AFTER_TEST = "pref_auto_sort_after_test"
+    const val PREF_AUTO_SCROLL_TO_TOP = "pref_auto_scroll_to_top"
     const val PREF_SHOW_DELAY_CHIPS = "pref_show_delay_chips"
     const val PREF_AUTO_CONNECT_FASTEST = "pref_auto_connect_fastest"
     const val PREF_ONBOARDING_DONE = "pref_onboarding_done"

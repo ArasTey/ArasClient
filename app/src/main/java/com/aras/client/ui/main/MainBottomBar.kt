@@ -70,7 +70,7 @@ fun MainBottomBar(
                 .shadow(elevation = 6.dp, shape = RoundedCornerShape(32.dp))
                 .clip(RoundedCornerShape(32.dp))
                 .background(barColor)
-                .clickable(onClick = { onAction(MainAction.ToggleService) })
+                .clickable(onClick = { onAction(MainAction.TestCurrentServer) })
                 .padding(start = 14.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

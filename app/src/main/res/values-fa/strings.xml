@@ -184,6 +184,8 @@
     <string name="summary_pref_auto_remove_invalid_after_test">نتایج پینگ ممکن است همیشه دقیق نباشند؛ کانفیگ‌های حذف‌شده قابل بازیابی نیستند.</string>
     <string name="title_pref_auto_sort_after_test">مرتب‌سازی خودکار بعد از پینگ گرفتن</string>
     <string name="summary_pref_auto_sort_after_test">نتایج آزمایش ممکن است کاملاً دقیق نباشند.</string>
+    <string name="title_pref_auto_scroll_to_top">اسکرول خودکار به بالا بعد از تست</string>
+    <string name="summary_pref_auto_scroll_to_top">بعد از تموم شدن تست‌ها بره بالای لیست (خاموشش کنی، جای خودت می‌مونه)</string>
 
     <string name="title_mux_settings">تنظیمات Mux</string>
     <string name="title_pref_mux_enabled">فعال کردن Mux</string>
@@ -552,6 +554,7 @@
     <string name="title_smart_connect">اتصال به سریع‌ترین سرور</string>
     <string name="smart_connect_none">هیچ سرور در دسترسی پیدا نشد</string>
     <string name="bar_tap_to_connect">برای اتصال لمس کنید</string>
+    <string name="toast_connect_first_to_test">اول وصل شو، بعد برای تست سرور اینجا لمس کن</string>
     <string name="bar_test">تست</string>
     <string name="title_test_single">تست این سرور</string>
     <string name="setup_title">به ArasClient خوش آمدید</string>

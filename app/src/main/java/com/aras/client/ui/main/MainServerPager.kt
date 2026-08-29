@@ -255,14 +255,14 @@ private fun ServerListPage(
 @Composable
 private fun ScrollToTopEffect(scrollToTopTick: Int, state: LazyListState) {
     LaunchedEffect(scrollToTopTick) {
-        if (scrollToTopTick > 0) state.scrollToItem(0)
+        if (scrollToTopTick > 0 && !state.isScrollInProgress) state.scrollToItem(0)
     }
 }
 
 @Composable
 private fun ScrollToTopEffect(scrollToTopTick: Int, state: LazyGridState) {
     LaunchedEffect(scrollToTopTick) {
-        if (scrollToTopTick > 0) state.scrollToItem(0)
+        if (scrollToTopTick > 0 && !state.isScrollInProgress) state.scrollToItem(0)
     }
 }
 

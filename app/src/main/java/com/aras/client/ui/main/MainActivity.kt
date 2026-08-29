@@ -250,6 +250,8 @@ class MainActivity : HelperBaseComponentActivity() {
     private fun handleLayoutTestClick() {
         if (mainViewModel.uiState.value.isRunning) {
             mainViewModel.testCurrentServerRealPing()
+        } else {
+            toast(R.string.toast_connect_first_to_test)
         }
     }
 

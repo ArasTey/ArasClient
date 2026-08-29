@@ -579,7 +579,9 @@ class MainViewModel(
                     setupGroupTab(forceRefresh = true)
                     reloadAllGroups(_uiState.value.groups.map { it.id })
                     reloadJob?.join()
-                    _uiState.update { it.copy(scrollToTopTick = it.scrollToTopTick + 1) }
+                    if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)) {
+                        _uiState.update { it.copy(scrollToTopTick = it.scrollToTopTick + 1) }
+                    }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
@@ -813,7 +815,9 @@ class MainViewModel(
             if (smartTarget != null) {
                 _uiState.update { it.copy(requestServiceStart = true) }
             }
-            _uiState.update { it.copy(scrollToTopTick = it.scrollToTopTick + 1) }
+            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)) {
+                _uiState.update { it.copy(scrollToTopTick = it.scrollToTopTick + 1) }
+            }
         }
     }
 

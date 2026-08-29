@@ -288,6 +288,7 @@ fun SubSettingScreen(
         var autoTestAfterUpdateSubscription by rememberMmkvBool(AppConfig.PREF_AUTO_TEST_AFTER_UPDATE_SUBSCRIPTION, false)
         var autoRemoveInvalidAfterTest by rememberMmkvBool(AppConfig.PREF_AUTO_REMOVE_INVALID_AFTER_TEST, false)
         var autoSortAfterTest by rememberMmkvBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, true)
+        var autoScrollToTop by rememberMmkvBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)
 
         AlertDialog(
             onDismissRequest = { showUpdateDialog = false },
@@ -317,6 +318,12 @@ fun SubSettingScreen(
                         checked = autoSortAfterTest,
                         enabled = autoTestAfterUpdateSubscription,
                         onCheckedChange = { autoSortAfterTest = it }
+                    )
+                    SettingsSwitchItem(
+                        title = stringResource(R.string.title_pref_auto_scroll_to_top),
+                        summary = stringResource(R.string.summary_pref_auto_scroll_to_top),
+                        checked = autoScrollToTop,
+                        onCheckedChange = { autoScrollToTop = it }
                     )
                 }
             },
