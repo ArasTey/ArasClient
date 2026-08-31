@@ -102,8 +102,14 @@ object CountryResolver {
 
     /**
      * Returns the flag emoji for the profile's country, or "" when unknown.
+     *
+     * @param geoIso optional country code resolved from the server's IP
+     *   (GeoIPResolver) — takes priority over name-based detection.
      */
-    fun resolve(profile: ProfileItem): String {
+    fun resolve(profile: ProfileItem, geoIso: String = ""): String {
+        // 0) Real country from the server's IP — always wins.
+        if (geoIso.length == 2) return isoToFlag(geoIso)
+
         val raw = "${profile.remarks} ${profile.description.orEmpty()}"
         val text = raw.lowercase(Locale.ROOT)
 

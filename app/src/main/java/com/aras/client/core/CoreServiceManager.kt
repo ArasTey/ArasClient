@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.system.OsConstants
 import androidx.core.content.ContextCompat
 import com.aras.client.AppConfig
+import com.aras.client.util.ConnectionStatsManager
 import com.aras.client.contracts.IDialerService
 import com.aras.client.contracts.ServiceControl
 import com.aras.client.dto.ConnectionTestResult
@@ -117,6 +118,7 @@ object CoreServiceManager {
         currentVpnInterface = vpnInterface
         launchCore(service, vpnInterface)
         startNetworkMonitor(service)
+        ConnectionStatsManager.onSessionStarted()
     }
 
     @Throws(Exception::class)
@@ -207,6 +209,7 @@ object CoreServiceManager {
             browserDialer = null
         }
 
+        ConnectionStatsManager.onSessionStopped()
         MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         NotificationManager.cancelNotification()
 

@@ -745,6 +745,14 @@ class MainViewModel(
         viewModelScope.launch(ioDispatcher) {
             dataSource.clearAllTestDelayResults(serverGuids)
             cacheMutex.withLock { groupDataCache.remove(groupId) }
+            // Pre-warm the GeoIP cache so flags appear as soon as pings land.
+            try {
+                com.aras.client.util.GeoIPResolver.refresh(
+                    servers.mapNotNull { it.profile.server?.takeIf { h -> h.isNotBlank() } }
+                )
+            } catch (e: Exception) {
+                LogUtil.w(AppConfig.TAG, "GeoIP pre-warm failed: ${e.message}")
+            }
             dataSource.sendMsg2TestService(
                 TestServiceMessage(
                     key = AppConfig.MSG_MEASURE_CONFIG_START,
@@ -771,6 +779,14 @@ class MainViewModel(
         viewModelScope.launch(ioDispatcher) {
             dataSource.clearAllTestDelayResults(listOf(guid))
             cacheMutex.withLock { groupDataCache.remove(groupId) }
+            try {
+                val host = currentServers().firstOrNull { it.guid == guid }?.profile?.server
+                if (!host.isNullOrBlank()) {
+                    com.aras.client.util.GeoIPResolver.refresh(listOf(host))
+                }
+            } catch (e: Exception) {
+                LogUtil.w(AppConfig.TAG, "GeoIP refresh failed: ${e.message}")
+            }
             dataSource.sendMsg2TestService(
                 TestServiceMessage(
                     key = AppConfig.MSG_MEASURE_CONFIG_START,

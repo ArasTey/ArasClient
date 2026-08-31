@@ -658,7 +658,7 @@ object MmkvManager {
         val subscriptions = mutableListOf<SubscriptionCache>()
         decodeSubsList().forEach { key ->
             if (key == AppConfig.FREE_SUB_GUID &&
-                !decodeSettingsBool(AppConfig.PREF_FREE_SUB_ENABLED, true)
+                !decodeSettingsBool(AppConfig.PREF_FREE_SUB_ENABLED, false)
             ) {
                 return@forEach
             }
@@ -677,7 +677,7 @@ object MmkvManager {
      * users without an app update. It is never editable or removable.
      */
     private fun ensureFreeSubscription() {
-        if (!decodeSettingsBool(AppConfig.PREF_FREE_SUB_ENABLED, true)) return
+        if (!decodeSettingsBool(AppConfig.PREF_FREE_SUB_ENABLED, false)) return
         if (decodeSubsList().contains(AppConfig.FREE_SUB_GUID)) return
         val free = SubscriptionItem(
             remarks = "Free",

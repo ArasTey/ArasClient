@@ -340,7 +340,10 @@ private fun ServerItemRow(
     val protectedDescription = stringResource(R.string.protected_config_hidden)
 
     ServerListItem(
-        country = com.aras.client.util.CountryResolver.resolve(profile),
+        country = com.aras.client.util.CountryResolver.resolve(
+            profile,
+            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty())
+        ),
         remarks = profile.remarks,
         statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
             protectedDescription
@@ -381,7 +384,10 @@ private fun ServerItemColumn(
         MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks?.firstOrNull()?.toString() ?: ""
     } else ""
     ServerListItem(
-        country = com.aras.client.util.CountryResolver.resolve(profile),
+        country = com.aras.client.util.CountryResolver.resolve(
+            profile,
+            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty())
+        ),
         remarks = profile.remarks,
         statistics = profile.description.nullIfBlank() ?: AngConfigManager.generateDescription(profile),
         typeDescription = getProtocolDescription(profile),

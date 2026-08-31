@@ -44,6 +44,18 @@ object ConnectionStatsManager {
     @Volatile private var sessionUp = 0L
     @Volatile private var lastSnapshot: Snapshot = Snapshot()
 
+    private fun rxCounter(): Long {
+        val uid = android.os.Process.myUid()
+        val v = TrafficStats.getUidRxBytes(uid)
+        return if (v >= 0) v else TrafficStats.getTotalRxBytes()
+    }
+
+    private fun txCounter(): Long {
+        val uid = android.os.Process.myUid()
+        val v = TrafficStats.getUidTxBytes(uid)
+        return if (v >= 0) v else TrafficStats.getTotalTxBytes()
+    }
+
     /** Called when the VPN tunnel is actually up. */
     fun onSessionStarted() {
         if (running) return
@@ -51,8 +63,8 @@ object ConnectionStatsManager {
         sessionStart = System.currentTimeMillis()
         sessionDown = 0
         sessionUp = 0
-        lastDown = TrafficStats.getTotalRxBytes()
-        lastUp = TrafficStats.getTotalTxBytes()
+        lastDown = rxCounter()
+        lastUp = txCounter()
         MmkvManager.encodeSettings(
             KEY_CONNECT_COUNT,
             (MmkvManager.decodeSettingsLong(KEY_CONNECT_COUNT, 0) + 1).toInt()
@@ -80,8 +92,8 @@ object ConnectionStatsManager {
 
     private fun sample() {
         try {
-            val nowDown = TrafficStats.getTotalRxBytes()
-            val nowUp = TrafficStats.getTotalTxBytes()
+            val nowDown = rxCounter()
+            val nowUp = txCounter()
             if (lastDown >= 0 && nowDown >= lastDown) {
                 sessionDown += nowDown - lastDown
             }
