@@ -422,7 +422,7 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     /** Pending bytes of a Protected .arasc waiting for the password dialog. */
-    private var pendingArascBytes: ByteArray? = null
+    @Volatile private var pendingArascBytes: ByteArray? = null
 
     private fun importArascFile() {
         launchFileChooser { uri ->
@@ -445,6 +445,7 @@ class MainActivity : HelperBaseComponentActivity() {
 
     /** Runs one import attempt with the given password and routes the outcome. */
     private fun handleArascAttempt(bytes: ByteArray, password: CharArray?) {
+        LogUtil.i(AppConfig.TAG, "arasc: attempt start, bytes=${bytes.size}, pw=${password != null}")
         lifecycleScope.launch(Dispatchers.IO) {
             when (val attempt = ArasExportImportManager.tryImport(bytes, password)) {
                 is ArasExportImportManager.ImportAttempt.NeedPassword -> {
@@ -497,6 +498,7 @@ class MainActivity : HelperBaseComponentActivity() {
     private fun importArascWithPassword(password: String) {
         val bytes = pendingArascBytes
         if (bytes == null) {
+            LogUtil.w(AppConfig.TAG, "arasc: OK tapped with no pending file — dialog dismissed")
             composeDialogHolder.show = false
             return
         }

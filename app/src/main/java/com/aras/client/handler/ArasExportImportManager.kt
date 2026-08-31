@@ -124,6 +124,7 @@ object ArasExportImportManager {
      * re-prompt for the password.
      */
     fun tryImport(bytes: ByteArray, password: CharArray?): ImportAttempt {
+        LogUtil.i(AppConfig.TAG, "arasc: tryImport ${bytes.size} bytes, pw=${password != null}")
         return try {
             when (val header = ArascContainer.peekHeader(bytes)) {
                 ArascContainer.Header.NotArasc -> ImportAttempt.Error(ImportError.NOT_ARASC)
@@ -139,16 +140,22 @@ object ArasExportImportManager {
                         // Protected files: any decrypt failure with a supplied
                         // password means wrong password.
                         if (header.passwordProtected) {
+                            LogUtil.w(AppConfig.TAG, "arasc: decrypt failed -> wrong password")
                             return ImportAttempt.WrongPassword
                         }
                         throw e
                     }
                     val payload = JsonUtil.fromJsonSafe(json, ArascPayload::class.java)
-                        ?: return ImportAttempt.Error(ImportError.CORRUPTED)
+                        ?: run {
+                            LogUtil.w(AppConfig.TAG, "arasc: payload JSON parse failed")
+                            return ImportAttempt.Error(ImportError.CORRUPTED)
+                        }
                     if (payload.subscriptions.isEmpty()) {
+                        LogUtil.w(AppConfig.TAG, "arasc: payload has no subscriptions")
                         return ImportAttempt.Error(ImportError.EMPTY)
                     }
                     val imported = importPayload(payload, header.passwordProtected)
+                    LogUtil.i(AppConfig.TAG, "arasc: import OK, $imported configs, protected=$header.passwordProtected")
                     ImportAttempt.Done(imported, payload.note)
                 }
             }

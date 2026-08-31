@@ -7,7 +7,7 @@ import java.util.Locale
 
 object LogUtil {
 
-    private const val DEFAULT_LEVEL = "warning"
+    private val DEFAULT_LEVEL = if (com.aras.client.BuildConfig.DEBUG) "info" else "warning"
     private const val CACHE_UNSET = Int.MIN_VALUE
 
     @Volatile
