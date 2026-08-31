@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="280" viewBox="0 0 1000 280">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#08203e"/>
+      <stop offset="55%" stop-color="#0a3a62"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="txt" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#9fd8ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4fb3f0" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#4fb3f0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1000" height="280" rx="24" fill="url(#bg)"/>
+  <circle cx="500" cy="150" r="190" fill="url(#glow)"/>
+  <!-- shield / bolt mark -->
+  <g transform="translate(430,52)">
+    <path d="M70 8 L128 32 v58 c0 42 -30 72 -58 88 c-28 -16 -58 -46 -58 -88 V32 Z"
+          fill="#04456f" stroke="#7cc4ff" stroke-width="4"/>
+    <path d="M78 40 L48 96 h22 l-10 54 l44 -68 h-24 z"
+          fill="#ffd166" stroke="#ffb03a" stroke-width="2" stroke-linejoin="round"/>
+  </g>
+  <text x="500" y="266" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="bold" fill="url(#txt)" letter-spacing="6">A R A S C L I E N T</text>
+</svg>

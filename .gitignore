@@ -1,0 +1,15 @@
+# Build outputs
+build/
+.gradle/
+.kotlin/
+local.properties
+*.apk.idsig
+# Signing
+keystore.properties
+*.jks
+*.keystore
+!keystore-example.properties
+# IDE / OS
+.idea/
+.DS_Store
+captures/
