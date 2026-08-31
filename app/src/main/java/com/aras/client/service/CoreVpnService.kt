@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.StrictMode
 import com.aras.client.AppConfig
+import com.aras.client.util.ConnectionStatsManager
 import com.aras.client.AppConfig.LOOPBACK
 import com.aras.client.BuildConfig
 import com.aras.client.contracts.ServiceControl
@@ -188,6 +189,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         try {
             mInterface = builder.establish()!!
             isRunning = true
+            ConnectionStatsManager.onSessionStarted()
             return true
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to establish VPN interface", e)
@@ -329,6 +331,7 @@ class CoreVpnService : VpnService(), ServiceControl {
 //        val info = loadVpnNetworkInfo(configName, emptyInfo)!! + (lastNetworkInfo ?: emptyInfo)
 //        saveVpnNetworkInfo(configName, info)
         unlockStart()
+        if (isRunning) ConnectionStatsManager.onSessionStopped()
         isRunning = false
 
         tun2SocksService?.stopTun2Socks()

@@ -12,6 +12,7 @@ import com.tencent.mmkv.MMKV
 import com.tencent.mmkv.MMKVHandler
 import com.tencent.mmkv.MMKVLogLevel
 import com.tencent.mmkv.MMKVRecoverStrategic
+import com.aras.client.AppConfig
 import com.aras.client.AppConfig.DEFAULT_SUBSCRIPTION_ID
 import com.aras.client.AppConfig.PREF_IS_BOOTED
 import com.aras.client.AppConfig.PREF_ROUTING_RULESET
@@ -652,9 +653,15 @@ object MmkvManager {
      */
     fun decodeSubscriptions(): List<SubscriptionCache> {
         initSubsList()
+        ensureFreeSubscription()
 
         val subscriptions = mutableListOf<SubscriptionCache>()
         decodeSubsList().forEach { key ->
+            if (key == AppConfig.FREE_SUB_GUID &&
+                !decodeSettingsBool(AppConfig.PREF_FREE_SUB_ENABLED, true)
+            ) {
+                return@forEach
+            }
             val json = subStorage.decodeString(key)
             if (!json.isNullOrBlank()) {
                 val item = JsonUtil.fromJsonSafe(json, SubscriptionItem::class.java) ?: SubscriptionItem()
@@ -662,6 +669,28 @@ object MmkvManager {
             }
         }
         return subscriptions
+    }
+
+    /**
+     * Ensures the built-in Free subscription exists. Its configs come from a
+     * centrally managed URL so the developer can push free configs to all
+     * users without an app update. It is never editable or removable.
+     */
+    private fun ensureFreeSubscription() {
+        if (!decodeSettingsBool(AppConfig.PREF_FREE_SUB_ENABLED, true)) return
+        if (decodeSubsList().contains(AppConfig.FREE_SUB_GUID)) return
+        val free = SubscriptionItem(
+            remarks = "Free",
+            url = AppConfig.FREE_SUB_URL,
+            enabled = true,
+            autoUpdate = false,
+        )
+        subStorage.encode(AppConfig.FREE_SUB_GUID, JsonUtil.toJson(free))
+        val subsList = decodeSubsList()
+        if (!subsList.contains(AppConfig.FREE_SUB_GUID)) {
+            subsList.add(AppConfig.FREE_SUB_GUID)
+            encodeSubsList(subsList)
+        }
     }
 
     /**

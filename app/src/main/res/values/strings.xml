@@ -36,6 +36,13 @@
     <string name="sub_setting_announcement">Announcement</string>
     <string name="sub_setting_creator_message">Creator message</string>
     <string name="title_export">Export</string>
+    <string name="title_connection_stats">Connection stats</string>
+    <string name="stats_connections">Connections</string>
+    <string name="stats_total_time">Total connected time</string>
+    <string name="stats_total_down">Total download</string>
+    <string name="stats_total_up">Total upload</string>
+    <string name="stats_total_all">Total traffic</string>
+
     <string name="menu_section_manage">Manage</string>
     <string name="menu_section_files_tools">Files &amp; tools</string>
     <string name="menu_section_system">System</string>

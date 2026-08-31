@@ -181,12 +181,19 @@ fun MainScreen(
                 )
             },
             bottomBar = {
-                MainBottomBar(
-                    displayText = displayText,
-                    isRunning = isRunning,
-                    isDarkTheme = isDarkTheme,
-                    onAction = onAction
-                )
+                Column {
+                    if (isRunning) {
+                        com.aras.client.ui.compose.ConnectionMiniStats(
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+                    MainBottomBar(
+                        displayText = displayText,
+                        isRunning = isRunning,
+                        isDarkTheme = isDarkTheme,
+                        onAction = onAction
+                    )
+                }
             },
             floatingActionButton = {},
         ) { innerPadding ->

@@ -340,6 +340,7 @@ private fun ServerItemRow(
     val protectedDescription = stringResource(R.string.protected_config_hidden)
 
     ServerListItem(
+        country = com.aras.client.util.CountryResolver.resolve(profile),
         remarks = profile.remarks,
         statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
             protectedDescription
@@ -380,6 +381,7 @@ private fun ServerItemColumn(
         MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks?.firstOrNull()?.toString() ?: ""
     } else ""
     ServerListItem(
+        country = com.aras.client.util.CountryResolver.resolve(profile),
         remarks = profile.remarks,
         statistics = profile.description.nullIfBlank() ?: AngConfigManager.generateDescription(profile),
         typeDescription = getProtocolDescription(profile),
@@ -415,7 +417,8 @@ fun ServerListItem(
     onTest: () -> Unit,
     modifier: Modifier = Modifier,
     dragModifier: Modifier = Modifier,
-    isProtected: Boolean = false
+    isProtected: Boolean = false,
+    country: String = ""
 ) {
     val showDelayChips = remember {
         MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_DELAY_CHIPS, true)
@@ -516,6 +519,14 @@ fun ServerListItem(
                             .clip(RoundedCornerShape(6.dp))
                             .background(pingColor.copy(alpha = 0.13f))
                             .padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
+                if (country.isNotBlank()) {
+                    Text(
+                        text = country,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 4.dp)
                     )
                 }
             }

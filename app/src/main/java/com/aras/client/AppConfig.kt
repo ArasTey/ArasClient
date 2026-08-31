@@ -95,6 +95,11 @@ object AppConfig {
     const val PREF_ARASC_PROTECTED_GUIDS = "pref_arasc_protected_guids"
     const val PREF_SHOW_SUB_INFO = "pref_show_sub_info"
     const val PREF_SHOW_SUB_ANNOUNCEMENT = "pref_show_sub_announcement"
+    const val PREF_FREE_SUB_ENABLED = "pref_free_sub_enabled"
+
+    /** Reserved guid of the built-in Free group — cannot be edited or deleted. */
+    const val FREE_SUB_GUID = "aras_free_sub_builtin"
+    const val FREE_SUB_URL = "https://raw.githubusercontent.com/ArasTey/ArasClient/main/free/free_sub.txt"
     const val PREF_REAL_PING_CONCURRENCY = "pref_real_ping_concurrency"
 
     /** Cache keys. */

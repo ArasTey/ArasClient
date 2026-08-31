@@ -37,6 +37,7 @@ import com.aras.client.root.RootManager
 import com.aras.client.ui.base.BaseComponentActivity
 import com.aras.client.ui.compose.AppTopBar
 import com.aras.client.ui.compose.CollapsiblePreferenceGroupHeader
+import com.aras.client.ui.compose.ConnectionStatsSection
 import com.aras.client.ui.compose.NavigationBarsSpacer
 import com.aras.client.ui.compose.SettingsEditItem
 import com.aras.client.ui.compose.SettingsListItem
@@ -85,6 +86,7 @@ fun SettingsScreen(
     var localDns by rememberMmkvBool(AppConfig.PREF_LOCAL_DNS_ENABLED, false)
     var fakeDns by rememberMmkvBool(AppConfig.PREF_FAKE_DNS_ENABLED, false)
     val context = androidx.compose.ui.platform.LocalContext.current
+        var statsExpanded by remember { mutableStateOf(false) }
     var showResetConfirm by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(false)
     }
@@ -679,6 +681,17 @@ fun SettingsScreen(
                         }
                     }
                 )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            CollapsiblePreferenceGroupHeader(
+                title = stringResource(R.string.title_connection_stats),
+                expanded = statsExpanded,
+                onExpandedChange = { statsExpanded = it }
+            )
+            if (statsExpanded) {
+                ConnectionStatsSection()
             }
 
             Spacer(modifier = Modifier.height(24.dp))
