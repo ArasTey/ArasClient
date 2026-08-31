@@ -96,6 +96,7 @@ object AppConfig {
     const val PREF_SHOW_SUB_INFO = "pref_show_sub_info"
     const val PREF_SHOW_SUB_ANNOUNCEMENT = "pref_show_sub_announcement"
     const val PREF_FREE_SUB_ENABLED = "pref_free_sub_enabled"
+    const val PREF_GEOIP_LAST_REFRESH = "pref_geoip_last_refresh"
 
     /** Reserved guid of the built-in Free group — cannot be edited or deleted. */
     const val FREE_SUB_GUID = "aras_free_sub_builtin"

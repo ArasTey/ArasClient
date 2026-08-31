@@ -60,6 +60,7 @@ object ConnectionStatsManager {
     fun onSessionStarted() {
         if (running) return
         running = true
+        LogUtil.i(AppConfig.TAG, "Stats: session started")
         sessionStart = System.currentTimeMillis()
         sessionDown = 0
         sessionUp = 0
@@ -82,6 +83,10 @@ object ConnectionStatsManager {
         if (!running) return
         running = false
         sample()
+        LogUtil.i(
+            AppConfig.TAG,
+            "Stats: session stopped, down=$sessionDown up=$sessionUp"
+        )
         val totalDown = MmkvManager.decodeSettingsLong(KEY_TOTAL_DOWN, 0) + sessionDown
         val totalUp = MmkvManager.decodeSettingsLong(KEY_TOTAL_UP, 0) + sessionUp
         val session = System.currentTimeMillis() - sessionStart

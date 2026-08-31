@@ -88,7 +88,13 @@ object GeoIPResolver {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@use
                     val json = response.body?.string() ?: return@use
-                    val root = JsonUtil.parseString(json) ?: return@use
+                    // ip-api/batch returns a JSON *array* — parse with Gson directly
+                    val root = try {
+                        com.google.gson.JsonParser.parseString(json)
+                    } catch (e: Exception) {
+                        LogUtil.w(AppConfig.TAG, "GeoIP: bad response: ${e.message}")
+                        return@use
+                    }
                     if (!root.isJsonArray) return@use
                     root.asJsonArray.forEach { el ->
                         val obj = el.takeIf { it.isJsonObject }?.asJsonObject ?: return@forEach

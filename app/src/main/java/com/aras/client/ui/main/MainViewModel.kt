@@ -194,7 +194,13 @@ class MainViewModel(
             is MainAction.ShareTxtFile -> Unit // handled by the Activity
             is MainAction.ShareArascFile -> Unit // handled by the Activity
             is MainAction.ExportGroupTxt -> Unit // handled by the Activity
-            MainAction.UpdateSubscriptions -> importConfigViaSub()
+            MainAction.UpdateSubscriptions -> {
+                importConfigViaSub()
+                viewModelScope.launch(ioDispatcher) {
+                    delay(15_000) // let the subs finish fetching, then refresh flags
+                    refreshGeoIPIfDue(force = true)
+                }
+            }
             MainAction.ExportAll -> exportAllAsync()
             is MainAction.SelectGroup -> subscriptionIdChanged(action.groupId)
             is MainAction.SelectServer -> updateSelectedGuid(action.guid)
@@ -236,6 +242,7 @@ class MainViewModel(
                 delay(32)
                 dataSource.initAssets()
                 dataSource.syncSubscriptions()
+                refreshGeoIPIfDue()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -885,8 +892,48 @@ class MainViewModel(
         _uiState.update { it.copy(locateTarget = null) }
     }
 
+    // ---------- GeoIP auto refresh ----------
+
+    /** Refreshes country lookups for every config, throttled to once/30min. */
+    private fun refreshGeoIPIfDue(force: Boolean = false) {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                if (!force) {
+                    val last = MmkvManager.decodeSettingsLong(
+                        AppConfig.PREF_GEOIP_LAST_REFRESH, 0
+                    )
+                    if (System.currentTimeMillis() - last < 30 * 60 * 1000L) return@launch
+                    MmkvManager.encodeSettings(
+                        AppConfig.PREF_GEOIP_LAST_REFRESH, System.currentTimeMillis()
+                    )
+                }
+                val hosts = mutableListOf<String>()
+                MmkvManager.decodeSubscriptions().forEach { sub ->
+                    MmkvManager.decodeServerList(sub.guid).forEach { guid ->
+                        MmkvManager.decodeServerConfig(guid)?.server
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { hosts.add(it) }
+                    }
+                }
+                com.aras.client.util.GeoIPResolver.refresh(hosts.distinct())
+                reloadAllGroups(_uiState.value.groups.map { it.id })
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                LogUtil.w(AppConfig.TAG, "GeoIP auto refresh failed: ${e.message}")
+            }
+        }
+    }
+
     // ---------- Running state ----------
     private fun updateRunningState(running: Boolean, clearTestingText: Boolean = true) {
+        // Connection stats follow the UI state — this is the one trigger that
+        // always fires, whatever path the service took to start or stop.
+        if (running) {
+            com.aras.client.util.ConnectionStatsManager.onSessionStarted()
+        } else {
+            com.aras.client.util.ConnectionStatsManager.onSessionStopped()
+        }
         _uiState.update { state ->
             state.copy(
                 isRunning = running,
