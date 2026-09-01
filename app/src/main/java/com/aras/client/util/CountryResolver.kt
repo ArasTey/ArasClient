@@ -103,13 +103,13 @@ object CountryResolver {
     /**
      * Returns the flag emoji for the profile's country, or "" when unknown.
      *
-     * @param geoIso optional country code resolved from the server's IP
-     *   (GeoIPResolver) — takes priority over name-based detection.
+     * Priority: the provider's own naming (flag emoji, ISO code, country
+     * name) always wins — subscription panels deliberately label nodes with
+     * a country while many share one IP behind a CDN/worker, so a GeoIP
+     * lookup would be wrong there. The server-IP lookup ([geoIso], from
+     * GeoIPResolver) is only used when the name carries no country hint.
      */
     fun resolve(profile: ProfileItem, geoIso: String = ""): String {
-        // 0) Real country from the server's IP — always wins.
-        if (geoIso.length == 2) return isoToFlag(geoIso)
-
         val raw = "${profile.remarks} ${profile.description.orEmpty()}"
         val text = raw.lowercase(Locale.ROOT)
 
@@ -131,6 +131,9 @@ object CountryResolver {
         cityToIso.forEach { (city, iso) ->
             if (text.contains(city)) return isoToFlag(iso)
         }
+
+        // 5) Server-IP lookup — only when the name had no country hint at all.
+        if (geoIso.length == 2) return isoToFlag(geoIso)
 
         return ""
     }
