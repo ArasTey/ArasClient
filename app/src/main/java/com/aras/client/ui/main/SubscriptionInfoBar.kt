@@ -35,6 +35,8 @@ import com.aras.client.dto.entities.SubscriptionItem
 import com.aras.client.handler.MmkvManager
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -53,8 +55,17 @@ fun SubscriptionInfoBar(groupId: String, modifier: Modifier = Modifier) {
 
     var sub by remember(groupId) { mutableStateOf<SubscriptionItem?>(null) }
     LaunchedEffect(groupId) {
-        sub = withContext(Dispatchers.IO) {
-            MmkvManager.decodeSubscription(groupId)
+        // initial load, then re-read on every update broadcast (5s poll as
+        // a safety net so the bar always catches up)
+        sub = withContext(Dispatchers.IO) { MmkvManager.decodeSubscription(groupId) }
+        launch {
+            while (true) {
+                delay(5000)
+                sub = withContext(Dispatchers.IO) { MmkvManager.decodeSubscription(groupId) }
+            }
+        }
+        com.aras.client.util.SubscriptionUpdateNotifier.flow.collect {
+            sub = withContext(Dispatchers.IO) { MmkvManager.decodeSubscription(groupId) }
         }
     }
     val current = sub ?: return

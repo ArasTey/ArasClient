@@ -180,6 +180,8 @@ object HttpUtil {
                 .get()
                 .header("User-agent", finalUserAgent)
                 .header("Connection", "close")
+                .header("Cache-Control", "no-cache, no-store, max-age=0")
+                .header("Pragma", "no-cache")
 
             applyEmbeddedBasicAuthHeader(currentUrl, requestBuilder)
 

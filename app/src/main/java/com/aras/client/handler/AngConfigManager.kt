@@ -534,6 +534,10 @@ object AngConfigManager {
                 }
             }
             LogUtil.i(AppConfig.TAG, url)
+            // Cache-buster: provider/CDN caches were returning stale copies,
+            // freezing the traffic/expiry numbers between updates.
+            val fetchUrl = if (url.contains("?")) "$url&_t=${System.currentTimeMillis()}"
+                           else "$url?_t=${System.currentTimeMillis()}"
             val userAgent = it.subscription.userAgent
             val requestHeaders = it.subscription.requestHeaders
             val proxyUsername = SettingsManager.getSocksUsername()
@@ -543,7 +547,7 @@ object AngConfigManager {
                 val httpPort = SettingsManager.getHttpPort()
                 HttpUtil.getSubscriptionWithHeaders(
                     UrlContentRequest(
-                        url = url,
+                        url = fetchUrl,
                         userAgent = userAgent,
                         requestHeaders = requestHeaders,
                         timeout = 15000,
@@ -560,7 +564,7 @@ object AngConfigManager {
                 fetched = try {
                     HttpUtil.getSubscriptionWithHeaders(
                         UrlContentRequest(
-                            url = url,
+                            url = fetchUrl,
                             userAgent = userAgent,
                             requestHeaders = requestHeaders
                         )
@@ -580,6 +584,7 @@ object AngConfigManager {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 applySubscriptionMetadata(it.subscription, fetched.headers)
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
+                com.aras.client.util.SubscriptionUpdateNotifier.notify(it.guid)
                 LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
                 return SubscriptionUpdateResult(
                     configCount = count,

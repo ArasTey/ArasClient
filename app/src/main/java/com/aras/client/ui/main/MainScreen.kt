@@ -83,12 +83,16 @@ fun MainScreen(
         lazyGridStates.keys.retainAll(validGroupIds)
     }
 
-    LaunchedEffect(groups, uiState.selectedGroupId) {
+    LaunchedEffect(uiState.selectedGroupId, groups.size) {
+        // Keyed WITHOUT the groups list itself: every subscription update
+        // regenerates the list (new object identity), which used to re-run
+        // this effect and stack scrollToPage calls on top of each other,
+        // deadlocking the pager and ANRing the app (issue: traffic stuck).
         if (groups.isEmpty()) return@LaunchedEffect
         val selectedIndex = groups.indexOfFirst { it.id == uiState.selectedGroupId }
             .takeIf { it >= 0 } ?: 0
-        if (!pagerState.isScrollInProgress && pagerState.settledPage != selectedIndex) {
-            pagerState.scrollToPage(selectedIndex)
+        if (pagerState.settledPage != selectedIndex) {
+            runCatching { pagerState.scrollToPage(selectedIndex) }
         }
     }
 
