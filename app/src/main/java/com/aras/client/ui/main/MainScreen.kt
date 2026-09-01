@@ -43,6 +43,8 @@ fun MainScreen(
     val isLoading by mainViewModel.isLoading.collectAsStateWithLifecycle()
     val isRunning = uiState.isRunning
     val displayText = mainViewModel.formatStatus(uiState.status)
+    val statusGeoLine = displayText.lineSequence().drop(1).firstOrNull()
+    val statusTitle = displayText.lineSequence().firstOrNull() ?: displayText
     val selectedGuid = uiState.selectedGuid
     val doubleColumnDisplay = uiState.doubleColumnDisplay
     val confirmRemove = uiState.confirmRemove
