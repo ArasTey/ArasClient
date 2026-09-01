@@ -628,6 +628,9 @@
     <string name="setup_auto_sort">Auto-sort servers by ping after testing</string>
     <string name="setup_auto_connect">Auto-connect to the fastest server on launch</string>
     <string name="setup_show_delay">Show ping (delay) on server cards</string>
+    <string name="summary_auto_connect_fastest">When the app opens, test all servers and connect to the fastest one</string>
+    <string name="summary_pref_show_delay_chips">Show the ping result chip on each server card</string>
+    <string name="title_connection_preferences">Connection preferences</string>
     <string name="setup_auto_scroll">Auto-scroll to the best server after tests</string>
     <string name="setup_show_sub_messages">Show subscription traffic &amp; announcements</string>
     <string name="share_method_txtfile">Export TXT file</string>

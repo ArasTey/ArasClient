@@ -37,6 +37,7 @@ import com.aras.client.root.RootManager
 import com.aras.client.ui.base.BaseComponentActivity
 import com.aras.client.ui.compose.AppTopBar
 import com.aras.client.ui.compose.CollapsiblePreferenceGroupHeader
+import com.aras.client.ui.compose.ConnectionPreferencesSection
 import com.aras.client.ui.compose.ConnectionStatsSection
 import com.aras.client.ui.compose.NavigationBarsSpacer
 import com.aras.client.ui.compose.SettingsEditItem
@@ -74,6 +75,7 @@ fun SettingsScreen(
 ) {
     val scrollState = rememberScrollState()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    var connectionSettingsExpanded by rememberSaveable { mutableStateOf(false) }
     var uiSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     var vpnSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     var coreSettingsExpanded by rememberSaveable { mutableStateOf(true) }
@@ -634,6 +636,15 @@ fun SettingsScreen(
                     value = ipApiUrl,
                     onValueChanged = { ipApiUrl = it }
                 )
+            }
+
+            CollapsiblePreferenceGroupHeader(
+                title = stringResource(R.string.title_connection_preferences),
+                expanded = connectionSettingsExpanded,
+                onExpandedChange = { connectionSettingsExpanded = it }
+            )
+            if (connectionSettingsExpanded) {
+                ConnectionPreferencesSection()
             }
 
             CollapsiblePreferenceGroupHeader(
