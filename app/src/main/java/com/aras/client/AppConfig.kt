@@ -223,6 +223,8 @@ object AppConfig {
     const val HYSTERIA = "hysteria://"
     const val HYSTERIA2 = "hysteria2://"
     const val HY2 = "hy2://"
+    const val ANYTLS = "anytls://"
+    const val AMNEZIAWG = "awg://"
     const val ARASFMTS = "xrayn://"
 
     /** Give a good name to this, IDK*/

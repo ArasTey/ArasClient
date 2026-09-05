@@ -42,6 +42,8 @@ import com.aras.client.ui.logcat.LogcatActivity
 import com.aras.client.ui.perappproxy.PerAppProxyActivity
 import com.aras.client.ui.routing.RoutingSettingActivity
 import com.aras.client.ui.server.ProfileEditorResult
+import com.aras.client.ui.server.ServerAmneziawgActivity
+import com.aras.client.ui.server.ServerAnytlsActivity
 import com.aras.client.ui.server.ServerCustomConfigActivity
 import com.aras.client.ui.server.ServerGroupActivity
 import com.aras.client.ui.server.ServerHttpActivity
@@ -382,6 +384,8 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.TROJAN.value -> Intent(this, ServerTrojanActivity::class.java)
             EConfigType.WIREGUARD.value -> Intent(this, ServerWireguardActivity::class.java)
             EConfigType.HYSTERIA2.value -> Intent(this, ServerHysteria2Activity::class.java)
+            EConfigType.ANYTLS.value -> Intent(this, ServerAnytlsActivity::class.java)
+            EConfigType.AMNEZIAWG.value -> Intent(this, ServerAmneziawgActivity::class.java)
             else -> Intent(this, ServerHttpActivity::class.java).apply {
                 putExtra("createConfigType", createConfigType)
             }
@@ -532,6 +536,8 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.TROJAN -> ServerTrojanActivity::class.java
             EConfigType.WIREGUARD -> ServerWireguardActivity::class.java
             EConfigType.HYSTERIA2 -> ServerHysteria2Activity::class.java
+            EConfigType.ANYTLS -> ServerAnytlsActivity::class.java
+            EConfigType.AMNEZIAWG -> ServerAmneziawgActivity::class.java
             else -> ServerHttpActivity::class.java
         }
         val intent = Intent(this, activityClass).apply {

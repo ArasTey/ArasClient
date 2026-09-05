@@ -58,6 +58,16 @@ data class ProfileItem(
     var reserved: String? = null,
     var mtu: Int? = null,
 
+    // AmneziaWG obfuscation parameters.
+    var junkPacketCount: String? = null,
+    var junkPacketMinSize: String? = null,
+    var junkPacketMaxSize: String? = null,
+    var initPacketJunkSize: String? = null,
+    var responsePacketJunkSize: String? = null,
+    var initPacketJunkHeader: String? = null,
+    var responsePacketJunkHeader: String? = null,
+    var transportPacketJunkHeader: String? = null,
+
     var obfsPassword: String? = null,
     var portHopping: String? = null,
     var portHoppingInterval: String? = null,

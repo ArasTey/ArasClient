@@ -103,7 +103,16 @@ data class XrayConfig(
             data class WireGuardBean(
                 var publicKey: String = "",
                 var preSharedKey: String? = null,
-                var endpoint: String = ""
+                var endpoint: String = "",
+                /*AmneziaWG*/
+                var junkPacketCount: Int? = null,
+                var junkPacketMinSize: Int? = null,
+                var junkPacketMaxSize: Int? = null,
+                var initPacketJunkSize: Int? = null,
+                var responsePacketJunkSize: Int? = null,
+                var initPacketJunkHeader: List<Int>? = null,
+                var responsePacketJunkHeader: List<Int>? = null,
+                var transportPacketJunkHeader: List<Int>? = null
             )
         }
 

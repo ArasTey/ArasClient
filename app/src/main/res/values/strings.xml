@@ -105,6 +105,8 @@
     <string name="menu_item_import_config_manually_trojan">Add [Trojan]</string>
     <string name="menu_item_import_config_manually_wireguard">Add [WireGuard]</string>
     <string name="menu_item_import_config_manually_hysteria2">Add [Hysteria2]</string>
+    <string name="menu_item_import_config_manually_anytls">Add [AnyTLS]</string>
+    <string name="menu_item_import_config_manually_amneziawg">Add [AmneziaWG]</string>
     <string name="confirm_delete_visible_profiles">Are you sure you want to delete all profiles currently shown?</string>
     <string name="confirm_delete_duplicate_profiles">Are you sure you want to delete all duplicate profiles currently shown?</string>
     <string name="confirm_delete_invalid_profiles">Please test the profiles first. Are you sure you want to delete all invalid profiles currently shown?</string>
@@ -164,6 +166,15 @@
     <string name="server_lab_reserved">Reserved (optional, separated by commas)</string>
     <string name="server_lab_local_address">Local address (optional IPv4/IPv6, separated by commas)</string>
     <string name="server_lab_local_mtu">MTU (optional, default 1420)</string>
+    <string name="server_amnezia_section">AmneziaWG obfuscation (must match the server)</string>
+    <string name="server_awg_junk_packet_count">Jc — junk packet count (optional)</string>
+    <string name="server_awg_junk_packet_min">Jmin — junk packet min size (optional)</string>
+    <string name="server_awg_junk_packet_max">Jmax — junk packet max size (optional)</string>
+    <string name="server_awg_init_packet_junk">S1 — init packet junk size (optional)</string>
+    <string name="server_awg_response_packet_junk">S2 — response packet junk size (optional)</string>
+    <string name="server_awg_init_header">H1 — init packet header (optional, e.g. 5-10 or 123456)</string>
+    <string name="server_awg_response_header">H2 — response packet header (optional)</string>
+    <string name="server_awg_transport_header">H3 — transport packet header (optional)</string>
     <string name="server_lab_kcp_mtu">mKCP MTU (optional, core default 1350)</string>
     <string name="server_lab_kcp_tti">mKCP TTI (optional, core default 50)</string>
     <string name="toast_success">Success</string>

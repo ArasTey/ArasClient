@@ -30,8 +30,10 @@ object CoreOutboundBuilder {
             EConfigType.VLESS -> toOutboundVless(profileItem)
             EConfigType.TROJAN -> toOutboundTrojan(profileItem)
             EConfigType.WIREGUARD -> toOutboundWireguard(profileItem)
+            EConfigType.AMNEZIAWG -> toOutboundAmneziawg(profileItem)
             EConfigType.HYSTERIA2 -> toOutboundHysteria2(profileItem)
             EConfigType.HTTP -> toOutboundHttp(profileItem)
+            EConfigType.ANYTLS -> toOutboundAnytls(profileItem)
             else -> null
         }
 
@@ -51,6 +53,8 @@ object CoreOutboundBuilder {
                 || protocol.equals(EConfigType.HTTP.name, true)
                 || protocol.equals(EConfigType.TROJAN.name, true)
                 || protocol.equals(EConfigType.WIREGUARD.name, true)
+                || protocol.equals(EConfigType.AMNEZIAWG.name, true)
+                || protocol.equals(EConfigType.ANYTLS.name, true)
                 || protocol.equals(EConfigType.HYSTERIA2.name, true)
                 || protocol.equals(EConfigType.HYSTERIA.name, true)
             ) {
@@ -99,6 +103,20 @@ object CoreOutboundBuilder {
                     secretKey = "",
                     peers = listOf(OutboundBean.OutSettingsBean.WireGuardBean())
                 )
+            )
+
+            EConfigType.AMNEZIAWG -> OutboundBean(
+                protocol = EConfigType.WIREGUARD.name.lowercase(),
+                settings = OutboundBean.OutSettingsBean(
+                    secretKey = "",
+                    peers = listOf(OutboundBean.OutSettingsBean.WireGuardBean())
+                )
+            )
+
+            EConfigType.ANYTLS -> OutboundBean(
+                protocol = configType.name.lowercase(),
+                settings = OutboundBean.OutSettingsBean(),
+                streamSettings = OutboundBean.StreamSettingsBean()
             )
 
             EConfigType.HYSTERIA,
@@ -271,6 +289,67 @@ object CoreOutboundBuilder {
                 it.network = null
             }
         }
+        return outboundBean
+    }
+
+    /**
+     * AmneziaWG uses the same wireguard outbound protocol as plain WireGuard,
+     * but the bundled core is compiled against amneziawg-go, so the junk
+     * packet parameters ride along on the peer. Kernel TUN is disabled:
+     * the obfuscation only exists in the userspace AWG device.
+     */
+    private fun toOutboundAmneziawg(profileItem: ProfileItem): OutboundBean? {
+        val outboundBean = toOutboundWireguard(profileItem) ?: return null
+
+        fun parseJunkInt(value: String?): Int? {
+            return value?.nullIfBlank()?.trim()?.toIntOrNull()?.takeIf { it >= 0 }
+        }
+
+        fun parseJunkHeader(value: String?): List<Int>? {
+            val list = value?.nullIfBlank()?.split(",")?.mapNotNull { it.trim().toIntOrNull() }
+            return list?.takeIf { it.isNotEmpty() }
+        }
+
+        outboundBean.settings?.peers?.firstOrNull()?.let { peer ->
+            peer.junkPacketCount = parseJunkInt(profileItem.junkPacketCount)
+            peer.junkPacketMinSize = parseJunkInt(profileItem.junkPacketMinSize)
+            peer.junkPacketMaxSize = parseJunkInt(profileItem.junkPacketMaxSize)
+            peer.initPacketJunkSize = parseJunkInt(profileItem.initPacketJunkSize)
+            peer.responsePacketJunkSize = parseJunkInt(profileItem.responsePacketJunkSize)
+            peer.initPacketJunkHeader = parseJunkHeader(profileItem.initPacketJunkHeader)
+            peer.responsePacketJunkHeader = parseJunkHeader(profileItem.responsePacketJunkHeader)
+            peer.transportPacketJunkHeader = parseJunkHeader(profileItem.transportPacketJunkHeader)
+        }
+        return outboundBean
+    }
+
+    /**
+     * AnyTLS outbound: password-based, always over TLS. The core's anytls
+     * transport dialer performs session multiplexing and TLS wrapping.
+     */
+    private fun toOutboundAnytls(profileItem: ProfileItem): OutboundBean? {
+        val outboundBean = createInitOutbound(EConfigType.ANYTLS) ?: return null
+
+        outboundBean.settings?.let { settings ->
+            settings.address = getServerAddress(profileItem)
+            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.password = profileItem.password
+        }
+
+        // AnyTLS requires TLS; default the stream security accordingly.
+        if (profileItem.security.isNullOrBlank()) {
+            profileItem.security = AppConfig.TLS
+        }
+
+        val sni = outboundBean.streamSettings?.let {
+            it.network = NetworkType.ANYTLS.type
+            populateTransportSettings(it, profileItem)
+        }
+
+        outboundBean.streamSettings?.let {
+            populateTlsSettings(it, profileItem, sni)
+        }
+
         return outboundBean
     }
 
@@ -515,6 +594,12 @@ object CoreOutboundBuilder {
                 }
                 streamSettings.hysteriaSettings = hysteriaSetting
                 streamSettings.finalmask = finalmask
+            }
+
+            NetworkType.ANYTLS.type -> {
+                // The anytls transport dials TLS directly; no extra transport
+                // settings exist. SNI comes from the TLS settings block.
+                sni = profileItem.sni ?: host
             }
         }
         finalMask?.let {

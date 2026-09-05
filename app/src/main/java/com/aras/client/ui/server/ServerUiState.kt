@@ -30,6 +30,14 @@ class ServerUiState(
     reserved: String = "0,0,0",
     localAddress: String = WIREGUARD_LOCAL_ADDRESS_V4,
     mtu: String = WIREGUARD_LOCAL_MTU,
+    junkPacketCount: String = "",
+    junkPacketMinSize: String = "",
+    junkPacketMaxSize: String = "",
+    initPacketJunkSize: String = "",
+    responsePacketJunkSize: String = "",
+    initPacketJunkHeader: String = "",
+    responsePacketJunkHeader: String = "",
+    transportPacketJunkHeader: String = "",
     obfsPassword: String = "",
     portHopping: String = "",
     portHoppingInterval: String = "",
@@ -79,6 +87,14 @@ class ServerUiState(
     var reserved by mutableStateOf(reserved)
     var localAddress by mutableStateOf(localAddress)
     var mtu by mutableStateOf(mtu)
+    var junkPacketCount by mutableStateOf(junkPacketCount)
+    var junkPacketMinSize by mutableStateOf(junkPacketMinSize)
+    var junkPacketMaxSize by mutableStateOf(junkPacketMaxSize)
+    var initPacketJunkSize by mutableStateOf(initPacketJunkSize)
+    var responsePacketJunkSize by mutableStateOf(responsePacketJunkSize)
+    var initPacketJunkHeader by mutableStateOf(initPacketJunkHeader)
+    var responsePacketJunkHeader by mutableStateOf(responsePacketJunkHeader)
+    var transportPacketJunkHeader by mutableStateOf(transportPacketJunkHeader)
     var obfsPassword by mutableStateOf(obfsPassword)
     var portHopping by mutableStateOf(portHopping)
     var portHoppingInterval by mutableStateOf(portHoppingInterval)
@@ -119,6 +135,7 @@ class ServerUiState(
         val isShadowsocks = configType == EConfigType.SHADOWSOCKS
         val isSocksOrHttp = configType == EConfigType.SOCKS || configType == EConfigType.HTTP
         val isWireguard = configType == EConfigType.WIREGUARD
+        val isAmneziawg = configType == EConfigType.AMNEZIAWG
         val isHysteria2 = configType == EConfigType.HYSTERIA2
 
         return initialConfig.copy(
@@ -134,16 +151,24 @@ class ServerUiState(
             },
             flow = if (isVless) flow else null,
             username = if (isSocksOrHttp) username else null,
-            secretKey = if (isWireguard) secretKey else null,
+            secretKey = if (isWireguard || isAmneziawg) secretKey else null,
             publicKey = when {
-                isWireguard -> publicKey
+                isWireguard || isAmneziawg -> publicKey
                 streamSecurity == REALITY -> publicKeyReality
                 else -> null
             },
-            preSharedKey = if (isWireguard) preSharedKey else null,
-            reserved = if (isWireguard) reserved else null,
-            localAddress = if (isWireguard) localAddress else null,
-            mtu = if (isWireguard) mtu.toIntOrNull() else null,
+            preSharedKey = if (isWireguard || isAmneziawg) preSharedKey else null,
+            reserved = if (isWireguard || isAmneziawg) reserved else null,
+            localAddress = if (isWireguard || isAmneziawg) localAddress else null,
+            mtu = if (isWireguard || isAmneziawg) mtu.toIntOrNull() else null,
+            junkPacketCount = if (isAmneziawg) junkPacketCount.nullIfBlank() else null,
+            junkPacketMinSize = if (isAmneziawg) junkPacketMinSize.nullIfBlank() else null,
+            junkPacketMaxSize = if (isAmneziawg) junkPacketMaxSize.nullIfBlank() else null,
+            initPacketJunkSize = if (isAmneziawg) initPacketJunkSize.nullIfBlank() else null,
+            responsePacketJunkSize = if (isAmneziawg) responsePacketJunkSize.nullIfBlank() else null,
+            initPacketJunkHeader = if (isAmneziawg) initPacketJunkHeader.nullIfBlank() else null,
+            responsePacketJunkHeader = if (isAmneziawg) responsePacketJunkHeader.nullIfBlank() else null,
+            transportPacketJunkHeader = if (isAmneziawg) transportPacketJunkHeader.nullIfBlank() else null,
             obfsPassword = if (isHysteria2) obfsPassword else null,
             portHopping = if (isHysteria2) portHopping else null,
             portHoppingInterval = if (isHysteria2) portHoppingInterval else null,
@@ -202,6 +227,14 @@ class ServerUiState(
                 reserved = initialConfig.reserved ?: "0,0,0",
                 localAddress = initialConfig.localAddress ?: WIREGUARD_LOCAL_ADDRESS_V4,
                 mtu = initialConfig.mtu?.toString() ?: WIREGUARD_LOCAL_MTU,
+                junkPacketCount = initialConfig.junkPacketCount ?: "",
+                junkPacketMinSize = initialConfig.junkPacketMinSize ?: "",
+                junkPacketMaxSize = initialConfig.junkPacketMaxSize ?: "",
+                initPacketJunkSize = initialConfig.initPacketJunkSize ?: "",
+                responsePacketJunkSize = initialConfig.responsePacketJunkSize ?: "",
+                initPacketJunkHeader = initialConfig.initPacketJunkHeader ?: "",
+                responsePacketJunkHeader = initialConfig.responsePacketJunkHeader ?: "",
+                transportPacketJunkHeader = initialConfig.transportPacketJunkHeader ?: "",
                 obfsPassword = initialConfig.obfsPassword ?: "",
                 portHopping = initialConfig.portHopping ?: "",
                 portHoppingInterval = initialConfig.portHoppingInterval ?: "",

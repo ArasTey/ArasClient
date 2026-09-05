@@ -18,6 +18,8 @@ import com.aras.client.fmt.ShadowsocksFmt
 import com.aras.client.fmt.SocksFmt
 import com.aras.client.fmt.TrojanFmt
 import com.aras.client.fmt.ArasFmt
+import com.aras.client.fmt.AmneziawgFmt
+import com.aras.client.fmt.AnytlsFmt
 import com.aras.client.fmt.VlessFmt
 import com.aras.client.fmt.VmessFmt
 import com.aras.client.fmt.WireguardFmt
@@ -54,6 +56,8 @@ object AngConfigManager {
             EConfigType.WIREGUARD.protocolScheme to WireguardFmt::parse,
             EConfigType.HYSTERIA2.protocolScheme to Hysteria2Fmt::parse,
             AppConfig.HY2 to Hysteria2Fmt::parse,
+            EConfigType.ANYTLS.protocolScheme to AnytlsFmt::parse,
+            EConfigType.AMNEZIAWG.protocolScheme to AmneziawgFmt::parse,
             AppConfig.ARASFMTS to ArasFmt::parse
         )
     }
@@ -202,6 +206,8 @@ object AngConfigManager {
                 EConfigType.TROJAN -> TrojanFmt.toUri(config)
                 EConfigType.WIREGUARD -> WireguardFmt.toUri(config)
                 EConfigType.HYSTERIA2 -> Hysteria2Fmt.toUri(config)
+                EConfigType.ANYTLS -> AnytlsFmt.toUri(config)
+                EConfigType.AMNEZIAWG -> AmneziawgFmt.toUri(config)
                 else -> {}
             }
         } catch (e: Exception) {
@@ -405,7 +411,16 @@ object AngConfigManager {
             return 0
         } else if (server.startsWith("[Interface]") && server.contains("[Peer]")) {
             try {
-                val config = WireguardFmt.parseWireguardConfFile(server)
+                val isAmneziaConf = server.contains("Jc", ignoreCase = false) &&
+                    server.split('\n').any {
+                        val key = it.substringBefore('=').trim().lowercase()
+                        key in setOf("jc", "jmin", "jmax", "s1", "s2", "h1", "h2", "h3", "h4")
+                    }
+                val config = if (isAmneziaConf) {
+                    AmneziawgFmt.parseAmneziaConfFile(server)
+                } else {
+                    WireguardFmt.parseWireguardConfFile(server)
+                }
                 config.subscriptionId = subid
                 config.description = generateDescription(config)
                 commitProfiles(

@@ -51,6 +51,14 @@ data class ArasShareItem(
         val WgInterfaceAddress: String?,
         val WgReserved: String?,
         val WgMtu: Int?,
+        val AwgJunkPacketCount: String?,
+        val AwgJunkPacketMinSize: String?,
+        val AwgJunkPacketMaxSize: String?,
+        val AwgInitPacketJunkSize: String?,
+        val AwgResponsePacketJunkSize: String?,
+        val AwgInitPacketJunkHeader: String?,
+        val AwgResponsePacketJunkHeader: String?,
+        val AwgTransportPacketJunkHeader: String?,
         val SalamanderPass: String?,
         val UpMbps: Int?,
         val DownMbps: Int?,
@@ -89,6 +97,8 @@ data class ArasShareItem(
             // 8 -> EConfigType.TUIC
             9 -> EConfigType.WIREGUARD
             10 -> EConfigType.HTTP
+            11 -> EConfigType.ANYTLS
+            12 -> EConfigType.AMNEZIAWG
             101 -> EConfigType.POLICYGROUP
             102 -> EConfigType.PROXYCHAIN
             else -> error("Unknown ConfigType: $ConfigType")
@@ -141,11 +151,19 @@ data class ArasShareItem(
             shortId = ShortId,
             spiderX = SpiderX,
             mldsa65Verify = Mldsa65Verify,
-            secretKey = if (configType == EConfigType.WIREGUARD) Password else null,
+            secretKey = if (configType == EConfigType.WIREGUARD || configType == EConfigType.AMNEZIAWG) Password else null,
             preSharedKey = ProtoExtraObj?.WgPresharedKey,
             localAddress = ProtoExtraObj?.WgInterfaceAddress,
             reserved = ProtoExtraObj?.WgReserved,
             mtu = ProtoExtraObj?.WgMtu,
+            junkPacketCount = ProtoExtraObj?.AwgJunkPacketCount,
+            junkPacketMinSize = ProtoExtraObj?.AwgJunkPacketMinSize,
+            junkPacketMaxSize = ProtoExtraObj?.AwgJunkPacketMaxSize,
+            initPacketJunkSize = ProtoExtraObj?.AwgInitPacketJunkSize,
+            responsePacketJunkSize = ProtoExtraObj?.AwgResponsePacketJunkSize,
+            initPacketJunkHeader = ProtoExtraObj?.AwgInitPacketJunkHeader,
+            responsePacketJunkHeader = ProtoExtraObj?.AwgResponsePacketJunkHeader,
+            transportPacketJunkHeader = ProtoExtraObj?.AwgTransportPacketJunkHeader,
             obfsPassword = ProtoExtraObj?.SalamanderPass,
             portHopping = ProtoExtraObj?.Ports,
             portHoppingInterval = ProtoExtraObj?.HopInterval,
