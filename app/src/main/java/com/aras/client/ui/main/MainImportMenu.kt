@@ -1,8 +1,22 @@
 package com.aras.client.ui.main
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.aras.client.R
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.EConfigType
@@ -15,8 +29,12 @@ private enum class ImportMenuAction(@StringRes val labelRes: Int, val action: Ma
     Clipboard(R.string.menu_item_import_config_clipboard, MainAction.ImportClipboard),
     LocalFile(R.string.menu_item_import_config_local, MainAction.ImportConfigLocal),
     ArascFile(R.string.menu_item_import_config_arasc, MainAction.ImportArascFile),
+    Manual(R.string.menu_item_import_config_manually, MainAction.ImportManualMenu),
     PolicyGroup(R.string.menu_item_import_config_policy_group, MainAction.ImportManually(EConfigType.POLICYGROUP.value)),
-    ProxyChain(R.string.menu_item_import_config_proxy_chain, MainAction.ImportManually(EConfigType.PROXYCHAIN.value)),
+    ProxyChain(R.string.menu_item_import_config_proxy_chain, MainAction.ImportManually(EConfigType.PROXYCHAIN.value))
+}
+
+private enum class ImportManualProtocolMenuAction(@StringRes val labelRes: Int, val action: MainAction) {
     Vmess(R.string.menu_item_import_config_manually_vmess, MainAction.ImportManually(EConfigType.VMESS.value)),
     Vless(R.string.menu_item_import_config_manually_vless, MainAction.ImportManually(EConfigType.VLESS.value)),
     Shadowsocks(R.string.menu_item_import_config_manually_ss, MainAction.ImportManually(EConfigType.SHADOWSOCKS.value)),
@@ -69,11 +87,48 @@ internal fun serverMenuActions(
 }
 
 @Composable
-fun ImportMenuContent(onAction: (MainAction) -> Unit) = AppDropdownMenuItems(
-    items = ImportMenuAction.entries,
-    labelRes = { it.labelRes },
-    onSelected = { onAction(it.action) }
-)
+fun ImportMenuContent(onAction: (MainAction) -> Unit) {
+    var showProtocolMenu by remember { mutableStateOf(false) }
+
+    ImportMenuAction.entries.forEach { item ->
+        if (item == ImportMenuAction.Manual) {
+            // Submenu hint: arrow so users see this opens a second menu.
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(item.labelRes))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "❯",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                onClick = { showProtocolMenu = true }
+            )
+        } else {
+            DropdownMenuItem(
+                text = { Text(stringResource(item.labelRes)) },
+                onClick = { onAction(item.action) }
+            )
+        }
+    }
+
+    if (showProtocolMenu) {
+        // Second-stage menu: pick a protocol to create manually.
+        SelectListDialog(
+            options = ImportManualProtocolMenuAction.entries,
+            optionText = { stringResource(it.labelRes) },
+            onSelected = { selected ->
+                showProtocolMenu = false
+                onAction(selected.action)
+            },
+            onDismiss = { showProtocolMenu = false },
+            title = stringResource(R.string.menu_item_import_config_manually)
+        )
+    }
+}
 
 @Composable
 fun MoreMenuContent(onSelected: (MainMoreMenuAction) -> Unit) = AppDropdownMenuItems(

@@ -28,6 +28,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import com.aras.client.extension.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.aras.client.dto.CheckUpdateResult
+import com.aras.client.handler.UpdateCheckerManager
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -48,6 +50,9 @@ class MainViewModel(
     private val preloadDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
 
     // ---------- UI state ----------
+    private val updateAnnouncement = MutableStateFlow<CheckUpdateResult?>(null)
+    val updateAnnouncementFlow: StateFlow<CheckUpdateResult?> = updateAnnouncement.asStateFlow()
+
     private val _uiState = MutableStateFlow(
         MainUiState(
             selectedGroupId = dataSource.getSelectedSubscriptionId(),
@@ -223,6 +228,7 @@ class MainViewModel(
             MainAction.ImportClipboard,
             MainAction.ImportConfigLocal,
             MainAction.ImportArascFile,
+            MainAction.ImportManualMenu,
             is MainAction.ImportManually,
             MainAction.RestartService,
             MainAction.LocateSelectedServer,
@@ -234,8 +240,28 @@ class MainViewModel(
         }
     }
 
+    // ---------- Update announcement ----------
+    private fun maybeAnnounceUpdate() {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val result = UpdateCheckerManager.checkForUpdate()
+                if (result.hasUpdate) {
+                    updateAnnouncement.value = result
+                }
+            } catch (e: Exception) {
+                LogUtil.i(AppConfig.TAG, "Update announcement check skipped: ${e.message}")
+            }
+        }
+    }
+
+    fun dismissUpdateAnnouncement() {
+        updateAnnouncement.value = null
+    }
+
     // ---------- Initialization ----------
     fun initialize() {
+        maybeAnnounceUpdate()
+
         viewModelScope.launch(preloadDispatcher) {
             try {
                 initialPageReady.await()

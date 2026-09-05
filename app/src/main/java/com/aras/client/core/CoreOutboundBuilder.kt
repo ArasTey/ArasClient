@@ -597,8 +597,11 @@ object CoreOutboundBuilder {
             }
 
             NetworkType.ANYTLS.type -> {
-                // The anytls transport dials TLS directly; no extra transport
-                // settings exist. SNI comes from the TLS settings block.
+                // The anytls transport dials TLS directly and authenticates
+                // with the password carried in anytlsSettings.
+                streamSettings.anytlsSettings = OutboundBean.StreamSettingsBean.AnytlsSettingsBean(
+                    password = profileItem.password
+                )
                 sni = profileItem.sni ?: host
             }
         }

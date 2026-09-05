@@ -97,6 +97,7 @@
 
     <string name="menu_item_import_config_policy_group">Add [Policy group]</string>
     <string name="menu_item_import_config_proxy_chain">Add [Proxy chain]</string>
+    <string name="menu_item_import_config_manually">Add manually</string>
     <string name="menu_item_import_config_manually_vmess">Add [VMess]</string>
     <string name="menu_item_import_config_manually_vless">Add [VLESS]</string>
     <string name="menu_item_import_config_manually_ss">Add [Shadowsocks]</string>
@@ -178,6 +179,10 @@
     <string name="server_lab_kcp_mtu">mKCP MTU (optional, core default 1350)</string>
     <string name="server_lab_kcp_tti">mKCP TTI (optional, core default 50)</string>
     <string name="toast_success">Success</string>
+    <string name="update_banner_available">Update available!</string>
+    <string name="update_banner_tap_to_update">A new version is ready to install.</string>
+    <string name="update_banner_dismiss">Dismiss</string>
+    <string name="update_banner_update_now">Update</string>
     <string name="toast_failure">Failure</string>
     <string name="toast_none_data">No data available</string>
     <string name="toast_incorrect_protocol">Incorrect protocol</string>

@@ -39,6 +39,7 @@ fun MainScreen(
     onNavigate: (MainDestination) -> Unit,
 ) {
     val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
+    val updateAnnouncement by mainViewModel.updateAnnouncementFlow.collectAsStateWithLifecycle()
     val groups = uiState.groups
     val isLoading by mainViewModel.isLoading.collectAsStateWithLifecycle()
     val isRunning = uiState.isRunning
@@ -211,6 +212,15 @@ fun MainScreen(
                         .fillMaxSize()
                         .padding(top = innerPadding.calculateTopPadding())
                 ) {
+                    updateAnnouncement?.let { announcement ->
+                        UpdateAnnouncementBanner(
+                            result = announcement,
+                            onUpdateClick = {
+                                onNavigate(MainDestination.CheckUpdate)
+                            },
+                            onDismiss = { mainViewModel.dismissUpdateAnnouncement() }
+                        )
+                    }
                     if (groups.size > 1) {
                         GroupTabBar(
                             groups = groups,

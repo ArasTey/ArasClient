@@ -34,6 +34,7 @@
     <string name="menu_item_import_config_local">کانفیگ را از محلی وارد کنید</string>
     <string name="menu_item_import_config_policy_group">افزودن [گروه خط‌‌ مشی]</string>
     <string name="menu_item_import_config_proxy_chain">افزودن [زنجیره پروکسی]</string>
+    <string name="menu_item_import_config_manually">افزودن دستی</string>
     <string name="menu_item_import_config_manually_vmess">افزودن [VMess]</string>
     <string name="menu_item_import_config_manually_vless">افزودن [VLESS]</string>
     <string name="menu_item_import_config_manually_ss">افزودن [Shadowsocks]</string>
@@ -115,6 +116,10 @@
     <string name="server_lab_kcp_mtu">mKCP MTU (اختیاری، پیش‌فرض هسته 1350)</string>
     <string name="server_lab_kcp_tti">mKCP TTI (اختیاری، پیش‌فرض هسته 50)</string>
     <string name="toast_success">موفقیت‌آمیز</string>
+    <string name="update_banner_available">به‌روزرسانی در دسترس است!</string>
+    <string name="update_banner_tap_to_update">نسخه جدید آماده نصب است.</string>
+    <string name="update_banner_dismiss">بی‌خیال</string>
+    <string name="update_banner_update_now">به‌روزرسانی</string>
     <string name="toast_failure">شکست!</string>
     <string name="toast_none_data">داده‌ای یافت نشد</string>
     <string name="toast_incorrect_protocol">پروتکل نادرست</string>
