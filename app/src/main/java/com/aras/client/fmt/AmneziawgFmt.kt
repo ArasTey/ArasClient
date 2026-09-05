@@ -48,7 +48,30 @@ object AmneziawgFmt : FmtBase() {
         config.responsePacketJunkHeader = queryParam["responsePacketJunkHeader"]?.nullIfBlank()
         config.transportPacketJunkHeader = queryParam["transportPacketJunkHeader"]?.nullIfBlank()
 
+        applyDefaultJunkParams(config)
         return config
+    }
+
+    /**
+     * AmneziaWG's standard obfuscation defaults (the same values the
+     * AmneziaVPN client applies to awg:// links that carry no junk
+     * parameters — e.g. Cloudflare WARP endpoints). Without these the
+     * handshake goes out as plain WireGuard and gets dropped.
+     */
+    fun applyDefaultJunkParams(config: ProfileItem) {
+        if (!config.junkPacketCount.isNullOrBlank() ||
+            !config.initPacketJunkHeader.isNullOrBlank()
+        ) {
+            return
+        }
+        config.junkPacketCount = "4"
+        config.junkPacketMinSize = "40"
+        config.junkPacketMaxSize = "70"
+        config.initPacketJunkSize = "15"
+        config.responsePacketJunkSize = "20"
+        config.initPacketJunkHeader = "1234567"
+        config.responsePacketJunkHeader = "2345678"
+        config.transportPacketJunkHeader = "3456789"
     }
 
     /**
@@ -121,6 +144,7 @@ object AmneziawgFmt : FmtBase() {
         config.responsePacketJunkHeader = peerParams["h2"]?.nullIfBlank()
         config.transportPacketJunkHeader = peerParams["h3"]?.nullIfBlank()
 
+        applyDefaultJunkParams(config)
         return config
     }
 
