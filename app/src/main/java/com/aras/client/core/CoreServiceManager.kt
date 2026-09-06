@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.system.OsConstants
 import androidx.core.content.ContextCompat
 import com.aras.client.AppConfig
+import com.aras.client.enums.EConfigType
 import com.aras.client.util.ConnectionStatsManager
 import com.aras.client.contracts.IDialerService
 import com.aras.client.contracts.ServiceControl
@@ -134,6 +135,19 @@ object CoreServiceManager {
         }
 
         currentConfig = config
+
+        // AmneziaWG profiles bypass Xray entirely: the standalone awg-go
+        // tunnel takes the VPN TUN fd directly — exactly how the AmneziaVPN
+        // client runs AmneziaWG on Android.
+        if (config.configType == EConfigType.AMNEZIAWG) {
+            val fd = vpnInterface?.fd ?: error("VPN interface missing for AmneziaWG")
+            NotificationManager.showNotification(config)
+            val uapi = AwgConfigBuilder.buildUapi(config)
+            CoreNativeManager.awgTurnOn(fd, uapi, 1280)
+            LogUtil.i(AppConfig.TAG, "StartCore-Manager: standalone AmneziaWG tunnel up")
+            return
+        }
+
         var tunFd = vpnInterface?.fd ?: 0
         val dialerMode = BrowserDialerMode.from(config.browserDialerMode)
         val dialerAddr = if (dialerMode != null) {
@@ -191,6 +205,13 @@ object CoreServiceManager {
         networkMonitor?.unregister()
         networkMonitor = null
         currentVpnInterface = null
+
+        // Tear down the standalone AmneziaWG tunnel if one is active.
+        try {
+            CoreNativeManager.awgTurnOff()
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop AWG tunnel", e)
+        }
 
         if (isRunning()) {
             CoroutineScope(Dispatchers.IO).launch {
@@ -259,7 +280,9 @@ object CoreServiceManager {
             isReloading = true
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core reload start...")
 
-            coreController.stopLoop()
+            if (!CoreNativeManager.awgIsRunning()) {
+                coreController.stopLoop()
+            }
             launchCore(service, tunFd, isReload = true)
 
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core reload finished")

@@ -88,6 +88,29 @@ object CoreNativeManager {
      * @param handler The callback handler for core events
      * @return A new CoreController instance
      */
+    fun awgTurnOn(fd: Int, uapiConfig: String, mtu: Int) {
+        try {
+            ArasCore.awgTurnOn(fd, uapiConfig, mtu)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "AWG tunnel failed", e)
+            throw e
+        }
+    }
+
+    fun awgTurnOff() {
+        try {
+            ArasCore.awgTurnOff()
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "AWG tunnel stop failed", e)
+        }
+    }
+
+    fun awgIsRunning(): Boolean = try {
+        ArasCore.awgIsRunning()
+    } catch (e: Exception) {
+        false
+    }
+
     fun newCoreController(handler: CoreCallbackHandler): CoreController {
         return try {
             ArasCore.newCoreController(handler)

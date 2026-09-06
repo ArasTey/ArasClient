@@ -18,4 +18,8 @@ object ArasCore {
         libv2ray.Libv2ray.fetchQuicCertSha256(request)
     fun fetchTlsCertSha256(request: String) =
         libv2ray.Libv2ray.fetchTlsCertSha256(request)
+    fun awgTurnOn(fd: Int, uapiConfig: String, mtu: Int) =
+        libv2ray.Libv2ray.awgTurnOn(fd, uapiConfig, mtu)
+    fun awgTurnOff() = libv2ray.Libv2ray.awgTurnOff()
+    fun awgIsRunning() = libv2ray.Libv2ray.awgIsRunning()
 }
