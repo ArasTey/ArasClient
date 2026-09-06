@@ -112,6 +112,7 @@ data class XrayConfig(
                 var responsePacketJunkSize: Int? = null,
                 var initPacketJunkHeader: List<Int>? = null,
                 var responsePacketJunkHeader: List<Int>? = null,
+                var cookiePacketJunkHeader: List<Int>? = null,
                 var transportPacketJunkHeader: List<Int>? = null
             )
         }

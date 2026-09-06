@@ -69,9 +69,10 @@ object AmneziawgFmt : FmtBase() {
         config.junkPacketMaxSize = "70"
         config.initPacketJunkSize = "15"
         config.responsePacketJunkSize = "20"
-        config.initPacketJunkHeader = "1234567"
-        config.responsePacketJunkHeader = "2345678"
-        config.transportPacketJunkHeader = "3456789"
+        config.initPacketJunkHeader = "1"
+        config.responsePacketJunkHeader = "2"
+        config.cookiePacketJunkHeader = "3"
+        config.transportPacketJunkHeader = "4"
     }
 
     /**
@@ -94,23 +95,26 @@ object AmneziawgFmt : FmtBase() {
         str.lines().forEach { line ->
             val trimmedLine = line.trim()
 
-            if (trimmedLine.isEmpty() || trimmedLine.startsWith("#")) {
+            if (trimmedLine.isEmpty()) {
                 return@forEach
             }
 
+            // Real-world .conf files often arrive wrapped in channel
+            // signatures / ads (e.g. "Telegram/@...") before [Interface];
+            // ignore everything outside the sections.
             when {
                 trimmedLine.startsWith("[Interface]", ignoreCase = true) -> currentSection = "Interface"
                 trimmedLine.startsWith("[Peer]", ignoreCase = true) -> currentSection = "Peer"
+                currentSection == null -> return@forEach
+                trimmedLine.startsWith("#") || trimmedLine.startsWith("//") -> return@forEach
                 else -> {
-                    if (currentSection != null) {
-                        val parts = trimmedLine.split("=", limit = 2).map { it.trim() }
-                        if (parts.size == 2) {
-                            val key = parts[0].lowercase()
-                            val value = parts[1]
-                            when (currentSection) {
-                                "Interface" -> interfaceParams[key] = value
-                                "Peer" -> peerParams[key] = value
-                            }
+                    val parts = trimmedLine.split("=", limit = 2).map { it.trim() }
+                    if (parts.size == 2) {
+                        val key = parts[0].lowercase()
+                        val value = parts[1]
+                        when (currentSection) {
+                            "Interface" -> interfaceParams[key] = value
+                            "Peer" -> peerParams[key] = value
                         }
                     }
                 }
@@ -142,7 +146,8 @@ object AmneziawgFmt : FmtBase() {
         config.responsePacketJunkSize = peerParams["s2"]?.nullIfBlank()
         config.initPacketJunkHeader = peerParams["h1"]?.nullIfBlank()
         config.responsePacketJunkHeader = peerParams["h2"]?.nullIfBlank()
-        config.transportPacketJunkHeader = peerParams["h3"]?.nullIfBlank()
+        config.cookiePacketJunkHeader = peerParams["h3"]?.nullIfBlank()
+        config.transportPacketJunkHeader = peerParams["h4"]?.nullIfBlank()
 
         applyDefaultJunkParams(config)
         return config

@@ -37,6 +37,7 @@ class ServerUiState(
     responsePacketJunkSize: String = "",
     initPacketJunkHeader: String = "",
     responsePacketJunkHeader: String = "",
+    cookiePacketJunkHeader: String = "",
     transportPacketJunkHeader: String = "",
     obfsPassword: String = "",
     portHopping: String = "",
@@ -94,6 +95,7 @@ class ServerUiState(
     var responsePacketJunkSize by mutableStateOf(responsePacketJunkSize)
     var initPacketJunkHeader by mutableStateOf(initPacketJunkHeader)
     var responsePacketJunkHeader by mutableStateOf(responsePacketJunkHeader)
+    var cookiePacketJunkHeader by mutableStateOf(cookiePacketJunkHeader)
     var transportPacketJunkHeader by mutableStateOf(transportPacketJunkHeader)
     var obfsPassword by mutableStateOf(obfsPassword)
     var portHopping by mutableStateOf(portHopping)
@@ -168,6 +170,7 @@ class ServerUiState(
             responsePacketJunkSize = if (isAmneziawg) responsePacketJunkSize.nullIfBlank() else null,
             initPacketJunkHeader = if (isAmneziawg) initPacketJunkHeader.nullIfBlank() else null,
             responsePacketJunkHeader = if (isAmneziawg) responsePacketJunkHeader.nullIfBlank() else null,
+            cookiePacketJunkHeader = if (isAmneziawg) cookiePacketJunkHeader.nullIfBlank() else null,
             transportPacketJunkHeader = if (isAmneziawg) transportPacketJunkHeader.nullIfBlank() else null,
             obfsPassword = if (isHysteria2) obfsPassword else null,
             portHopping = if (isHysteria2) portHopping else null,
@@ -234,6 +237,7 @@ class ServerUiState(
                 responsePacketJunkSize = initialConfig.responsePacketJunkSize ?: "",
                 initPacketJunkHeader = initialConfig.initPacketJunkHeader ?: "",
                 responsePacketJunkHeader = initialConfig.responsePacketJunkHeader ?: "",
+                cookiePacketJunkHeader = initialConfig.cookiePacketJunkHeader ?: "",
                 transportPacketJunkHeader = initialConfig.transportPacketJunkHeader ?: "",
                 obfsPassword = initialConfig.obfsPassword ?: "",
                 portHopping = initialConfig.portHopping ?: "",

@@ -66,6 +66,7 @@ data class ProfileItem(
     var responsePacketJunkSize: String? = null,
     var initPacketJunkHeader: String? = null,
     var responsePacketJunkHeader: String? = null,
+    var cookiePacketJunkHeader: String? = null,
     var transportPacketJunkHeader: String? = null,
 
     var obfsPassword: String? = null,

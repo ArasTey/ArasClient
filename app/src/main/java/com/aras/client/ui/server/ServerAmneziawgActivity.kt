@@ -117,6 +117,11 @@ class ServerAmneziawgActivity : BaseServerActivity() {
             { state.responsePacketJunkHeader = it }
         )
         FormTextField(
+            stringResource(R.string.server_awg_cookie_header),
+            state.cookiePacketJunkHeader,
+            { state.cookiePacketJunkHeader = it }
+        )
+        FormTextField(
             stringResource(R.string.server_awg_transport_header),
             state.transportPacketJunkHeader,
             { state.transportPacketJunkHeader = it }

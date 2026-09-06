@@ -175,7 +175,8 @@
     <string name="server_awg_response_packet_junk">S2 — response packet junk size (optional)</string>
     <string name="server_awg_init_header">H1 — init packet header (optional, e.g. 5-10 or 123456)</string>
     <string name="server_awg_response_header">H2 — response packet header (optional)</string>
-    <string name="server_awg_transport_header">H3 — transport packet header (optional)</string>
+    <string name="server_awg_cookie_header">H3 — cookie packet header (optional)</string>
+    <string name="server_awg_transport_header">H4 — transport packet header (optional)</string>
     <string name="server_lab_kcp_mtu">mKCP MTU (optional, core default 1350)</string>
     <string name="server_lab_kcp_tti">mKCP TTI (optional, core default 50)</string>
     <string name="toast_success">Success</string>

@@ -318,8 +318,16 @@ object CoreOutboundBuilder {
             peer.responsePacketJunkSize = parseJunkInt(profileItem.responsePacketJunkSize)
             peer.initPacketJunkHeader = parseJunkHeader(profileItem.initPacketJunkHeader)
             peer.responsePacketJunkHeader = parseJunkHeader(profileItem.responsePacketJunkHeader)
+            peer.cookiePacketJunkHeader = parseJunkHeader(profileItem.cookiePacketJunkHeader)
             peer.transportPacketJunkHeader = parseJunkHeader(profileItem.transportPacketJunkHeader)
         }
+        // Cloudflare WARP endpoints filter IPv6 handshakes; the v6 fallback
+        // dial fails with "network is unreachable". Prefer IPv4 here and
+        // drop v6 local addresses so the tunnel binds v4 only.
+        outboundBean.settings?.domainStrategy = "forceIPv4"
+        outboundBean.settings?.address = outboundBean.settings?.address
+            ?.let { list -> (list as? List<*>)?.filterIsInstance<String>()?.filter { !it.contains(":") } }
+            ?.takeIf { it.isNotEmpty() } ?: outboundBean.settings?.address
         return outboundBean
     }
 
