@@ -324,6 +324,26 @@ object CoreOutboundBuilder {
         // Cloudflare WARP endpoints filter IPv6 handshakes; the v6 fallback
         // dial fails with "network is unreachable". Prefer IPv4 here and
         // drop v6 local addresses so the tunnel binds v4 only.
+        // Profiles imported before the junk params existed (or with defaults)
+        // carry none — apply AmneziaWG's standard obfuscation defaults at
+        // connection time so old saved profiles work without re-import.
+        fun blank(v: String?) = v.isNullOrBlank()
+        if (blank(profileItem.junkPacketCount) && blank(profileItem.junkPacketMinSize) &&
+            blank(profileItem.junkPacketMaxSize) && blank(profileItem.initPacketJunkSize) &&
+            blank(profileItem.responsePacketJunkSize) && blank(profileItem.initPacketJunkHeader) &&
+            blank(profileItem.responsePacketJunkHeader) && blank(profileItem.cookiePacketJunkHeader) &&
+            blank(profileItem.transportPacketJunkHeader)
+        ) {
+            profileItem.junkPacketCount = "4"
+            profileItem.junkPacketMinSize = "40"
+            profileItem.junkPacketMaxSize = "70"
+            profileItem.initPacketJunkSize = "15"
+            profileItem.responsePacketJunkSize = "20"
+            profileItem.initPacketJunkHeader = "1"
+            profileItem.responsePacketJunkHeader = "2"
+            profileItem.cookiePacketJunkHeader = "3"
+            profileItem.transportPacketJunkHeader = "4"
+        }
         // Kernel TUN cannot apply AmneziaWG junk packets — always use the
         // userspace (gVisor) TUN for AWG profiles.
         outboundBean.settings?.noKernelTun = true
