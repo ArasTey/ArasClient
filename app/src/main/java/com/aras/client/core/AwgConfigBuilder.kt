@@ -12,7 +12,7 @@ import com.aras.client.dto.entities.ProfileItem
 object AwgConfigBuilder {
 
     private fun hex(key: String): String =
-        Base64.decode(key, Base64.DEFAULT).joinToString("") { "%02x".format(it) }
+        java.util.Base64.getDecoder().decode(key).joinToString("") { "%02x".format(it) }
 
     private fun intOrDefault(v: String?, default: Int): Int = v?.trim()?.toIntOrNull() ?: default
 
