@@ -135,7 +135,16 @@ object CoreServiceManager {
         // any xray config.
         if (config.configType == EConfigType.AMNEZIAWG) {
             currentConfig = config
-            val fd = vpnInterface?.fd ?: error("VPN interface missing for AmneziaWG")
+            if (CoreNativeManager.awgIsRunning()) {
+                // Tunnel already up (e.g. reload triggered by a subscription
+                // update) — leave it as-is.
+                MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+                return
+            }
+            val pfd = vpnInterface ?: error("VPN interface missing for AmneziaWG")
+            // Transfer fd ownership to the Go tunnel: Kotlin detaches (its
+            // close() will no longer touch this fd), Go closes it on stop.
+            val fd = pfd.detachFd()
             val uapi = AwgConfigBuilder.buildUapi(config)
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: AWG UAPI:\n$uapi")
             CoreNativeManager.awgTurnOn(fd, uapi, 1280)
