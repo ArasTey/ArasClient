@@ -141,10 +141,12 @@ object CoreServiceManager {
         // client runs AmneziaWG on Android.
         if (config.configType == EConfigType.AMNEZIAWG) {
             val fd = vpnInterface?.fd ?: error("VPN interface missing for AmneziaWG")
-            NotificationManager.showNotification(config)
             val uapi = AwgConfigBuilder.buildUapi(config)
+            LogUtil.i(AppConfig.TAG, "StartCore-Manager: AWG UAPI:\n$uapi")
             CoreNativeManager.awgTurnOn(fd, uapi, 1280)
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: standalone AmneziaWG tunnel up")
+            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+            ConnectionStatsManager.onSessionStarted()
             return
         }
 
