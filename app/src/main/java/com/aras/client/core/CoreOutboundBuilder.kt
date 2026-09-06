@@ -324,6 +324,9 @@ object CoreOutboundBuilder {
         // Cloudflare WARP endpoints filter IPv6 handshakes; the v6 fallback
         // dial fails with "network is unreachable". Prefer IPv4 here and
         // drop v6 local addresses so the tunnel binds v4 only.
+        // Kernel TUN cannot apply AmneziaWG junk packets — always use the
+        // userspace (gVisor) TUN for AWG profiles.
+        outboundBean.settings?.noKernelTun = true
         outboundBean.settings?.domainStrategy = "forceIPv4"
         outboundBean.settings?.address = outboundBean.settings?.address
             ?.let { list -> (list as? List<*>)?.filterIsInstance<String>()?.filter { !it.contains(":") } }

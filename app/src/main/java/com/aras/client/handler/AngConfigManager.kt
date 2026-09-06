@@ -233,6 +233,13 @@ object AngConfigManager {
             if (count <= 0) {
                 count = parseCustomConfigServer(server, subid, append)
             }
+            if (count <= 0 && server != null && server.contains("[Interface]") && server.contains("[Peer]")) {
+                count = parseCustomConfigServer(
+                    server.substringAfter("[Interface]").let { "[Interface]$it" },
+                    subid,
+                    append
+                )
+            }
 
             var newSubIds = parseBatchSubscription(server)
             if (newSubIds.isEmpty()) {
