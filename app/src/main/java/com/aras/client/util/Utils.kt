@@ -96,12 +96,13 @@ object Utils {
         try {
             return Base64.decode(text, Base64.NO_WRAP).toString(Charsets.UTF_8)
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to decode standard base64", e)
+            // Expected when the text is not base64 (e.g. a plain .conf import);
+            // fall through to URL-safe and finally to raw text.
         }
         try {
             return Base64.decode(text, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to decode URL-safe base64", e)
+            LogUtil.d(AppConfig.TAG, "Text is not base64 — treating as raw")
         }
         return null
     }

@@ -128,18 +128,13 @@ object CoreServiceManager {
         val config = MmkvManager.decodeServerConfig(guid) ?: error("Failed to decode server config")
 
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting core loop for ${config.remarks}")
-        val result = CoreConfigManager.getXrayConfig(service, guid)
-        LogUtil.d(AppConfig.TAG, result.content)
-        if (!result.status) {
-            error(result.errorMessage.ifBlank { "Failed to get Xray config" })
-        }
-
-        currentConfig = config
 
         // AmneziaWG profiles bypass Xray entirely: the standalone awg-go
         // tunnel takes the VPN TUN fd directly — exactly how the AmneziaVPN
-        // client runs AmneziaWG on Android.
+        // client runs AmneziaWG on Android. Must be checked BEFORE building
+        // any xray config.
         if (config.configType == EConfigType.AMNEZIAWG) {
+            currentConfig = config
             val fd = vpnInterface?.fd ?: error("VPN interface missing for AmneziaWG")
             val uapi = AwgConfigBuilder.buildUapi(config)
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: AWG UAPI:\n$uapi")
@@ -149,6 +144,14 @@ object CoreServiceManager {
             ConnectionStatsManager.onSessionStarted()
             return
         }
+
+        val result = CoreConfigManager.getXrayConfig(service, guid)
+        LogUtil.d(AppConfig.TAG, result.content)
+        if (!result.status) {
+            error(result.errorMessage.ifBlank { "Failed to get Xray config" })
+        }
+
+        currentConfig = config
 
         var tunFd = vpnInterface?.fd ?: 0
         val dialerMode = BrowserDialerMode.from(config.browserDialerMode)
