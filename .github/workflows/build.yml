@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+  release:
+    types: [ published ]
 
 jobs:
   build-core:
@@ -55,14 +57,12 @@ jobs:
           cd core-bindings
           curl -sL https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geoip.dat -o assets/geoip.dat
           curl -sL https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geosite.dat -o assets/geosite.dat
-          ls -la assets/
 
       - name: Build core AAR (aras-core.aar)
         env:
           ANDROID_NDK_HOME: $HOME/android-sdk/ndk/27.2.12479018
         run: |
           cd core-bindings
-          # wire go.mod to the public ArasTey/xray-core source
           go mod edit -replace=github.com/xtls/xray-core=../xray-core-src
           go mod edit -dropreplace=github.com/patterniha/xray-core 2>/dev/null || true
           go mod tidy
@@ -109,8 +109,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: apks
-          path: |
-            app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/*.apk
 
   release:
     runs-on: ubuntu-latest
