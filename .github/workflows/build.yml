@@ -1,0 +1,131 @@
+name: Build ArasClient from open source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-core:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout core bindings
+        uses: actions/checkout@v4
+        with:
+          repository: ArasTey/AndroidLibXrayLite
+          ref: main
+          path: core-bindings
+
+      - name: Checkout xray-core source
+        uses: actions/checkout@v4
+        with:
+          repository: ArasTey/xray-core
+          ref: main
+          path: xray-core-src
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android NDK
+        run: |
+          ANDROID_HOME=$HOME/android-sdk
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/clt.zip
+          unzip -q /tmp/clt.zip -d $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018" >/dev/null
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          gomobile init
+
+      - name: Download geo assets
+        run: |
+          cd core-bindings
+          curl -sL https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geoip.dat -o assets/geoip.dat
+          curl -sL https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geosite.dat -o assets/geosite.dat
+          ls -la assets/
+
+      - name: Build core AAR (aras-core.aar)
+        env:
+          ANDROID_NDK_HOME: $HOME/android-sdk/ndk/27.2.12479018
+        run: |
+          cd core-bindings
+          # wire go.mod to the public ArasTey/xray-core source
+          go mod edit -replace=github.com/xtls/xray-core=../xray-core-src
+          go mod edit -dropreplace=github.com/patterniha/xray-core 2>/dev/null || true
+          go mod tidy
+          gomobile bind -androidapi 24 -trimpath \
+            -ldflags='-s -w -buildid= -checklinkname=0' \
+            -o $GITHUB_WORKSPACE/aras-core.aar ./
+
+      - name: Upload core AAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aras-core-aar
+          path: aras-core.aar
+
+  build-app:
+    runs-on: ubuntu-latest
+    needs: build-core
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Download core AAR built from source
+        uses: actions/download-artifact@v4
+        with:
+          name: aras-core-aar
+          path: artifact-core
+
+      - name: Place AAR into app libs
+        run: |
+          mkdir -p app/libs
+          cp artifact-core/aras-core.aar app/libs/aras-core.aar
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build release APKs
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: |
+            app/build/outputs/apk/release/*.apk
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build-app
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: apks
+          path: apks
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apks/*.apk
