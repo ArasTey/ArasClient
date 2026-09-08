@@ -38,13 +38,14 @@ jobs:
 
       - name: Set up Android NDK
         run: |
-          ANDROID_HOME=$HOME/android-sdk
-          mkdir -p $ANDROID_HOME/cmdline-tools
+          SDK=$HOME/android-sdk
+          mkdir -p $SDK/cmdline-tools
           curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/clt.zip
-          unzip -q /tmp/clt.zip -d $ANDROID_HOME/cmdline-tools
-          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018" >/dev/null
+          unzip -q /tmp/clt.zip -d $SDK/cmdline-tools
+          mv $SDK/cmdline-tools/cmdline-tools $SDK/cmdline-tools/latest
+          yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          $SDK/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018" >/dev/null
+          echo "ANDROID_NDK_HOME=$SDK/ndk/27.2.12479018" >> $GITHUB_ENV
 
       - name: Install gomobile
         run: |
@@ -59,8 +60,6 @@ jobs:
           curl -sL https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geosite.dat -o assets/geosite.dat
 
       - name: Build core AAR (aras-core.aar)
-        env:
-          ANDROID_NDK_HOME: $HOME/android-sdk/ndk/27.2.12479018
         run: |
           cd core-bindings
           go mod edit -replace=github.com/xtls/xray-core=../xray-core-src
