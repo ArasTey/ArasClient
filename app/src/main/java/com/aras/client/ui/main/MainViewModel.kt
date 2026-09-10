@@ -273,6 +273,7 @@ class MainViewModel(
                 // The Free group is created by the sync above — refresh tabs
                 setupGroupTab(forceRefresh = true).join()
                 dataSource.syncSubscriptions()
+                FreeSubManager.protectAll()
                 refreshGeoIPIfDue()
             } catch (cancelled: CancellationException) {
                 throw cancelled

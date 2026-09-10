@@ -65,6 +65,28 @@ object FreeSubManager {
                 )
             }
 
+            // Optional subscription link: sub-url.txt holds one https:// URL.
+            // The Free group fetches it like a normal subscription (auto-update).
+            names.firstOrNull { it.equals("sub-url.txt", true) }?.let { urlName ->
+                val url = runCatching {
+                    context.assets.open("freesub/$urlName").bufferedReader().use { it.readText().trim() }
+                }.getOrNull().orEmpty()
+                if (url.startsWith("http")) {
+                    val sub = MmkvManager.decodeSubscription(FREE_SUB_ID)
+                    if (sub == null || sub.url != url) {
+                        MmkvManager.encodeSubscription(
+                            FREE_SUB_ID,
+                            SubscriptionItem(
+                                remarks = FREE_SUB_REMARKS,
+                                url = url,
+                                enabled = true,
+                                autoUpdate = true,
+                            )
+                        )
+                    }
+                }
+            }
+
             val stored = decodeMap()
             val seen = mutableSetOf<String>()
 
@@ -102,10 +124,26 @@ object FreeSubManager {
             }
 
             persistMap(stored)
+            protectAll()
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "FreeSub sync failed", e)
         } finally {
             inFlight.set(false)
+        }
+    }
+
+    /**
+     * Re-marks every profile in the Free group as protected — covers configs
+     * imported by the normal subscription-update flow (which bypasses the
+     * importFile path).
+     */
+    fun protectAll() {
+        try {
+            MmkvManager.decodeServerList(FREE_SUB_ID).forEach { guid ->
+                ArasExportImportManager.markProtected(guid)
+            }
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "FreeSub protectAll failed", e)
         }
     }
 

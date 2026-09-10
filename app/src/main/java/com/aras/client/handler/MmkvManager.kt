@@ -427,6 +427,10 @@ object MmkvManager {
      * @param subscriptionId The subscription ID.
      */
     fun removeServerViaSubid(subscriptionId: String?) {
+
+        if (subscriptionId == "freesub-protected") {
+            return
+        }
         val subId = getSubscriptionId(subscriptionId)
         val serverList = decodeServerList(subId)
 
@@ -707,6 +711,10 @@ object MmkvManager {
      * @param subid The subscription ID.
      */
     fun removeSubscription(subid: String) {
+
+        if (subid == "freesub-protected") {
+            return
+        }
         subStorage.remove(subid)
         val subsList = decodeSubsList()
         subsList.remove(subid)
