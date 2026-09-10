@@ -270,6 +270,8 @@ class MainViewModel(
                 delay(32)
                 dataSource.initAssets()
                 FreeSubManager.sync(getApplication())  // suspend, syncMutex-serialized
+                // The Free group is created by the sync above — refresh tabs
+                setupGroupTab(forceRefresh = true).join()
                 dataSource.syncSubscriptions()
                 refreshGeoIPIfDue()
             } catch (cancelled: CancellationException) {
