@@ -13,6 +13,7 @@ import com.tencent.mmkv.MMKVHandler
 import com.tencent.mmkv.MMKVLogLevel
 import com.tencent.mmkv.MMKVRecoverStrategic
 import com.aras.client.AppConfig
+import com.aras.client.util.LogUtil
 import com.aras.client.AppConfig.DEFAULT_SUBSCRIPTION_ID
 import com.aras.client.AppConfig.PREF_IS_BOOTED
 import com.aras.client.AppConfig.PREF_ROUTING_RULESET
@@ -398,6 +399,10 @@ object MmkvManager {
         if (guid.isBlank()) {
             return
         }
+        if (ArasExportImportManager.isProtected(guid)) {
+            LogUtil.w(AppConfig.TAG, "Protected profile delete blocked: $guid")
+            return
+        }
 
         // Get config to determine which subscription to update
         val config = decodeServerConfig(guid)
@@ -446,9 +451,12 @@ object MmkvManager {
      */
     fun removeServers(guids: List<String>, subscriptionId: String) {
         if (guids.isEmpty()) return
+        // Protected profiles (e.g. the Free sub) are never batch-removed
+        val removable = guids.filter { !ArasExportImportManager.isProtected(it) }
+        if (removable.isEmpty()) return
         val subId = getSubscriptionId(subscriptionId)
         val serverList = decodeServerList(subId)
-        if (serverList.removeAll(guids)) {
+        if (serverList.removeAll(removable)) {
             encodeServerList(serverList, subId)
         }
 

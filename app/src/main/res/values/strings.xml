@@ -180,6 +180,8 @@
     <string name="server_lab_kcp_mtu">mKCP MTU (optional, core default 1350)</string>
     <string name="server_lab_kcp_tti">mKCP TTI (optional, core default 50)</string>
     <string name="toast_success">Success</string>
+    <string name="free_sub_locked">The Free group is locked</string>
+    <string name="free_sub_protected">This config is protected</string>
     <string name="update_banner_available">Update available!</string>
     <string name="update_banner_tap_to_update">A new version is ready to install.</string>
     <string name="update_banner_dismiss">Dismiss</string>

@@ -69,6 +69,12 @@ class SubSettingActivity : BaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val subId = intent?.getStringExtra("_id")
+        if (subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) {
+            toast(com.aras.client.R.string.free_sub_locked)
+            finish()
+            return
+        }
     }
 
     @Composable

@@ -82,7 +82,8 @@ internal fun serverMenuActions(
 ): List<ServerMenuAction> = ServerMenuAction.entries.filter { action ->
     // Protected configs: only test/delete are allowed — no share, no edit,
     // no full-content view. Enforced here so every entry point is covered.
-    if (isProtected && (action.isShareAction || action == ServerMenuAction.Edit)) return@filter false
+    if (isProtected && (action.isShareAction || action == ServerMenuAction.Edit ||
+                action == ServerMenuAction.Delete)) return@filter false
     (includeManagementActions || action.isShareAction) && (!isComplexProfile || action.supportsComplexProfiles)
 }
 

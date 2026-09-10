@@ -63,6 +63,12 @@ object ArasExportImportManager {
 
     fun isProtected(guid: String): Boolean = protectedGuids.contains(guid)
 
+    /** Marks guids as protected at the data layer (used by the Free sub). */
+    fun markProtected(guid: String) {
+        protectedGuids.add(guid)
+        persistProtected()
+    }
+
     fun forgetProtected(guids: List<String>) {
         if (guids.any { protectedGuids.remove(it) }) persistProtected()
     }

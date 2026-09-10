@@ -10,6 +10,8 @@ import com.aras.client.dto.ConnectionTestResult
 import com.aras.client.dto.GroupMapItem
 import com.aras.client.dto.LocateTarget
 import com.aras.client.dto.TestServiceMessage
+import com.aras.client.handler.ArasExportImportManager
+import com.aras.client.handler.FreeSubManager
 import com.aras.client.handler.MmkvManager
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.dto.entities.ServersCache
@@ -267,6 +269,7 @@ class MainViewModel(
                 initialPageReady.await()
                 delay(32)
                 dataSource.initAssets()
+                FreeSubManager.sync(getApplication())  // suspend, syncMutex-serialized
                 dataSource.syncSubscriptions()
                 refreshGeoIPIfDue()
             } catch (cancelled: CancellationException) {
@@ -718,6 +721,10 @@ class MainViewModel(
     fun removeServerAndRefresh(guid: String) {
         if (guid == uiState.value.selectedGuid) {
             toast(R.string.toast_action_not_allowed)
+            return
+        }
+        if (ArasExportImportManager.isProtected(guid)) {
+            toast(R.string.free_sub_protected)
             return
         }
         viewModelScope.launch(ioDispatcher) {
