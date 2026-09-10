@@ -41,7 +41,24 @@ object FreeSubManager {
     fun isFreeSubId(subscriptionId: String?): Boolean =
         subscriptionId == FREE_SUB_ID
 
-    /** Re-marks every profile in the Free group as protected (covers sub-fetch imports). */
+    /**
+     * Re-reads sub.txt and updates the Free group's URL (if changed) so the
+     * normal update flow fetches the current link. Returns true when a URL
+     * is set.
+     */
+    fun refreshUrl(context: Context): Boolean {
+        val url = runCatching {
+            context.assets.open("freesub/sub.txt").bufferedReader().use { it.readText().trim() }
+        }.getOrNull().orEmpty()
+        if (!url.startsWith("http")) return false
+        val sub = MmkvManager.decodeSubscription(FREE_SUB_ID) ?: return false
+        if (sub.url != url) {
+            sub.url = url
+            MmkvManager.encodeSubscription(FREE_SUB_ID, sub)
+        }
+        return true
+    }
+
     fun protectAll() {
         try {
             MmkvManager.decodeServerList(FREE_SUB_ID).forEach { guid ->

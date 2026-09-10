@@ -273,7 +273,7 @@ class MainViewModel(
                 // The Free group is created by the sync above — refresh tabs
                 setupGroupTab(forceRefresh = true).join()
                 dataSource.syncSubscriptions()
-                FreeSubManager.protectAll()
+                FreeSubManager.protectAll()  // covers sub-fetch imports
                 refreshGeoIPIfDue()
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -482,11 +482,18 @@ class MainViewModel(
         launchLoading {
             withContext(ioDispatcher) {
                 try {
+                    // Free sub: re-read sub.txt so an updated link is fetched now
+                    if (subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) {
+                        FreeSubManager.refreshUrl(getApplication())
+                    }
                     val result = if (subId.isEmpty()) {
                         dataSource.updateConfigViaSubAll()
                     } else {
                         val item = dataSource.getSubscriptionItem(subId) ?: return@withContext
                         dataSource.updateConfigViaSub(SubscriptionCache(subId, item))
+                    }
+                    if (subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) {
+                        FreeSubManager.protectAll()
                     }
                     when {
                         result.successCount + result.failureCount + result.skipCount == 0 ->

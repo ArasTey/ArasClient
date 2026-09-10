@@ -25,7 +25,7 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
     private val subscriptions: MutableList<SubscriptionCache> =
         MmkvManager.decodeSubscriptions().toMutableList()
 
-    private val _subsFlow = MutableStateFlow(subscriptions.toList())
+    private val _subsFlow = MutableStateFlow(subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID })
     val subsFlow: StateFlow<List<SubscriptionCache>> = _subsFlow.asStateFlow()
 
     fun getAll(): List<SubscriptionCache> = subscriptions.toList()
@@ -33,7 +33,7 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
     fun reload() {
         subscriptions.clear()
         subscriptions.addAll(MmkvManager.decodeSubscriptions())
-        _subsFlow.value = subscriptions.toList()
+        _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
     }
 
     fun remove(subId: String): Boolean {
@@ -42,7 +42,7 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
             SettingsManager.removeSubscriptionWithDefault(subId)
             SettingsChangeManager.makeSetupGroupTab()
         }
-        _subsFlow.value = subscriptions.toList()
+        _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
         return changed
     }
 
@@ -52,14 +52,14 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
             subscriptions[idx] = SubscriptionCache(subId, item)
             MmkvManager.encodeSubscription(subId, item)
         }
-        _subsFlow.value = subscriptions.toList()
+        _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
     }
 
     fun move(fromPosition: Int, toPosition: Int) {
         if (subscriptions.moveItem(fromPosition, toPosition)) {
             MmkvManager.encodeSubsList(subscriptions.mapTo(mutableListOf()) { it.guid })
             SettingsChangeManager.makeSetupGroupTab()
-            _subsFlow.value = subscriptions.toList()
+            _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
         }
     }
 
