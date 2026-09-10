@@ -3,11 +3,11 @@ build/
 .gradle/
 .kotlin/
 local.properties
+!keystore.properties
+!keystore/debug.keystore
 *.apk.idsig
 # Signing
-keystore.properties
 *.jks
-*.keystore
 !keystore-example.properties
 # IDE / OS
 .idea/
