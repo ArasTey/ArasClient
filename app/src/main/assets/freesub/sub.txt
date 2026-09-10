@@ -1,1 +1,2 @@
-
+https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/refs/heads/main/V2Ray-Config-By-EbraSha-All-Type.txt
+https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt#Patterniha-F
