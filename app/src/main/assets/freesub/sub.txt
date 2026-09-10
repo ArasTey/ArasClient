@@ -1,1 +1,1 @@
-https://example.com/freesub
+https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt#Patterniha-F
