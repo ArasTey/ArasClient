@@ -1,1 +1,4 @@
+vless://ba1eb22e-0ccb-2544-35bb-653e8c00ec7c@api.turbocenter.shop:443?path=%2Fi%2FpygmRwhOmqRlu7CYIG7yXVHq%2Fws%2Fba1eb22e-0ccb-2544-35bb-653e8c00ec7c&security=tls&alpn=http%2F1.1&encryption=none&insecure=0&host=api.turbocenter.shop&fp=chrome&type=ws&allowInsecure=0&sni=api.turbocenter.shop#Lunel-Aras%20%C2%B7%20VLESS
+trojan://2d9af20e-beb7-2aac-669b-08e5cd72ca8d@api.turbocenter.shop:443?path=%2Fi%2FpygmRwhOmqRlu7CYIG7yXVHq%2Ftrojan-ws&security=tls&alpn=http%2F1.1&insecure=0&host=api.turbocenter.shop&fp=chrome&type=ws&allowInsecure=0&sni=api.turbocenter.shop#Lunel-Aras%20%C2%B7%20Trojan
+vless://306d48f0-c772-6b85-930d-d313ffecee6e@api.turbocenter.shop:443?mode=packet-up&path=%2Fi%2FpygmRwhOmqRlu7CYIG7yXVHq%2Fxhttp-siz10%2Fpacket-up%2F306d48f0-c772-6b85-930d-d313ffecee6e&security=tls&alpn=http%2F1.1&encryption=none&insecure=0&host=api.turbocenter.shop&fp=chrome&type=xhttp&allowInsecure=0&sni=api.turbocenter.shop#Lunel-Aras%20%C2%B7%20xHTTP
 
