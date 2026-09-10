@@ -26,7 +26,7 @@ object FreeSubManager {
     private const val FREE_SUB_REMARKS = "Free"
 
     const val DEFAULT_URL =
-        "https://raw.githubusercontent.com/ArasTey/ArasClient/main/app/src/main/assets/freesub/config.txt"
+        "https://raw.githubusercontent.com/ArasTey/freesub/main/config.txt"
 
     private val syncMutex = Mutex()
 
