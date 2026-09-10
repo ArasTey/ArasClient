@@ -482,9 +482,9 @@ class MainViewModel(
         launchLoading {
             withContext(ioDispatcher) {
                 try {
-                    // Free sub: re-read sub.txt so an updated link is fetched now
+                    // Free sub: re-apply the URL from sub.txt / default before fetching
                     if (subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) {
-                        FreeSubManager.refreshUrl(getApplication())
+                        com.aras.client.handler.FreeSubManager.applyUrl(getApplication())
                     }
                     val result = if (subId.isEmpty()) {
                         dataSource.updateConfigViaSubAll()
@@ -731,10 +731,6 @@ class MainViewModel(
     fun removeServerAndRefresh(guid: String) {
         if (guid == uiState.value.selectedGuid) {
             toast(R.string.toast_action_not_allowed)
-            return
-        }
-        if (ArasExportImportManager.isProtected(guid)) {
-            toast(R.string.free_sub_protected)
             return
         }
         viewModelScope.launch(ioDispatcher) {

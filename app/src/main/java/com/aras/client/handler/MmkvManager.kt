@@ -399,10 +399,6 @@ object MmkvManager {
         if (guid.isBlank()) {
             return
         }
-        if (ArasExportImportManager.isProtected(guid)) {
-            LogUtil.w(AppConfig.TAG, "Protected profile delete blocked: $guid")
-            return
-        }
 
         // Get config to determine which subscription to update
         val config = decodeServerConfig(guid)
@@ -455,12 +451,9 @@ object MmkvManager {
      */
     fun removeServers(guids: List<String>, subscriptionId: String) {
         if (guids.isEmpty()) return
-        // Protected profiles (e.g. the Free sub) are never batch-removed
-        val removable = guids.filter { !ArasExportImportManager.isProtected(it) }
-        if (removable.isEmpty()) return
         val subId = getSubscriptionId(subscriptionId)
         val serverList = decodeServerList(subId)
-        if (serverList.removeAll(removable)) {
+        if (serverList.removeAll(guids)) {
             encodeServerList(serverList, subId)
         }
 
