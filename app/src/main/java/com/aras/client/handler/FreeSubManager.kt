@@ -1,39 +1,38 @@
 package com.aras.client.handler
 
 import android.content.Context
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.atomic.AtomicBoolean
 import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.dto.entities.SubscriptionItem
-import com.aras.client.enums.EConfigType
 import com.aras.client.fmt.AmneziawgFmt
 import com.aras.client.fmt.AnytlsFmt
 import com.aras.client.fmt.VlessFmt
 import com.aras.client.util.LogUtil
-import com.aras.client.util.Utils
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Bundled "Free" subscription: configs ship inside the APK assets
- * (assets/freesub/) and are synced into a locked group at app start.
+ * Bundled "Free" group. Two files in assets/freesub/ (ArasTey edits, users cannot):
  *
- * - Profiles are marked protected at the data layer (share/edit/delete blocked)
- * - The group itself has no URL / auto-update / traffic info
- * - Only ping (test) and connect are exposed to the user
+ *  - config.txt : one link per line (vless:// anytls:// awg:// ...) → imported directly
+ *  - sub.txt    : one https:// subscription URL → fetched at every app start, its
+ *                 links imported the same way (auto-updating free sub)
  *
- * ArasTey adds/updates configs by editing files in assets/freesub/ and
- * rebuilding; the app mirrors the folder on every launch.
+ * Every imported profile is marked protected at the data layer:
+ * users cannot view/edit/share/delete them — only ping and connect.
  */
 object FreeSubManager {
 
-    private val syncMutex = Mutex()
-    private val inFlight = AtomicBoolean(false)
-
     const val FREE_SUB_ID = "freesub-protected"
     private const val FREE_SUB_REMARKS = "Free"
-    private const val MAP_KEY = "FREESUB_FILE_MAP"
+    private const val MAP_KEY = "FREESUB_MAP"
+
+    private val syncMutex = Mutex()
+
+    private data class Entry(val hash: String, val guids: List<String>)
 
     private fun hashOf(text: String): String =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
@@ -42,101 +41,7 @@ object FreeSubManager {
     fun isFreeSubId(subscriptionId: String?): Boolean =
         subscriptionId == FREE_SUB_ID
 
-    /**
-     * Mirrors assets/freesub/ into the locked group.
-     * Safe to call on every app start: only changed files are re-imported.
-     */
-    suspend fun sync(context: Context) = syncMutex.withLock {
-        // Overlapping syncs (restart race) would double-import the same files.
-        if (!inFlight.compareAndSet(false, true)) return@withLock
-        try {
-            val names = context.assets.list("freesub")?.toList() ?: emptyList()
-
-            // Ensure the locked group exists
-            if (MmkvManager.decodeSubscription(FREE_SUB_ID) == null) {
-                MmkvManager.encodeSubscription(
-                    FREE_SUB_ID,
-                    SubscriptionItem(
-                        remarks = FREE_SUB_REMARKS,
-                        url = "",
-                        enabled = true,
-                        autoUpdate = false,
-                    )
-                )
-            }
-
-            // Optional subscription link: sub-url.txt holds one https:// URL.
-            // The Free group fetches it like a normal subscription (auto-update).
-            names.firstOrNull { it.equals("sub-url.txt", true) }?.let { urlName ->
-                val url = runCatching {
-                    context.assets.open("freesub/$urlName").bufferedReader().use { it.readText().trim() }
-                }.getOrNull().orEmpty()
-                if (url.startsWith("http")) {
-                    val sub = MmkvManager.decodeSubscription(FREE_SUB_ID)
-                    if (sub == null || sub.url != url) {
-                        MmkvManager.encodeSubscription(
-                            FREE_SUB_ID,
-                            SubscriptionItem(
-                                remarks = FREE_SUB_REMARKS,
-                                url = url,
-                                enabled = true,
-                                autoUpdate = true,
-                            )
-                        )
-                    }
-                }
-            }
-
-            val stored = decodeMap()
-            val seen = mutableSetOf<String>()
-
-            names.filter { it.endsWith(".conf") || it.endsWith(".txt") }.forEach { name ->
-                val text = runCatching {
-                    context.assets.open("freesub/$name").bufferedReader().use { it.readText() }
-                }.getOrNull() ?: return@forEach
-
-                val hash = hashOf(text)
-                val entry = stored[name]
-                if (entry != null && entry.first == hash) {
-                    seen.add(name)
-                    return@forEach
-                }
-
-                // Remove previously imported profiles of this file
-                entry?.second?.forEach { guid ->
-                    MmkvManager.removeServer(guid)
-                    ArasExportImportManager.forgetProtected(listOf(guid))
-                }
-
-                val guids = importFile(name, text)
-                if (guids.isNotEmpty()) {
-                    stored[name] = hash to guids
-                    seen.add(name)
-                }
-            }
-
-            // Remove profiles whose source file was deleted
-            stored.keys.filter { it !in seen }.forEach { name ->
-                stored.remove(name)?.second?.forEach { guid ->
-                    MmkvManager.removeServer(guid)
-                    ArasExportImportManager.forgetProtected(listOf(guid))
-                }
-            }
-
-            persistMap(stored)
-            protectAll()
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "FreeSub sync failed", e)
-        } finally {
-            inFlight.set(false)
-        }
-    }
-
-    /**
-     * Re-marks every profile in the Free group as protected — covers configs
-     * imported by the normal subscription-update flow (which bypasses the
-     * importFile path).
-     */
+    /** Re-marks every profile in the Free group as protected (covers sub-fetch imports). */
     fun protectAll() {
         try {
             MmkvManager.decodeServerList(FREE_SUB_ID).forEach { guid ->
@@ -147,55 +52,141 @@ object FreeSubManager {
         }
     }
 
-    /** Returns imported profile guids. */
-    private fun importFile(name: String, text: String): List<String> {
-        val guids = mutableListOf<String>()
+    /** Mirrors assets/freesub/ into the locked group. Safe on every app start. */
+    suspend fun sync(context: Context) = syncMutex.withLock {
+        try {
+            ensureGroup()
 
-        fun commit(profile: ProfileItem) {
+            val stored = decodeMap()
+            val seen = mutableSetOf<String>()
+
+            // ---- config.txt : direct links ----
+            val directText = readAsset(context, "config.txt")
+            if (directText != null) {
+                syncSource("config.txt", hashOf(directText), stored, seen) {
+                    importLinks(directText)
+                }
+            }
+
+            // ---- sub.txt : one https:// subscription URL, fetched at start ----
+            val subUrl = readAsset(context, "sub.txt")?.trim()?.takeIf { it.startsWith("http") }
+            if (subUrl != null) {
+                val sub = MmkvManager.decodeSubscription(FREE_SUB_ID)
+                if (sub == null || sub.url != subUrl) {
+                    MmkvManager.encodeSubscription(
+                        FREE_SUB_ID,
+                        SubscriptionItem(remarks = FREE_SUB_REMARKS, url = subUrl, autoUpdate = true)
+                    )
+                }
+                val fetched = runCatching {
+                    val conn = java.net.URL(subUrl).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 15000
+                    conn.instanceFollowRedirects = true
+                    conn.setRequestProperty("User-Agent", "ArasClient/1.6")
+                    if (conn.responseCode in 200..299) {
+                        conn.inputStream.bufferedReader().use { it.readText() }
+                    } else null
+                }.getOrNull()
+                if (fetched != null) {
+                    syncSource("sub.txt", hashOf(subUrl + "\n" + fetched), stored, seen) {
+                        importLinks(fetched)
+                    }
+                }
+            }
+
+            // ---- remove profiles whose source disappeared ----
+            stored.keys.filter { it !in seen }.forEach { name ->
+                stored.remove(name)?.guids?.forEach { guid ->
+                    MmkvManager.removeServer(guid)
+                    ArasExportImportManager.forgetProtected(listOf(guid))
+                }
+            }
+
+            persistMap(stored)
+            protectAll()
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "FreeSub sync failed", e)
+        }
+    }
+
+    private fun ensureGroup() {
+        if (MmkvManager.decodeSubscription(FREE_SUB_ID) == null) {
+            MmkvManager.encodeSubscription(
+                FREE_SUB_ID,
+                SubscriptionItem(remarks = FREE_SUB_REMARKS, url = "", autoUpdate = false)
+            )
+        }
+    }
+
+    private fun readAsset(context: Context, name: String): String? = runCatching {
+        context.assets.open("freesub/$name").bufferedReader().use { it.readText() }
+    }.getOrNull()
+
+    /**
+     * Generic hash-gated import: if the source hash changed, removes the old
+     * profiles of this source and imports the new ones via [import].
+     */
+    private inline fun syncSource(
+        name: String,
+        hash: String,
+        stored: MutableMap<String, Entry>,
+        seen: MutableSet<String>,
+        import: () -> List<String>
+    ) {
+        val entry = stored[name]
+        if (entry != null && entry.hash == hash) {
+            seen.add(name)
+            return
+        }
+        entry?.guids?.forEach { guid ->
+            MmkvManager.removeServer(guid)
+            ArasExportImportManager.forgetProtected(listOf(guid))
+        }
+        val guids = import()
+        if (guids.isNotEmpty()) {
+            stored[name] = Entry(hash, guids)
+            seen.add(name)
+        }
+    }
+
+    /** Parses link lines (vless:// anytls:// awg://) and commits each. */
+    private fun importLinks(text: String): List<String> {
+        val guids = mutableListOf<String>()
+        text.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
+            val profile = when {
+                line.startsWith(AppConfig.VLESS, true) -> VlessFmt.parse(line)
+                line.startsWith(AppConfig.ANYTLS, true) -> AnytlsFmt.parse(line)
+                line.startsWith(AppConfig.AMNEZIAWG, true) -> AmneziawgFmt.parse(line)
+                line.startsWith(AppConfig.WIREGUARD, true) -> AmneziawgFmt.parse(line)
+                else -> null
+            } ?: return@forEach
             profile.subscriptionId = FREE_SUB_ID
             if (profile.remarks.isBlank() || profile.remarks.toLongOrNull() != null) {
-                profile.remarks = name.substringBeforeLast('.')
+                profile.remarks = "Free " + (guids.size + 1)
             }
             val guid = MmkvManager.encodeServerConfig("", profile)
             ArasExportImportManager.markProtected(guid)
             guids.add(guid)
         }
-
-        val trimmed = text.trim()
-        if (trimmed.contains("[Interface]")) {
-            val profile = AmneziawgFmt.parseAmneziaConfFile(text)
-            commit(profile)
-            return guids
-        }
-
-        // Link file: one link per non-empty line
-        text.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
-            val profile = when {
-                line.startsWith(AppConfig.AMNEZIAWG, true) -> AmneziawgFmt.parse(line)
-                line.startsWith(AppConfig.ANYTLS, true) -> AnytlsFmt.parse(line)
-                line.startsWith(AppConfig.VLESS, true) -> VlessFmt.parse(line)
-                else -> null
-            } ?: return@forEach
-            commit(profile)
-        }
         return guids
     }
 
-    private fun decodeMap(): MutableMap<String, Pair<String, List<String>>> {
+    private fun decodeMap(): MutableMap<String, Entry> {
         val raw = MmkvManager.decodeSettingsString(MAP_KEY) ?: return mutableMapOf()
-        val result = mutableMapOf<String, Pair<String, List<String>>>()
+        val result = mutableMapOf<String, Entry>()
         raw.split(";").filter { it.isNotBlank() }.forEach { entry ->
             val parts = entry.split("|")
             if (parts.size == 2) {
-                result[parts[0]] = parts[1] to parts[2].split(",").filter { it.isNotBlank() }
+                result[parts[0]] = Entry(parts[1], parts[2].split(",").filter { it.isNotBlank() })
             }
         }
         return result
     }
 
-    private fun persistMap(map: Map<String, Pair<String, List<String>>>) {
-        val raw = map.entries.joinToString(";") { (name, pair) ->
-            "$name|${pair.first}|${pair.second.joinToString(",")}"
+    private fun persistMap(map: Map<String, Entry>) {
+        val raw = map.entries.joinToString(";") { (name, e) ->
+            "$name|${e.hash}|${e.guids.joinToString(",")}"
         }
         MmkvManager.encodeSettings(MAP_KEY, raw)
     }
