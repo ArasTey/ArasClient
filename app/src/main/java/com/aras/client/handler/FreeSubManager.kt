@@ -4,9 +4,6 @@ import android.content.Context
 import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.dto.entities.SubscriptionItem
-import com.aras.client.fmt.AmneziawgFmt
-import com.aras.client.fmt.AnytlsFmt
-import com.aras.client.fmt.VlessFmt
 import com.aras.client.util.LogUtil
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -167,17 +164,11 @@ object FreeSubManager {
         }
     }
 
-    /** Parses link lines (vless:// anytls:// awg://) and commits each. */
+    /** Parses link lines of ANY supported scheme and commits each. */
     private fun importLinks(text: String): List<String> {
         val guids = mutableListOf<String>()
         text.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
-            val profile = when {
-                line.startsWith(AppConfig.VLESS, true) -> VlessFmt.parse(line)
-                line.startsWith(AppConfig.ANYTLS, true) -> AnytlsFmt.parse(line)
-                line.startsWith(AppConfig.AMNEZIAWG, true) -> AmneziawgFmt.parse(line)
-                line.startsWith(AppConfig.WIREGUARD, true) -> AmneziawgFmt.parse(line)
-                else -> null
-            } ?: return@forEach
+            val profile = AngConfigManager.parseAnyLink(line) ?: return@forEach
             profile.subscriptionId = FREE_SUB_ID
             if (profile.remarks.isBlank() || profile.remarks.toLongOrNull() != null) {
                 profile.remarks = "Free " + (guids.size + 1)

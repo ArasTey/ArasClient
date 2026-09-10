@@ -44,6 +44,13 @@ object AngConfigManager {
     )
 
     // Parser mapping for different config types (lazy initialized)
+    /** Parses any supported link scheme (vless://, ss://, trojan://, awg:// ...). */
+    fun parseAnyLink(line: String): ProfileItem? {
+        return configFmtParsers.firstNotNullOfOrNull { (scheme, parser) ->
+            if (line.startsWith(scheme, ignoreCase = true)) parser(line) else null
+        }
+    }
+
     private val configFmtParsers: Map<String, (String) -> ProfileItem?> by lazy {
         mapOf(
             EConfigType.VMESS.protocolScheme to VmessFmt::parse,
