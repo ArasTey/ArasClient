@@ -50,11 +50,22 @@ fun MainBottomBar(
     isRunning: Boolean,
     isDarkTheme: Boolean,
     onAction: (MainAction) -> Unit,
-    subtitleOverride: String? = null
+    subtitleOverride: String? = null,
+    hasPing: Boolean = false
 ) {
     val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    // Ping-aware colors: green when connected and ping is measured OK,
+    // red when connected but no valid ping.
+    val okColor = Color(0xFF2E7D32)
+    val badColor = Color(0xFFC62828)
+    val pingColor = when {
+        isRunning && hasPing -> okColor
+        isRunning -> badColor
+        else -> null
+    }
     val buttonColor = when {
-        isRunning -> colorFabActive
+        isRunning && hasPing -> okColor
+        isRunning -> badColor
         isDarkTheme -> colorFabInactiveDark
         else -> colorFabInactiveLight
     }
@@ -89,8 +100,9 @@ fun MainBottomBar(
                         .size(12.dp)
                         .clip(CircleShape)
                         .background(
-                            if (isRunning) colorFabActive
-                            else MaterialTheme.colorScheme.outline
+                            pingColor
+                                ?: if (isRunning) colorFabActive
+                                else MaterialTheme.colorScheme.outline
                         )
                 )
             }

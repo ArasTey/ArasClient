@@ -47,6 +47,11 @@ fun MainScreen(
     val statusGeoLine = displayText.lineSequence().drop(1).firstOrNull()
     val statusTitle = displayText.lineSequence().firstOrNull() ?: displayText
     val selectedGuid = uiState.selectedGuid
+    // Ping-aware bottom bar: green when connected with a measured (>= 0) ping,
+    // red when connected but the last ping failed or hasn't been measured.
+    val hasPing = if (isRunning && selectedGuid != null) {
+        (MmkvManager.decodeServerAffiliationInfo(selectedGuid)?.testDelayMillis ?: -1L) >= 0L
+    } else false
     val doubleColumnDisplay = uiState.doubleColumnDisplay
     val confirmRemove = uiState.confirmRemove
     val shareQRCodeBitmap = uiState.shareQRCodeBitmap
@@ -198,7 +203,8 @@ fun MainScreen(
                         displayText = displayText,
                         isRunning = isRunning,
                         isDarkTheme = isDarkTheme,
-                        onAction = onAction
+                        onAction = onAction,
+                        hasPing = hasPing
                     )
                 }
             },
