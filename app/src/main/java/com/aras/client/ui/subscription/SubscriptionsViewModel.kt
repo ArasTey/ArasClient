@@ -55,8 +55,23 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
         _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
     }
 
+    private fun visibleIndexToBackingIndex(visibleIndex: Int): Int {
+        // _subsFlow hides the Free sub; the UI indexes into the filtered list.
+        // Walk the backing list and return the position of the Nth visible item.
+        var remaining = visibleIndex
+        for (i in subscriptions.indices) {
+            if (subscriptions[i].guid == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) continue
+            if (remaining == 0) return i
+            remaining--
+        }
+        return -1
+    }
+
     fun move(fromPosition: Int, toPosition: Int) {
-        if (subscriptions.moveItem(fromPosition, toPosition)) {
+        val from = visibleIndexToBackingIndex(fromPosition)
+        val to = visibleIndexToBackingIndex(toPosition)
+        if (from < 0 || to < 0 || from == to) return
+        if (subscriptions.moveItem(from, to)) {
             MmkvManager.encodeSubsList(subscriptions.mapTo(mutableListOf()) { it.guid })
             SettingsChangeManager.makeSetupGroupTab()
             _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
