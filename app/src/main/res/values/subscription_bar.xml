@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sub_bar_update">Update subscription</string>
+    <string name="sub_bar_delete_final">Final confirmation</string>
+    <string name="sub_bar_delete_warning">This deletes the subscription and all its profiles. This cannot be undone.</string>
+</resources>

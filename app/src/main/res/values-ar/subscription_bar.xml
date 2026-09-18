@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sub_bar_update">تحديث الاشتراك</string>
+    <string name="sub_bar_delete_final">التأكيد النهائي</string>
+    <string name="sub_bar_delete_warning">سيُحذف الاشتراك وجميع إعداداته. لا يمكن التراجع عن هذا الإجراء.</string>
+</resources>

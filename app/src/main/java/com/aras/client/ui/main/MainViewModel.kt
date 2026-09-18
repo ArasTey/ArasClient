@@ -21,6 +21,7 @@ import com.aras.client.extension.matchesPattern
 import com.aras.client.extension.moveItem
 import com.aras.client.ui.base.BaseViewModel
 import com.aras.client.util.LogUtil
+import com.aras.client.util.Utils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -65,6 +66,44 @@ class MainViewModel(
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
+    // Main-thread-only presentation lifetime. Service/test data continues updating while hidden.
+    private var statusMessageJob: Job? = null
+    private var mainScreenActive = false
+    private var acceptCurrentPingMessages = false
+
+    fun setMainScreenActive(active: Boolean) {
+        mainScreenActive = active
+        if (!active) {
+            clearStatusMessage()
+            _uiState.update {
+                if (it.status == MainStatus.Testing && !it.isTesting) {
+                    it.copy(status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected)
+                } else it
+            }
+        }
+    }
+
+    private fun clearStatusMessage() {
+        statusMessageJob?.cancel()
+        statusMessageJob = null
+        acceptCurrentPingMessages = false
+        _uiState.update { it.copy(statusMessageVisible = false) }
+    }
+
+    private fun showStatusMessage() {
+        statusMessageJob?.cancel()
+        if (!mainScreenActive) return
+        _uiState.update { it.copy(statusMessageVisible = true) }
+        statusMessageJob = viewModelScope.launch {
+            delay(5_000)
+            clearStatusMessage()
+        }
+    }
+
+    internal fun connectedServerTitle(): String =
+        uiState.value.selectedGuid?.let { dataSource.decodeServerConfig(it)?.remarks }
+            ?.takeIf { it.isNotBlank() } ?: dataSource.getString(R.string.app_name)
+
     // ---------- Keyword filtering ----------
     @Volatile
     private var keywordFilter: String = ""
@@ -82,9 +121,10 @@ class MainViewModel(
     private var selectedGroupLoadJob: Job? = null
     private var reloadJob: Job? = null
 
-    @Volatile
-    private var testingGroupId: String? = null
-    private var pendingSmartConnect = false
+    // Round state and job ownership are confined to the main dispatcher.
+    private val testRounds = SmartConnectRoundTracker()
+    private var testPreparationJob: Job? = null
+    private var testFinishJob: Job? = null
 
     private val initialPageReady = CompletableDeferred<Unit>()
 
@@ -118,22 +158,34 @@ class MainViewModel(
 
             MainServiceEvent.StateStopSuccess -> updateRunningState(false)
             is MainServiceEvent.MeasureDelayResult -> {
-                _uiState.update { it.copy(status = MainStatus.ConnectionTest(event.result)) }
+                // The daemon may send a second, delayed GeoIP enrichment. Neither it nor
+                // a result from a previous screen visit may resurrect a dismissed message.
+                if (mainScreenActive && acceptCurrentPingMessages && uiState.value.isRunning) {
+                    val firstResult = uiState.value.status !is MainStatus.ConnectionTest
+                    _uiState.update { it.copy(status = MainStatus.ConnectionTest(event.result)) }
+                    if (firstResult) showStatusMessage()
+                }
             }
 
             MainServiceEvent.MeasureConfigSuccess -> {
-                viewModelScope.launch(ioDispatcher) {
-                    val gid = testingGroupId ?: uiState.value.selectedGroupId
-                    cacheMutex.withLock { groupDataCache.remove(gid) }
-                    val loaded = loadGroup(gid, forceRefresh = true)
-                    // Keep the original order while the round is running so the list
-                    // doesn't jump under the user's finger; sorting happens once at finish.
-                    updateGroupUi(gid, loaded)
+                val round = testRounds.current ?: return
+                if (!round.dispatched || round.finishing) return
+                viewModelScope.launch {
+                    val loaded = withContext(ioDispatcher) {
+                        loadGroup(round.groupId, forceRefresh = true)
+                    }
+                    // A cancelled/replaced round must not publish a late cache refresh.
+                    if (testRounds.isCurrent(round) && !round.finishing) {
+                        updateGroupUi(round.groupId, loaded)
+                    }
                 }
             }
 
             is MainServiceEvent.MeasureConfigNotify -> {
-                _uiState.update { it.copy(status = MainStatus.TestProgress(event.progress)) }
+                val round = testRounds.current
+                if (round != null && round.dispatched && !round.finishing) {
+                    _uiState.update { it.copy(status = MainStatus.TestProgress(event.progress)) }
+                }
             }
 
             is MainServiceEvent.MeasureConfigFinish -> {
@@ -477,8 +529,30 @@ class MainViewModel(
         }
     }
 
-    private fun importConfigViaSub() {
-        val subId = uiState.value.selectedGroupId
+    fun removeSubscription(subId: String) {
+        if (subId.isEmpty() || subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) return
+        if (uiState.value.isTesting || (uiState.value.isRunning &&
+                uiState.value.selectedGuid in MmkvManager.decodeServerList(subId))) {
+            toast(R.string.toast_action_not_allowed)
+            return
+        }
+        MmkvManager.removeSubscription(subId)
+        refreshSelectedGuid()
+        setupGroupTab(forceRefresh = true)
+        toast(dataSource.getString(R.string.toast_success))
+    }
+
+    fun copySubscriptionUrl(subId: String) {
+        val url = dataSource.getSubscriptionItem(subId)?.url
+        if (url.isNullOrBlank()) {
+            toastError(R.string.toast_failure)
+            return
+        }
+        Utils.setClipboard(getApplication(), url)
+        toast(R.string.toast_success)
+    }
+
+    fun importConfigViaSub(subId: String = uiState.value.selectedGroupId) {
         launchLoading {
             withContext(ioDispatcher) {
                 try {
@@ -720,6 +794,10 @@ class MainViewModel(
     }
 
     fun updateSelectedGuid(guid: String) {
+        if (guid != _uiState.value.selectedGuid) {
+            clearStatusMessage()
+            _uiState.update { it.withoutServerStatusMessage() }
+        }
         dataSource.setSelectServer(guid)
         _uiState.update { it.copy(selectedGuid = guid) }
     }
@@ -756,143 +834,176 @@ class MainViewModel(
 
     // ---------- Testing ----------
     fun cancelAllPing() {
+        testRounds.invalidate()
+        testPreparationJob?.cancel()
+        testFinishJob?.cancel()
+        testPreparationJob = null
+        testFinishJob = null
+        clearStatusMessage()
         dataSource.cancelAllPing()
-        testingGroupId = null
         _uiState.update {
             it.copy(
                 isTesting = false,
+                requestServiceStart = false,
                 status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected
             )
         }
     }
 
     fun testAllRealPing(onlyTcp: Boolean = false) {
-        dataSource.cancelAllPing()
-        val groupId = uiState.value.selectedGroupId
-        val servers = currentServers()
-        if (servers.isEmpty()) {
-            _uiState.update { it.copy(isTesting = false) }
-            return
-        }
-        val serverGuids = servers.map { it.guid }
+        startTestRound(uiState.value.selectedGroupId, currentServers(), onlyTcp, smartConnect = false)
+    }
+
+    private fun startTestRound(
+        groupId: String,
+        servers: List<ServersCache>,
+        onlyTcp: Boolean,
+        smartConnect: Boolean
+    ) {
+        cancelAllPing()
+        val round = testRounds.begin(groupId, servers.map { it.guid }, smartConnect) ?: return
         mutableServersForGroup(groupId).update { current ->
             current.map { server ->
-                if (server.testDelayMillis == 0L) server
-                else server.copy(testDelayMillis = 0L)
+                if (server.guid in round.candidates) server.copy(testDelayMillis = 0L) else server
             }
         }
-        testingGroupId = groupId
-        _uiState.update {
-            it.copy(
-                isTesting = true,
-                status = MainStatus.Testing
-            )
-        }
-        viewModelScope.launch(ioDispatcher) {
-            dataSource.clearAllTestDelayResults(serverGuids)
-            cacheMutex.withLock { groupDataCache.remove(groupId) }
-            // Pre-warm the GeoIP cache so flags appear as soon as pings land.
+        _uiState.update { it.copy(isTesting = true, status = MainStatus.Testing) }
+        testPreparationJob = viewModelScope.launch {
             try {
-                com.aras.client.util.GeoIPResolver.refresh(
-                    servers.mapNotNull { it.profile.server?.takeIf { h -> h.isNotBlank() } }
+                withContext(ioDispatcher) {
+                    dataSource.clearAllTestDelayResults(round.candidates)
+                    cacheMutex.withLock { groupDataCache.remove(groupId) }
+                    try {
+                        com.aras.client.util.GeoIPResolver.refresh(
+                            servers.mapNotNull { it.profile.server?.takeIf { h -> h.isNotBlank() } }
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (e: Exception) {
+                        LogUtil.w(AppConfig.TAG, "GeoIP pre-warm failed: ${e.message}")
+                    }
+                }
+                ensureActive()
+                if (!testRounds.isCurrent(round)) return@launch
+                // Always send the captured list. An empty list tells the service to
+                // expand to the subscription (or ALL subscriptions), not to test nothing.
+                testRounds.dispatched(round)
+                dataSource.sendMsg2TestService(
+                    TestServiceMessage(
+                        key = AppConfig.MSG_MEASURE_CONFIG_START,
+                        subscriptionId = groupId,
+                        serverGuids = round.candidates,
+                        onlyTcp = onlyTcp
+                    )
                 )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
-                LogUtil.w(AppConfig.TAG, "GeoIP pre-warm failed: ${e.message}")
+                if (testRounds.isCurrent(round)) cancelAllPing()
+                LogUtil.e(AppConfig.TAG, "Failed to prepare tests", e)
             }
-            dataSource.sendMsg2TestService(
-                TestServiceMessage(
-                    key = AppConfig.MSG_MEASURE_CONFIG_START,
-                    subscriptionId = groupId,
-                    serverGuids = if (keywordFilter.isNotEmpty()) serverGuids else emptyList(),
-                    onlyTcp = onlyTcp
-                )
-            )
         }
     }
 
     fun testCurrentServerRealPing() {
+        clearStatusMessage()
+        acceptCurrentPingMessages = mainScreenActive
         _uiState.update { it.copy(status = MainStatus.Testing) }
         dataSource.testCurrentServerRealPing()
     }
 
-    /**
-     * Tests a single server and updates its delay chip.
-     */
+    /** Tests a single server without inheriting a previous Smart Connect intent. */
     fun testSingleServer(guid: String) {
         if (_uiState.value.isTesting || guid.isEmpty()) return
-        val groupId = _uiState.value.selectedGroupId
-        _uiState.update { it.copy(isTesting = true, status = MainStatus.Testing) }
-        viewModelScope.launch(ioDispatcher) {
-            dataSource.clearAllTestDelayResults(listOf(guid))
-            cacheMutex.withLock { groupDataCache.remove(groupId) }
-            try {
-                val host = currentServers().firstOrNull { it.guid == guid }?.profile?.server
-                if (!host.isNullOrBlank()) {
-                    com.aras.client.util.GeoIPResolver.refresh(listOf(host))
-                }
-            } catch (e: Exception) {
-                LogUtil.w(AppConfig.TAG, "GeoIP refresh failed: ${e.message}")
+        val profile = dataSource.decodeServerConfig(guid) ?: return
+        startTestRound(
+            uiState.value.selectedGroupId,
+            listOf(ServersCache(guid = guid, profile = profile.copy(), testDelayMillis = 0L)),
+            onlyTcp = false,
+            smartConnect = false
+        )
+    }
+
+    /** Tests the captured visible candidates in the selected subscription only. */
+    fun startSmartConnect() {
+        // initialize() also calls this from IO; all round transitions belong on Main.
+        viewModelScope.launch {
+            if (_uiState.value.isTesting) return@launch
+            val groupId = uiState.value.selectedGroupId
+            if (groupId.isEmpty()) {
+                // The All tab is not a selected subscription. Never choose globally.
+                cancelAllPing()
+                toast(R.string.smart_connect_none)
+                return@launch
             }
-            dataSource.sendMsg2TestService(
-                TestServiceMessage(
-                    key = AppConfig.MSG_MEASURE_CONFIG_START,
-                    subscriptionId = groupId,
-                    serverGuids = listOf(guid),
-                    onlyTcp = false
-                )
-            )
+            val members = dataSource.getServerGuidList(groupId).toSet()
+            val servers = currentServers().filter {
+                it.guid in members && dataSource.decodeServerConfig(it.guid)?.subscriptionId == groupId
+            }
+            startTestRound(groupId, servers, onlyTcp = false, smartConnect = true)
+            if (servers.isEmpty()) toast(R.string.smart_connect_none)
         }
     }
 
-    /**
-     * Smart Connect: tests every server with real ping, then connects
-     * to the one with the lowest latency.
-     */
-    fun startSmartConnect() {
-        if (_uiState.value.isTesting) return
-        pendingSmartConnect = true
-        testAllRealPing()
-    }
+    private fun bestTestedServerInRound(round: SmartConnectRoundTracker.Round): String? =
+        bestSmartConnectCandidate(
+            round,
+            uiState.value.selectedGroupId,
+            dataSource.getServerGuidList(round.groupId).toSet(),
+            { dataSource.decodeServerConfig(it)?.subscriptionId },
+            { dataSource.decodeAffiliationInfo(it)?.testDelayMillis }
+        )
 
     private fun onTestsFinished() {
-        viewModelScope.launch(ioDispatcher) {
-            // Auto-sort: fastest servers move to the top after every test round
-            // (can be turned off in subscription settings).
-            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, true)) {
-                try {
-                    sortByTestResultsInternal()
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "Auto sort after test failed", e)
+        // This only deduplicates local completion work. Broadcasts have no request ID,
+        // so a late old finish AFTER a new dispatch is inherently indistinguishable.
+        val round = testRounds.claimFinish() ?: return
+        testFinishJob = viewModelScope.launch {
+            try {
+                withContext(ioDispatcher) {
+                    if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, true)) {
+                        try {
+                            val subs = if (round.groupId.isEmpty()) dataSource.getSubsList()
+                                else listOf(round.groupId)
+                            subs.forEach {
+                                ensureActive()
+                                dataSource.sortByTestResultsForSub(it)
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (e: Exception) {
+                            LogUtil.e(AppConfig.TAG, "Auto sort after test failed", e)
+                        }
+                    }
+                    cacheMutex.withLock { groupDataCache.clear() }
                 }
-            }
-            val smartConnect = pendingSmartConnect
-            pendingSmartConnect = false
-            var smartTarget: String? = null
-            if (smartConnect) {
-                smartTarget = dataSource.bestTestedServerGuid()
-                if (smartTarget != null) {
-                    updateSelectedGuid(smartTarget)
-                } else {
+                if (!testRounds.isCurrent(round)) return@launch
+                // Keep testing true until finalization: a new round may still explicitly
+                // replace this one, but a duplicate finish must not start another job.
+                reloadAllGroups(_uiState.value.groups.map { it.id })
+                reloadJob?.join()
+                ensureActive()
+                if (!testRounds.isCurrent(round)) return@launch
+                val smartTarget = if (round.smartConnect) bestTestedServerInRound(round) else null
+                testRounds.invalidate()
+                if (smartTarget != null) updateSelectedGuid(smartTarget)
+                else if (round.smartConnect && uiState.value.selectedGroupId == round.groupId) {
                     toast(R.string.smart_connect_none)
                 }
-            }
-            cacheMutex.withLock { groupDataCache.clear() }
-            testingGroupId = null
-            _uiState.update {
-                it.copy(
-                    isTesting = false,
-                    status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected
-                )
-            }
-            reloadAllGroups(_uiState.value.groups.map { it.id })
-            reloadJob?.join()
-            if (smartTarget != null) {
-                _uiState.update { it.copy(requestServiceStart = true) }
-            }
-            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)) {
-                _uiState.update { it.copy(scrollToTopTick = it.scrollToTopTick + 1) }
+                _uiState.update {
+                    it.copy(
+                        isTesting = false,
+                        status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected,
+                        requestServiceStart = smartTarget != null,
+                        scrollToTopTick = it.scrollToTopTick +
+                            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)) 1 else 0
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                if (testRounds.isCurrent(round)) cancelAllPing()
+                LogUtil.e(AppConfig.TAG, "Failed to finish tests", e)
             }
         }
     }
@@ -973,6 +1084,10 @@ class MainViewModel(
         } else {
             com.aras.client.util.ConnectionStatsManager.onSessionStopped()
         }
+        val connectionChanged = uiState.value.isRunning != running
+        // Registration/state snapshots must not replay guidance or replace a ping result.
+        if (!connectionChanged && !clearTestingText) return
+        clearStatusMessage()
         _uiState.update { state ->
             state.copy(
                 isRunning = running,
@@ -980,9 +1095,11 @@ class MainViewModel(
                 else if (running) MainStatus.Connected else MainStatus.Disconnected
             )
         }
+        if (running && uiState.value.status == MainStatus.Connected) showStatusMessage()
     }
 
     override fun onCleared() {
+        statusMessageJob?.cancel()
         setupGroupJob?.cancel()
         preloadJob?.cancel()
         selectedGroupLoadJob?.cancel()

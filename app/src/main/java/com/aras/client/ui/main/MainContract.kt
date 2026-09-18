@@ -23,6 +23,8 @@ data class MainUiState(
     val isRunning: Boolean = false,
     val isTesting: Boolean = false,
     val status: MainStatus = MainStatus.Disconnected,
+    // Presentation only: hiding a message must not change connection or test state.
+    val statusMessageVisible: Boolean = false,
     val locateTarget: LocateTarget? = null,
     val confirmRemove: Boolean = false,
     val doubleColumnDisplay: Boolean = false,
@@ -30,6 +32,29 @@ data class MainUiState(
     val requestServiceStart: Boolean = false,
     val scrollToTopTick: Int = 0
 )
+
+internal fun MainUiState.withoutServerStatusMessage(): MainUiState = copy(
+    statusMessageVisible = false,
+    status = if (status is MainStatus.ConnectionTest || (status == MainStatus.Testing && !isTesting)) {
+        if (isRunning) MainStatus.Connected else MainStatus.Disconnected
+    } else status
+)
+
+internal data class MainBarText(val title: String, val subtitle: String)
+
+/** Empty subtitle is intentional: never fall back to the connected guidance after dismissal. */
+internal fun mainBarText(state: MainUiState, formattedStatus: String, connectedTitle: String): MainBarText =
+    when (state.status) {
+        MainStatus.Connected -> MainBarText(
+            connectedTitle,
+            if (state.statusMessageVisible) formattedStatus.replace('\n', ' ') else ""
+        )
+        is MainStatus.ConnectionTest -> MainBarText(
+            formattedStatus.lineSequence().first(),
+            if (state.statusMessageVisible) formattedStatus.lineSequence().drop(1).joinToString(" ") else ""
+        )
+        else -> MainBarText(formattedStatus, "")
+    }
 
 /**
  * All possible user interaction intents

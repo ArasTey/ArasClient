@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -86,6 +87,11 @@ fun GroupPagerPage(
     onMoreServer: (String, ProfileItem) -> Unit,
     onRemoveServer: (String) -> Unit,
     onTestServer: (String) -> Unit,
+    onEditSubscription: (() -> Unit)? = null,
+    onUpdateSubscription: (() -> Unit)? = null,
+    onRemoveSubscription: (() -> Unit)? = null,
+    onCopySubscriptionUrl: (() -> Unit)? = null,
+    isProtectedSubscription: Boolean = false,
     contentPadding: PaddingValues
 ) {
     val serverFlow = remember(groupId) {
@@ -94,7 +100,14 @@ fun GroupPagerPage(
     val servers by serverFlow.collectAsStateWithLifecycle()
     val canReorder = groupId.isNotEmpty() && searchQuery.isEmpty()
     Column {
-        SubscriptionInfoBar(groupId = groupId)
+        SubscriptionInfoBar(
+            groupId = groupId,
+            onEditSubscription = onEditSubscription,
+            onUpdateSubscription = onUpdateSubscription,
+            onRemoveSubscription = onRemoveSubscription,
+            onCopySubscriptionUrl = onCopySubscriptionUrl,
+            isProtectedSubscription = isProtectedSubscription
+        )
         ServerListPage(
         servers = servers,
         selectedGuid = selectedGuid,
@@ -389,7 +402,10 @@ private fun ServerItemColumn(
             geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty())
         ),
         remarks = profile.remarks,
-        statistics = profile.description.nullIfBlank() ?: AngConfigManager.generateDescription(profile),
+        statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
+            stringResource(R.string.protected_config_hidden)
+        else
+            profile.description.nullIfBlank() ?: AngConfigManager.generateDescription(profile),
         typeDescription = getProtocolDescription(profile),
         configTypeName = profile.configType.name,
         testDelayMillis = serverCache.testDelayMillis,
@@ -401,7 +417,8 @@ private fun ServerItemColumn(
         onShare = { onShareServer(serverCache.guid, profile) },
         onRemove = { onRemoveServer(serverCache.guid) },
         onMore = { onMoreServer(serverCache.guid, profile) },
-        onTest = { onTestServer(serverCache.guid) }
+        onTest = { onTestServer(serverCache.guid) },
+        isProtected = ArasExportImportManager.isProtected(serverCache.guid)
     )
 }
 
@@ -500,10 +517,44 @@ fun ServerListItem(
                 )
             }
             Spacer(modifier = Modifier.height(5.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            if (!doubleColumnDisplay) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        typeDescription,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colorConfigType,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colorConfigType.copy(alpha = 0.13f))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                    if (testResult.isNotBlank()) {
+                        Text(
+                            testResult,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = pingColor,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(pingColor.copy(alpha = 0.13f))
+                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                    if (country.isNotBlank()) {
+                        Text(
+                            text = country,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                }
+            } else {
                 Text(
                     typeDescription,
                     style = MaterialTheme.typography.labelSmall,
@@ -511,29 +562,40 @@ fun ServerListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colorConfigType.copy(alpha = 0.13f))
+                        .background(colorConfigType.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 )
-                if (testResult.isNotBlank()) {
-                    Text(
-                        testResult,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = pingColor,
-                        maxLines = 1,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(pingColor.copy(alpha = 0.13f))
-                            .padding(horizontal = 7.dp, vertical = 2.dp)
-                    )
-                }
-                if (country.isNotBlank()) {
-                    Text(
-                        text = country,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        modifier = Modifier.padding(start = 4.dp)
-                    )
+                if (country.isNotBlank() || testResult.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (country.isNotBlank()) {
+                            Text(
+                                text = country,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                        if (testResult.isNotBlank()) {
+                            Text(
+                                testResult,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = pingColor,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .widthIn(min = 56.dp)
+                                    .background(pingColor.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

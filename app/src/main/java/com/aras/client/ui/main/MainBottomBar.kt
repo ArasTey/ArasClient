@@ -63,12 +63,9 @@ fun MainBottomBar(
         isRunning -> badColor
         else -> null
     }
-    val buttonColor = when {
-        isRunning && hasPing -> okColor
-        isRunning -> badColor
-        isDarkTheme -> colorFabInactiveDark
-        else -> colorFabInactiveLight
-    }
+    // Single solid color: the status dot on the left already carries ping health.
+    val buttonColor = MaterialTheme.colorScheme.primary
+    val buttonShape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = Modifier
@@ -117,16 +114,18 @@ fun MainBottomBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.semantics { contentDescription = displayText }
                 )
-                Text(
-                    text = subtitleOverride ?: stringResource(
-                        if (isRunning) R.string.connection_connected
-                        else R.string.bar_tap_to_connect
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // Null requests the disconnected hint; empty explicitly hides the subtitle.
+                val subtitle = subtitleOverride ?: if (isRunning) ""
+                    else stringResource(R.string.bar_tap_to_connect)
+                if (subtitle.isNotEmpty()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
 
@@ -152,7 +151,7 @@ fun MainBottomBar(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(CircleShape)
+                    .clip(buttonShape)
                     .background(buttonColor)
                     .clickable(onClick = { onAction(MainAction.ToggleService) }),
                 contentAlignment = Alignment.Center
@@ -163,7 +162,7 @@ fun MainBottomBar(
                     contentDescription = stringResource(
                         if (isRunning) R.string.acc_stop else R.string.acc_start
                     ),
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(24.dp)
                 )
             }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sub_bar_update">به‌روزرسانی اشتراک</string>
+    <string name="sub_bar_delete_final">تأیید نهایی حذف</string>
+    <string name="sub_bar_delete_warning">اشتراک و تمام کانفیگ‌های آن حذف می‌شوند. این کار قابل بازگشت نیست.</string>
+</resources>

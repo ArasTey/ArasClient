@@ -303,6 +303,7 @@ object AngConfigManager {
      * @return The number of configurations parsed.
      */
     private fun parseBatchConfig(servers: String?, subid: String, append: Boolean): Int {
+        val isClashYaml = servers != null && com.aras.client.fmt.ClashYamlFmt.isClashYaml(servers)
         try {
             if (servers == null) {
                 return 0
@@ -311,13 +312,19 @@ object AngConfigManager {
 
             // Parse all configs first (no I/O during parsing)
             val configs = mutableListOf<ProfileItem>()
-            servers.lines()
-                .distinct()
+            val links = if (isClashYaml) {
+                com.aras.client.fmt.ClashYamlFmt.toLinks(servers)
+            } else {
+                servers.lines()
+            }
+            links.distinct()
                 .reversed()
                 .forEach {
                     val config = parseConfig(it, subid, subItem)
                     if (config != null) {
                         configs.add(config)
+                    } else if (isClashYaml && subItem?.filter.isNullOrEmpty()) {
+                        return 0
                     }
                 }
 
@@ -333,7 +340,11 @@ object AngConfigManager {
         } catch (e: ProfileStorageException) {
             throw e
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to parse batch config", e)
+            if (isClashYaml) {
+                LogUtil.w(AppConfig.TAG, "Invalid or unsupported Clash YAML proxy list")
+            } else {
+                LogUtil.e(AppConfig.TAG, "Failed to parse batch config", e)
+            }
         }
         return 0
     }
@@ -473,9 +484,7 @@ object AngConfigManager {
                 return null
             }
 
-            val config = configFmtParsers.firstNotNullOfOrNull { (scheme, parser) ->
-                if (str.startsWith(scheme)) parser(str) else null
-            }
+            val config = parseAnyLink(str)
 
             if (config == null) {
                 return null

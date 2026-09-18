@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
@@ -25,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,19 +44,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Compact v2Box-style bar above the config list showing subscription
- * traffic (used / total) and remaining time, plus an optional announcement
- * banner. Both are gated by subscription settings toggles and only render
- * when the subscription actually provides the data.
- */
 @Composable
-fun SubscriptionInfoBar(groupId: String, modifier: Modifier = Modifier) {
+fun SubscriptionInfoBar(
+    groupId: String,
+    modifier: Modifier = Modifier,
+    onEditSubscription: (() -> Unit)? = null,
+    onUpdateSubscription: (() -> Unit)? = null,
+    onRemoveSubscription: (() -> Unit)? = null,
+    onCopySubscriptionUrl: (() -> Unit)? = null,
+    isProtectedSubscription: Boolean = false,
+) {
     if (groupId.isEmpty()) return
     val showInfo = MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true)
     val showAnnouncement =
         MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
-    if (!showInfo && !showAnnouncement) return
 
     var sub by remember(groupId) { mutableStateOf<SubscriptionItem?>(null) }
     LaunchedEffect(groupId) {
@@ -74,7 +80,6 @@ fun SubscriptionInfoBar(groupId: String, modifier: Modifier = Modifier) {
     val announcement = current.announcement?.takeIf {
         showAnnouncement && it.isNotBlank()
     }
-    if (!hasInfo && announcement == null) return
 
     Column(
         modifier = modifier
@@ -82,14 +87,61 @@ fun SubscriptionInfoBar(groupId: String, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        if (hasInfo) {
-            TrafficExpiryBar(current)
-        }
         AnimatedVisibility(visible = announcement != null) {
-            announcement?.let { text ->
-                AnnouncementBanner(text, current.creatorMessage)
-            }
+            announcement?.let { text -> AnnouncementBanner(text, current.creatorMessage) }
         }
+        if (hasInfo) TrafficExpiryBar(current)
+        SubscriptionActions(
+            groupId = groupId,
+            onEdit = onEditSubscription.takeUnless { isProtectedSubscription },
+            onUpdate = onUpdateSubscription,
+            onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
+            onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription }
+        )
+    }
+}
+
+@Composable
+private fun SubscriptionActions(
+    groupId: String,
+    onEdit: (() -> Unit)?,
+    onUpdate: (() -> Unit)?,
+    onRemove: (() -> Unit)?,
+    onCopy: (() -> Unit)?
+) {
+    var deleteStage by remember(groupId) { mutableStateOf(0) }
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        onEdit?.let { SubBarAction(R.drawable.ic_edit_24dp, R.string.acc_edit, onClick = it) }
+        onUpdate?.let { SubBarAction(R.drawable.ic_check_update_24dp, R.string.sub_bar_update, onClick = it) }
+        onCopy?.let { SubBarAction(R.drawable.ic_copy, R.string.share_method_clipboard, onClick = it) }
+        onRemove?.let {
+            SubBarAction(R.drawable.ic_delete_24dp, R.string.acc_delete,
+                tint = MaterialTheme.colorScheme.error, onClick = { deleteStage = 1 })
+        }
+    }
+    if (deleteStage > 0) {
+        AlertDialog(
+            onDismissRequest = { deleteStage = 0 },
+            title = { Text(stringResource(if (deleteStage == 1) R.string.acc_delete else R.string.sub_bar_delete_final)) },
+            text = { Text(stringResource(if (deleteStage == 1) R.string.confirm_delete_subscription_group else R.string.sub_bar_delete_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (deleteStage == 1) deleteStage = 2
+                    else {
+                        deleteStage = 0
+                        onRemove?.invoke()
+                    }
+                }) { Text(stringResource(if (deleteStage == 1) android.R.string.ok else R.string.acc_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteStage = 0 }) { Text(stringResource(android.R.string.cancel)) }
+            }
+        )
     }
 }
 
@@ -146,6 +198,30 @@ private fun TrafficExpiryBar(sub: SubscriptionItem) {
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
         }
+    }
+}
+
+@Composable
+private fun SubBarAction(
+    drawableRes: Int,
+    contentDescRes: Int,
+    container: Color = Color.Transparent,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(container)
+    ) {
+        Icon(
+            painter = painterResource(drawableRes),
+            contentDescription = stringResource(contentDescRes),
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 

@@ -1,5 +1,8 @@
 package com.aras.client.ui.main
 
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import com.aras.client.ui.subscription.SubEditActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.handler.MmkvManager
@@ -38,14 +42,21 @@ fun MainScreen(
     onAction: (MainAction) -> Unit,
     onNavigate: (MainDestination) -> Unit,
 ) {
+    val context = LocalContext.current
     val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
     val updateAnnouncement by mainViewModel.updateAnnouncementFlow.collectAsStateWithLifecycle()
     val groups = uiState.groups
     val isLoading by mainViewModel.isLoading.collectAsStateWithLifecycle()
     val isRunning = uiState.isRunning
-    val displayText = mainViewModel.formatStatus(uiState.status)
-    val statusGeoLine = displayText.lineSequence().drop(1).firstOrNull()
-    val statusTitle = displayText.lineSequence().firstOrNull() ?: displayText
+    val barText = mainBarText(
+        uiState,
+        mainViewModel.formatStatus(uiState.status),
+        mainViewModel.connectedServerTitle()
+    )
+    LifecycleResumeEffect(mainViewModel) {
+        mainViewModel.setMainScreenActive(true)
+        onPauseOrDispose { mainViewModel.setMainScreenActive(false) }
+    }
     val selectedGuid = uiState.selectedGuid
     // Ping-aware bottom bar: green when connected with a measured (>= 0) ping,
     // red when connected but the last ping failed or hasn't been measured.
@@ -200,7 +211,8 @@ fun MainScreen(
                         )
                     }
                     MainBottomBar(
-                        displayText = displayText,
+                        displayText = barText.title,
+                        subtitleOverride = if (uiState.status == MainStatus.Disconnected) null else barText.subtitle,
                         isRunning = isRunning,
                         isDarkTheme = isDarkTheme,
                         onAction = onAction,
@@ -273,6 +285,16 @@ fun MainScreen(
                             },
                             onRemoveServer = removeServer,
                             onTestServer = { guid -> onAction(MainAction.SingleTestServer(guid)) },
+                            onEditSubscription = if (group.id.isEmpty()) null
+                            else { -> context.startActivity(Intent(context, SubEditActivity::class.java).putExtra("subId", group.id)) },
+                            onUpdateSubscription = if (group.id.isEmpty()) null
+                            else { -> mainViewModel.importConfigViaSub(group.id) },
+                            onRemoveSubscription = if (group.id.isEmpty() ||
+                                group.id == com.aras.client.handler.FreeSubManager.FREE_SUB_ID
+                            ) null else { -> mainViewModel.removeSubscription(group.id) },
+                            onCopySubscriptionUrl = if (group.id.isEmpty()) null
+                            else { -> mainViewModel.copySubscriptionUrl(group.id) },
+                            isProtectedSubscription = group.id == com.aras.client.handler.FreeSubManager.FREE_SUB_ID,
                             contentPadding = PaddingValues(
                                 start = 12.dp,
                                 top = 4.dp,

@@ -20,8 +20,8 @@ android {
         applicationId = "com.aras.client"
         minSdk = 24
         targetSdk = 37
-        versionCode = 136
-        versionName = "1.6.9"
+        versionCode = 141
+        versionName = "1.7.0"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
@@ -155,6 +155,7 @@ dependencies {
     // Data and Storage Libraries
     implementation(libs.mmkv.static)
     implementation(libs.gson)
+    implementation("org.yaml:snakeyaml:2.3")
     implementation(libs.okhttp)
 
     // Reactive and Utility Libraries
