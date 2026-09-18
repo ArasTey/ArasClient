@@ -355,7 +355,8 @@ private fun ServerItemRow(
     ServerListItem(
         country = com.aras.client.util.CountryResolver.resolve(
             profile,
-            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty())
+            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
+            preferGeoIp = serverCache.guid == selectedGuid
         ),
         remarks = profile.remarks,
         statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
@@ -399,7 +400,8 @@ private fun ServerItemColumn(
     ServerListItem(
         country = com.aras.client.util.CountryResolver.resolve(
             profile,
-            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty())
+            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
+            preferGeoIp = serverCache.guid == selectedGuid
         ),
         remarks = profile.remarks,
         statistics = if (ArasExportImportManager.isProtected(serverCache.guid))

@@ -103,15 +103,27 @@ object CountryResolver {
     /**
      * Returns the flag emoji for the profile's country, or "" when unknown.
      *
-     * Priority: the provider's own naming (flag emoji, ISO code, country
-     * name) always wins — subscription panels deliberately label nodes with
-     * a country while many share one IP behind a CDN/worker, so a GeoIP
-     * lookup would be wrong there. The server-IP lookup ([geoIso], from
-     * GeoIPResolver) is only used when the name carries no country hint.
+     * Default priority: the provider's own naming (flag emoji, ISO code,
+     * country name) always wins — subscription panels deliberately label
+     * nodes with a country while many share one IP behind a CDN/worker, so
+     * a GeoIP lookup would be wrong there. The server-IP lookup ([geoIso],
+     * from GeoIPResolver) is only used when the name carries no country hint.
+     *
+     * When [preferGeoIp] is true (the server this flag belongs to is the one
+     * we actually connected to), the real IP country wins: a provider's
+     * remarks label is just marketing, the tunnel lands on the IP's real
+     * country, so the flag must match the IP, not the label.
      */
-    fun resolve(profile: ProfileItem, geoIso: String = ""): String {
+    fun resolve(
+        profile: ProfileItem,
+        geoIso: String = "",
+        preferGeoIp: Boolean = false
+    ): String {
         val raw = "${profile.remarks} ${profile.description.orEmpty()}"
         val text = raw.lowercase(Locale.ROOT)
+
+        // 0) Connected server: the IP's real country wins over the label.
+        if (preferGeoIp && geoIso.length == 2) return isoToFlag(geoIso)
 
         // 1) Existing flag emoji wins.
         flagRegex.find(raw)?.let { return it.value }
