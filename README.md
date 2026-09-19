@@ -279,7 +279,5 @@ See [LICENSE](LICENSE) for the full license text.
 
 ---
 
-<div align="center">
-<img src="art/hero-dark.svg" width="260" alt=""/><br/>
-<sub>Built with ⚡ by ArasTey</sub>
+<sub>Built with ☕️ by ArasTey</sub>
 </div>
