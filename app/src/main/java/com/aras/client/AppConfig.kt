@@ -203,6 +203,14 @@ object AppConfig {
     const val MSG_SUB_UPDATE_START = 8
     const val MSG_SUB_UPDATE_CANCEL = 81
 
+    const val MSG_QUICK_CONNECT_START = 9
+    const val MSG_QUICK_CONNECT_STARTED = 90
+    const val MSG_QUICK_CONNECT_PROGRESS = 91
+    const val MSG_QUICK_CONNECT_SUCCESS = 92
+    const val MSG_QUICK_CONNECT_FAILURE = 93
+    const val MSG_ROOT_SETUP_SUCCESS = 14
+    const val MSG_ROOT_SETUP_FAILURE = 15
+
     /** Notification channel IDs and names. */
     // Use a new ID because Android does not let an app raise an existing channel's importance.
     const val RAY_NG_CHANNEL_ID = "CORE_M_CH_ID_V2"

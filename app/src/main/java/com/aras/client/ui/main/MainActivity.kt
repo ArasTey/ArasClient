@@ -57,6 +57,7 @@ import com.aras.client.ui.server.ServerVmessActivity
 import com.aras.client.ui.server.ServerWireguardActivity
 import com.aras.client.ui.settings.SettingsActivity
 import com.aras.client.ui.subscription.SubSettingActivity
+import com.aras.client.ui.subscription.SubscriptionEditorResult
 import com.aras.client.ui.userasset.UserAssetActivity
 import com.aras.client.util.LogUtil
 import com.aras.client.util.Utils
@@ -96,11 +97,19 @@ class MainActivity : HelperBaseComponentActivity() {
         }
 
     private val settingsActivityLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val newSubscriptionId = result.data
+                ?.getStringExtra(SubscriptionEditorResult.EXTRA_SUBSCRIPTION_ID)
+                .orEmpty()
             val restartService = SettingsChangeManager.consumeRestartService()
             val refreshGroups = SettingsChangeManager.consumeSetupGroupTab()
             mainViewModel.refreshUiSettings()
-            if (refreshGroups) mainViewModel.onAction(MainAction.RefreshGroups)
+            when {
+                newSubscriptionId.isNotBlank() ->
+                    mainViewModel.openSubscriptionAfterAdd(newSubscriptionId)
+
+                refreshGroups -> mainViewModel.onAction(MainAction.RefreshGroups)
+            }
             if (restartService) LauncherManager.restartService(this)
         }
 
@@ -110,11 +119,28 @@ class MainActivity : HelperBaseComponentActivity() {
 
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}
         maybeImportOpenedArasc(intent)
+        handleSubscriptionNavigation(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         maybeImportOpenedArasc(intent)
+        handleSubscriptionNavigation(intent)
+    }
+
+    private fun handleSubscriptionNavigation(intent: Intent?) {
+        if (intent?.action != SubscriptionNavigation.ACTION_OPEN_SUBSCRIPTION) return
+        val subId = intent.getStringExtra(SubscriptionNavigation.EXTRA_SUBSCRIPTION_ID).orEmpty()
+        val subIds = intent.getStringArrayListExtra(
+            SubscriptionNavigation.EXTRA_SUBSCRIPTION_IDS
+        ).orEmpty()
+        intent.removeExtra(SubscriptionNavigation.EXTRA_SUBSCRIPTION_ID)
+        intent.removeExtra(SubscriptionNavigation.EXTRA_SUBSCRIPTION_IDS)
+        intent.action = null
+        val requestedIds = if (subIds.isNotEmpty()) subIds else listOf(subId)
+        val validIds = requestedIds.filter { it.isNotBlank() }
+        if (validIds.isNotEmpty()) mainViewModel.openSubscriptionsAfterAdd(validIds)
     }
 
     /**
@@ -390,7 +416,15 @@ class MainActivity : HelperBaseComponentActivity() {
                 putExtra("createConfigType", createConfigType)
             }
         }.apply {
-            putExtra("subscriptionId", mainViewModel.uiState.value.selectedGroupId)
+            val selectedGroupId = mainViewModel.uiState.value.selectedGroupId
+            putExtra(
+                "subscriptionId",
+                if (com.aras.client.handler.FreeSubManager.isFreeSubId(selectedGroupId)) {
+                    AppConfig.DEFAULT_SUBSCRIPTION_ID
+                } else {
+                    selectedGroupId
+                }
+            )
         }
         profileEditorLauncher.launch(intent)
     }

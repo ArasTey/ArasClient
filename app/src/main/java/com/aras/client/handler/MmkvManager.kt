@@ -102,6 +102,7 @@ object MmkvManager {
         profileFullStorage.removeValuesForKeys(keys)
         serverAffStorage.removeValuesForKeys(keys)
         serverRawStorage.removeValuesForKeys(keys)
+        ArasExportImportManager.forgetProtected(guids)
     }
 
     private fun requireStorageWrite(success: Boolean, message: String) {
@@ -378,12 +379,12 @@ object MmkvManager {
             }
             if (replacedServers.isEmpty()) return@withProfileIndexLock
 
-            val protectedServer = replacementSelection ?: previousSelection
+            val protectedServers = setOfNotNull(previousSelection, replacementSelection)
             val referencedByOtherGroups = decodeServersReferencedByOtherGroups(subscriptionId)
             val removablePayloads = ProfileReplacement.findRemovablePayloads(
                 replacedServers = replacedServers,
                 replacementServers = profiles.keys,
-                protectedServer = protectedServer,
+                protectedServers = protectedServers,
                 serversReferencedByOtherGroups = referencedByOtherGroups,
             )
             removeProfilePayloads(removablePayloads)
@@ -415,6 +416,7 @@ object MmkvManager {
         }
         profileFullStorage.remove(guid)
         serverAffStorage.remove(guid)
+        ArasExportImportManager.forgetProtected(listOf(guid))
     }
 
     /**
@@ -466,6 +468,7 @@ object MmkvManager {
             serverAffStorage.remove(guid)
             serverRawStorage.remove(guid)
         }
+        ArasExportImportManager.forgetProtected(guids)
     }
 
     /**
@@ -520,10 +523,12 @@ object MmkvManager {
      * @return The number of server configurations removed.
      */
     fun removeAllServer(): Int {
-        val count = profileFullStorage.allKeys()?.count() ?: 0
+        val profileGuids = profileFullStorage.allKeys()?.toList().orEmpty()
+        val count = profileGuids.size
         profileFullStorage.clearAll()
         serverAffStorage.clearAll()
         serverRawStorage.clearAll()
+        ArasExportImportManager.forgetProtected(profileGuids)
 
         decodeSubscriptions().forEach { sub ->
             encodeServerList(mutableListOf(), sub.guid)

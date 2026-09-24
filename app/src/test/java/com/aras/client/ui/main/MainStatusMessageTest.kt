@@ -53,6 +53,13 @@ class MainStatusMessageTest {
     }
 
     @Test
+    fun pingCountryCodeIsRenderedAsFlag() {
+        assertEquals("🇩🇪", pingCountryLabel("DE", "Unknown"))
+        assertEquals("🇳🇱", pingCountryLabel("Netherlands", "Unknown"))
+        assertEquals("Raw", pingCountryLabel("Raw", "Unknown"))
+    }
+
+    @Test
     fun failedPingAndTestProgressRemainReadableWithoutGuidance() {
         val failed = MainUiState(isRunning = true, status = MainStatus.ConnectionTest(ConnectionTestResult(-1)))
         assertEquals(MainBarText("Test failed", ""), mainBarText(failed, "Test failed", "Server"))

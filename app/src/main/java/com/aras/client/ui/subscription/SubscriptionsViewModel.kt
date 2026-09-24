@@ -1,6 +1,7 @@
 package com.aras.client.ui.subscription
 
 import android.app.Application
+import androidx.lifecycle.viewModelScope
 import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.dto.SubscriptionUpdateMessage
@@ -11,6 +12,7 @@ import com.aras.client.handler.AngConfigManager
 import com.aras.client.handler.MmkvManager
 import com.aras.client.handler.SettingsChangeManager
 import com.aras.client.handler.SettingsManager
+import com.aras.client.handler.SubscriptionWorkflowLock
 import com.aras.client.helper.MessageHelper
 import com.aras.client.ui.base.BaseViewModel
 import com.aras.client.util.LogUtil
@@ -19,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class SubscriptionsViewModel(application: Application) : BaseViewModel(application) {
@@ -39,8 +42,12 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
     fun remove(subId: String): Boolean {
         val changed = subscriptions.removeAll { it.guid == subId }
         if (changed) {
-            SettingsManager.removeSubscriptionWithDefault(subId)
-            SettingsChangeManager.makeSetupGroupTab()
+            viewModelScope.launch(Dispatchers.IO) {
+                SubscriptionWorkflowLock.withLock(app, subId) {
+                    SettingsManager.removeSubscriptionWithDefault(subId)
+                }
+                SettingsChangeManager.makeSetupGroupTab()
+            }
         }
         _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
         return changed
@@ -50,7 +57,14 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
         val idx = subscriptions.indexOfFirst { it.guid == subId }
         if (idx >= 0) {
             subscriptions[idx] = SubscriptionCache(subId, item)
-            MmkvManager.encodeSubscription(subId, item)
+            viewModelScope.launch(Dispatchers.IO) {
+                SubscriptionWorkflowLock.withLock(app, subId) {
+                    val current = MmkvManager.decodeSubscription(subId) ?: return@withLock
+                    current.enabled = item.enabled
+                    MmkvManager.encodeSubscription(subId, current)
+                }
+                SettingsChangeManager.makeSetupGroupTab()
+            }
         }
         _subsFlow.value = subscriptions.filter { it.guid != com.aras.client.handler.FreeSubManager.FREE_SUB_ID }
     }

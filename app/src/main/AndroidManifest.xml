@@ -302,6 +302,16 @@
                 android:value="test" />
         </service>
 
+        <service
+            android:name=".service.QuickConnectService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:process=":RunSoArasDaemon">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="test" />
+        </service>
+
         <receiver
             android:name=".receiver.WidgetProvider"
             android:exported="true"
@@ -335,12 +345,25 @@
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:process=":RunSoArasDaemon">
             <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
+                <action android:name="android.service.quicksettings.action.QSTile"/>
             </intent-filter>
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="tile" />
         </service>
+
+        <service
+            android:name=".service.SubscriptionQuickActionQSTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_speedtest_24dp"
+            android:label="@string/app_quick_connect_tile_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:process=":RunSoArasDaemon">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QSTile" />
+            </intent-filter>
+        </service>
+
         <!-- =====================Tasker===================== -->
         <activity
             android:name=".ui.shortcut.TaskerActivity"

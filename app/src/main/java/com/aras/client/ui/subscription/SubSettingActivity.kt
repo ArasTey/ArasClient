@@ -3,6 +3,7 @@ package com.aras.client.ui.subscription
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
@@ -66,6 +67,19 @@ private enum class SubscriptionShareAction(@StringRes val labelRes: Int) {
 
 class SubSettingActivity : BaseComponentActivity() {
     private val viewModel: SubscriptionsViewModel by viewModels()
+    private val subscriptionEditorLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val subId = result.data
+                ?.getStringExtra(SubscriptionEditorResult.EXTRA_SUBSCRIPTION_ID)
+                .orEmpty()
+            if (result.resultCode == RESULT_OK && subId.isNotBlank()) {
+                setResult(
+                    RESULT_OK,
+                    Intent().putExtra(SubscriptionEditorResult.EXTRA_SUBSCRIPTION_ID, subId)
+                )
+                finish()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,10 +98,14 @@ class SubSettingActivity : BaseComponentActivity() {
             viewModel = viewModel,
             isLoading = isLoading,
             onBackClick = { finish() },
-            onAddClick = { startActivity(Intent(this, SubEditActivity::class.java)) },
+            onAddClick = {
+                subscriptionEditorLauncher.launch(Intent(this, SubEditActivity::class.java))
+            },
             onSubUpdate = { viewModel.updateSubscriptions() },
             onEditSub = { subId ->
-                startActivity(Intent(this, SubEditActivity::class.java).putExtra("subId", subId))
+                subscriptionEditorLauncher.launch(
+                    Intent(this, SubEditActivity::class.java).putExtra("subId", subId)
+                )
             },
             onRemoveSub = { subId -> removeSub(subId) },
             onShareQRCode = { url -> QRCodeDecoder.createQRCode(url) },

@@ -36,18 +36,20 @@ object LauncherManager {
         return true
     }
 
-    fun startService(context: Context, guid: String? = null) {
+    fun startService(context: Context, guid: String? = null): Boolean {
         LogUtil.i(AppConfig.TAG, "LauncherManager: startService from ${context::class.java.simpleName}")
 
         if (guid != null) {
             MmkvManager.setSelectServer(guid)
         }
 
-        try {
+        return try {
             startContextService(context)
+            true
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "LauncherManager: ${e.message}", e)
             context.toast(e.message ?: e.javaClass.simpleName)
+            false
         }
     }
 

@@ -13,6 +13,8 @@ import com.aras.client.dto.TestServiceMessage
 import com.aras.client.handler.ArasExportImportManager
 import com.aras.client.handler.FreeSubManager
 import com.aras.client.handler.MmkvManager
+import com.aras.client.handler.SubscriptionUpdater
+import com.aras.client.handler.SubscriptionWorkflowLock
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.dto.entities.ServersCache
 import com.aras.client.dto.entities.SubscriptionCache
@@ -32,6 +34,9 @@ import com.aras.client.extension.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.aras.client.dto.CheckUpdateResult
+import com.aras.client.dto.QuickConnectFailure
+import com.aras.client.dto.QuickConnectResult
+import com.aras.client.dto.SubscriptionUpdateResult
 import com.aras.client.handler.UpdateCheckerManager
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +47,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.PatternSyntaxException
+
+internal fun pingCountryLabel(country: String?, fallback: String): String =
+    com.aras.client.util.CountryResolver.flagForCountry(country).ifBlank { country ?: fallback }
 
 class MainViewModel(
     application: Application,
@@ -191,6 +199,39 @@ class MainViewModel(
             is MainServiceEvent.MeasureConfigFinish -> {
                 onTestsFinished()
             }
+
+            MainServiceEvent.QuickConnectStarted -> cancelAllPing()
+            is MainServiceEvent.QuickConnectFinished -> handleQuickConnectFinished(event.result)
+        }
+    }
+
+    private fun handleQuickConnectFinished(result: QuickConnectResult) {
+        if (!result.success && result.reason !in setOf(
+                QuickConnectFailure.STOP_FAILED,
+                QuickConnectFailure.NO_SUBSCRIPTION,
+                QuickConnectFailure.ALREADY_RUNNING,
+            )
+        ) {
+            updateRunningState(false)
+        }
+        viewModelScope.launch {
+            setupGroupTab(
+                forceRefresh = true,
+                preferredSelectedGroupId = result.subscriptionId.takeIf { it.isNotBlank() },
+            ).join()
+            refreshSelectedGuid()
+            refreshGeoIPIfDue(force = true)
+            if (result.success) {
+                toastSuccess(R.string.quick_connect_success)
+            } else if (result.reason == QuickConnectFailure.NO_SERVERS ||
+                result.reason == QuickConnectFailure.NO_SUBSCRIPTION
+            ) {
+                toastError(R.string.quick_connect_no_server)
+            } else if (result.reason == QuickConnectFailure.VPN_PERMISSION_REQUIRED) {
+                toastError(R.string.quick_connect_vpn_permission)
+            } else {
+                toastError(R.string.quick_connect_failure)
+            }
         }
     }
 
@@ -222,7 +263,8 @@ class MainViewModel(
         }
 
         val unknown = dataSource.getString(R.string.value_unknown)
-        return "$status\n(${result.country ?: unknown}) ${result.ipAddress ?: unknown}"
+        val country = pingCountryLabel(result.country, unknown)
+        return "$status\n($country) ${result.ipAddress ?: unknown}"
     }
 
     // ---------- Public state accessors ----------
@@ -243,6 +285,7 @@ class MainViewModel(
             MainAction.RefreshGroups -> setupGroupTab(forceRefresh = true)
             MainAction.TestAllServers -> testAllRealPing(true)
             MainAction.TestRealAllServers -> testAllRealPing()
+            MainAction.PingSelectedSubscription -> pingSelectedSubscription()
             MainAction.CancelTesting -> cancelAllPing()
             MainAction.RemoveAllServers -> removeAllServerAsync()
             MainAction.RemoveDuplicateServers -> removeDuplicateServerAsync()
@@ -415,8 +458,11 @@ class MainViewModel(
 
     fun getSubscriptions(): List<SubscriptionCache> = dataSource.getSubscriptions()
 
-    private fun resolveSelectedGroup(groups: List<GroupMapItem>): String {
-        val current = uiState.value.selectedGroupId
+    private fun resolveSelectedGroup(
+        groups: List<GroupMapItem>,
+        preferredSelectedGroupId: String? = null,
+    ): String {
+        val current = preferredSelectedGroupId ?: uiState.value.selectedGroupId
         val resolved = when {
             groups.isEmpty() -> ""
             groups.any { it.id == current } -> current
@@ -440,7 +486,10 @@ class MainViewModel(
         return result
     }
 
-    fun setupGroupTab(forceRefresh: Boolean = false): Job {
+    fun setupGroupTab(
+        forceRefresh: Boolean = false,
+        preferredSelectedGroupId: String? = null,
+    ): Job {
         setupGroupJob?.cancel()
         preloadJob?.cancel()
         selectedGroupLoadJob?.cancel()
@@ -453,7 +502,7 @@ class MainViewModel(
                 val groups = dataSource.getSubscriptions().map {
                     GroupMapItem(id = it.guid, remarks = it.subscription.remarks)
                 }
-                val selectedGroup = resolveSelectedGroup(groups)
+                val selectedGroup = resolveSelectedGroup(groups, preferredSelectedGroupId)
                 val validIds = groups.mapTo(HashSet()) { it.id }
                 groupPageFlows.keys.removeAll { it !in validIds }
                 groupLoadMutexes.keys.removeAll { it !in validIds }
@@ -507,17 +556,35 @@ class MainViewModel(
         launchLoading {
             withContext(ioDispatcher) {
                 try {
-                    val (count, countSub) = dataSource.importBatchConfig(
-                        configText, uiState.value.selectedGroupId, true
-                    )
-                    when {
-                        count > 0 -> {
-                            toast(dataSource.getString(R.string.title_import_config_count, count))
-                            setupGroupTab(forceRefresh = true)
-                        }
+                    val selectedGroupId = uiState.value.selectedGroupId
+                    val targetGroupId = if (FreeSubManager.isFreeSubId(selectedGroupId)) {
+                        AppConfig.DEFAULT_SUBSCRIPTION_ID
+                    } else {
+                        selectedGroupId
+                    }
+                    val imported = dataSource.importBatchConfig(configText, targetGroupId, true)
+                    val firstNewSubscriptionId = imported.newSubscriptionIds.firstOrNull()
+                    if (firstNewSubscriptionId != null) {
+                        setupGroupTab(
+                            forceRefresh = true,
+                            preferredSelectedGroupId = firstNewSubscriptionId,
+                        ).join()
+                    } else {
+                        setupGroupTab(forceRefresh = true)
+                    }
 
-                        countSub > 0 -> setupGroupTab(forceRefresh = true)
-                        else -> toastError(R.string.toast_failure)
+                    if (imported.configCount > 0) {
+                        toast(dataSource.getString(R.string.title_import_config_count, imported.configCount))
+                    }
+                    if (imported.newSubscriptionIds.isNotEmpty()) {
+                        val updateResult = imported.newSubscriptionIds.fold(
+                            SubscriptionUpdateResult()
+                        ) { accumulated, subId ->
+                            accumulated + updateSubscriptionInternal(subId)
+                        }
+                        showSubscriptionUpdateResult(updateResult)
+                    } else if (imported.totalCount == 0) {
+                        toastError(R.string.toast_failure)
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -529,17 +596,48 @@ class MainViewModel(
         }
     }
 
+    fun openSubscriptionAfterAdd(subId: String) {
+        openSubscriptionsAfterAdd(listOf(subId))
+    }
+
+    fun openSubscriptionsAfterAdd(subIds: List<String>) {
+        val validIds = subIds.filter { it.isNotBlank() }.distinct()
+        val firstId = validIds.firstOrNull() ?: return
+        viewModelScope.launch {
+            if (_uiState.value.isTesting) cancelAllPing()
+            val selected = setupGroupTab(
+                forceRefresh = true,
+                preferredSelectedGroupId = firstId,
+            ).join().let { uiState.value.selectedGroupId == firstId }
+            if (!selected) return@launch
+            launchLoading {
+                withContext(ioDispatcher) {
+                    val result = validIds.fold(SubscriptionUpdateResult()) { accumulated, subId ->
+                        accumulated + updateSubscriptionInternal(subId)
+                    }
+                    showSubscriptionUpdateResult(result)
+                }
+            }
+        }
+    }
+
     fun removeSubscription(subId: String) {
-        if (subId.isEmpty() || subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) return
+        if (subId.isEmpty() || FreeSubManager.isFreeSubId(subId)) return
         if (uiState.value.isTesting || (uiState.value.isRunning &&
                 uiState.value.selectedGuid in MmkvManager.decodeServerList(subId))) {
             toast(R.string.toast_action_not_allowed)
             return
         }
-        MmkvManager.removeSubscription(subId)
-        refreshSelectedGuid()
-        setupGroupTab(forceRefresh = true)
-        toast(dataSource.getString(R.string.toast_success))
+        viewModelScope.launch(ioDispatcher) {
+            SubscriptionWorkflowLock.withLock(getApplication(), subId) {
+                MmkvManager.removeSubscription(subId)
+            }
+            withContext(Dispatchers.Main) {
+                refreshSelectedGuid()
+                setupGroupTab(forceRefresh = true)
+                toast(dataSource.getString(R.string.toast_success))
+            }
+        }
     }
 
     fun copySubscriptionUrl(subId: String) {
@@ -549,40 +647,18 @@ class MainViewModel(
             return
         }
         Utils.setClipboard(getApplication(), url)
-        toast(R.string.toast_success)
+        toast(dataSource.getString(R.string.toast_success))
     }
 
     fun importConfigViaSub(subId: String = uiState.value.selectedGroupId) {
+        if (_uiState.value.isTesting) {
+            toast(R.string.toast_action_not_allowed)
+            return
+        }
         launchLoading {
             withContext(ioDispatcher) {
                 try {
-                    // Free sub: re-apply the URL from sub.txt / default before fetching
-                    if (subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) {
-                        com.aras.client.handler.FreeSubManager.applyUrl(getApplication())
-                    }
-                    val result = if (subId.isEmpty()) {
-                        dataSource.updateConfigViaSubAll()
-                    } else {
-                        val item = dataSource.getSubscriptionItem(subId) ?: return@withContext
-                        dataSource.updateConfigViaSub(SubscriptionCache(subId, item))
-                    }
-                    if (subId == com.aras.client.handler.FreeSubManager.FREE_SUB_ID) {
-                        FreeSubManager.protectAll()
-                    }
-                    when {
-                        result.successCount + result.failureCount + result.skipCount == 0 ->
-                            toast(R.string.title_update_subscription_no_subscription)
-
-                        result.successCount > 0 && result.failureCount + result.skipCount == 0 ->
-                            toast(dataSource.getString(R.string.title_update_config_count, result.configCount))
-
-                        else ->
-                            toast(dataSource.getString(R.string.title_update_subscription_result, result.configCount, result.successCount, result.failureCount, result.skipCount))
-                    }
-                    if (result.configCount > 0) {
-                        setupGroupTab(forceRefresh = true)
-                        refreshSelectedGuid()
-                    }
+                    showSubscriptionUpdateResult(updateSubscriptionInternal(subId))
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
@@ -592,6 +668,53 @@ class MainViewModel(
             }
         }
     }
+
+    private suspend fun updateSubscriptionInternal(subId: String): SubscriptionUpdateResult {
+        if (FreeSubManager.isFreeSubId(subId)) {
+            FreeSubManager.applyUrl(getApplication())
+        }
+        val result = if (subId.isEmpty()) {
+            dataSource.updateConfigViaSubAll()
+        } else {
+            val item = dataSource.getSubscriptionItem(subId)
+                ?: return SubscriptionUpdateResult(skipCount = 1)
+            dataSource.updateConfigViaSub(SubscriptionCache(subId, item))
+        }
+        if (FreeSubManager.isFreeSubId(subId)) {
+            FreeSubManager.protectAll()
+        }
+        if (result.successCount > 0 && subId.isNotEmpty()) {
+            SubscriptionUpdater.syncOne(getApplication(), subId)
+        }
+        return result
+    }
+
+    private fun showSubscriptionUpdateResult(result: SubscriptionUpdateResult) {
+        when {
+            result.successCount + result.failureCount + result.skipCount == 0 ->
+                toast(R.string.title_update_subscription_no_subscription)
+
+            result.successCount > 0 && result.failureCount + result.skipCount == 0 ->
+                toast(dataSource.getString(R.string.title_update_config_count, result.configCount))
+
+            else ->
+                toast(
+                    dataSource.getString(
+                        R.string.title_update_subscription_result,
+                        result.configCount,
+                        result.successCount,
+                        result.failureCount,
+                        result.skipCount,
+                    )
+                )
+        }
+        if (result.configCount > 0) {
+            setupGroupTab(forceRefresh = true)
+            refreshSelectedGuid()
+            refreshGeoIPIfDue(force = true)
+        }
+    }
+
 
     private fun exportAllAsync() {
         launchLoading {
@@ -854,6 +977,26 @@ class MainViewModel(
         startTestRound(uiState.value.selectedGroupId, currentServers(), onlyTcp, smartConnect = false)
     }
 
+    fun pingSelectedSubscription() {
+        viewModelScope.launch {
+            if (_uiState.value.isTesting) return@launch
+            val groupId = _uiState.value.selectedGroupId
+            if (groupId.isBlank()) {
+                toast(R.string.toast_select_subscription_for_ping)
+                return@launch
+            }
+            val servers = withContext(ioDispatcher) {
+                buildServersCache(dataSource.getGroupServerGuids(groupId))
+            }
+            if (_uiState.value.isTesting) return@launch
+            if (servers.isEmpty()) {
+                toast(R.string.toast_none_data)
+                return@launch
+            }
+            startTestRound(groupId, servers, onlyTcp = false, smartConnect = false)
+        }
+    }
+
     private fun startTestRound(
         groupId: String,
         servers: List<ServersCache>,
@@ -1057,13 +1200,9 @@ class MainViewModel(
                         AppConfig.PREF_GEOIP_LAST_REFRESH, System.currentTimeMillis()
                     )
                 }
-                val hosts = mutableListOf<String>()
-                MmkvManager.decodeSubscriptions().forEach { sub ->
-                    MmkvManager.decodeServerList(sub.guid).forEach { guid ->
-                        MmkvManager.decodeServerConfig(guid)?.server
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let { hosts.add(it) }
-                    }
+                val hosts = MmkvManager.decodeAllServerList().mapNotNull { guid ->
+                    MmkvManager.decodeServerConfig(guid)?.server
+                        ?.takeIf { it.isNotBlank() }
                 }
                 com.aras.client.util.GeoIPResolver.refresh(hosts.distinct())
                 reloadAllGroups(_uiState.value.groups.map { it.id })

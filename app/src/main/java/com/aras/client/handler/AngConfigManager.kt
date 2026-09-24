@@ -3,8 +3,10 @@ package com.aras.client.handler
 import android.content.Context
 import android.graphics.Bitmap
 import android.text.TextUtils
+import com.aras.client.AngApplication
 import com.aras.client.AppConfig
 import com.aras.client.core.CoreConfigManager
+import com.aras.client.dto.BatchImportResult
 import com.aras.client.dto.SubscriptionUpdateResult
 import com.aras.client.dto.UrlContentRequest
 import com.aras.client.dto.entities.ProfileItem
@@ -30,6 +32,8 @@ import com.aras.client.util.QRCodeDecoder
 import com.aras.client.util.Utils
 import java.net.URI
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -231,7 +235,18 @@ object AngConfigManager {
      * @param append Whether to append the configurations.
      * @return A pair containing the number of configurations and subscriptions imported.
      */
-    fun importBatchConfig(server: String?, subid: String, append: Boolean): Pair<Int, Int> {
+    suspend fun importBatchConfig(server: String?, subid: String, append: Boolean): BatchImportResult {
+        val lockId = subid.ifBlank { AppConfig.DEFAULT_SUBSCRIPTION_ID }
+        return SubscriptionWorkflowLock.withLock(AngApplication.application, lockId) {
+            importBatchConfigUnlocked(server, subid, append)
+        }
+    }
+
+    private fun importBatchConfigUnlocked(
+        server: String?,
+        subid: String,
+        append: Boolean,
+    ): BatchImportResult {
         return try {
             var count = parseBatchConfig(Utils.decode(server), subid, append)
             if (count <= 0) {
@@ -252,18 +267,10 @@ object AngConfigManager {
             if (newSubIds.isEmpty()) {
                 newSubIds = parseBatchSubscription(Utils.decode(server))
             }
-            // Only fetch the subscriptions that were just added; existing ones
-            // keep their current content until the user updates them manually.
-            newSubIds.forEach { guid ->
-                MmkvManager.decodeSubscription(guid)?.let {
-                    updateConfigViaSub(SubscriptionCache(guid, it))
-                }
-            }
-
-            count to newSubIds.size
+            BatchImportResult(configCount = count, newSubscriptionIds = newSubIds)
         } catch (e: ProfileStorageException) {
             LogUtil.e(AppConfig.TAG, "Failed to store imported profiles", e)
-            0 to 0
+            BatchImportResult()
         }
     }
 
@@ -281,6 +288,7 @@ object AngConfigManager {
 
             val guids = mutableListOf<String>()
             servers.lines()
+                .map { it.trim() }
                 .distinct()
                 .forEach { str ->
                     if (Utils.isValidSubUrl(str)) {
@@ -315,7 +323,10 @@ object AngConfigManager {
             val links = if (isClashYaml) {
                 com.aras.client.fmt.ClashYamlFmt.toLinks(servers)
             } else {
-                servers.lines()
+                servers.lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .toList()
             }
             links.distinct()
                 .reversed()
@@ -376,6 +387,9 @@ object AngConfigManager {
             subscriptionId = subid,
             append = append,
         )
+        if (FreeSubManager.isFreeSubId(subid)) {
+            ArasExportImportManager.markProtected(keyToProfile.keys)
+        }
     }
 
     /**
@@ -547,37 +561,46 @@ object AngConfigManager {
      * @param it The subscription item.
      * @return Subscription update result.
      */
-    fun updateConfigViaSub(it: SubscriptionCache): SubscriptionUpdateResult {
+    suspend fun updateConfigViaSub(it: SubscriptionCache): SubscriptionUpdateResult =
+        SubscriptionWorkflowLock.withLock(AngApplication.application, it.guid) {
+            updateConfigViaSubLocked(it)
+        }
+
+    internal suspend fun updateConfigViaSubLocked(it: SubscriptionCache): SubscriptionUpdateResult {
         try {
+            // Always use the latest metadata after the workflow lock is acquired.
+            val subscription = MmkvManager.decodeSubscription(it.guid)
+                ?: return SubscriptionUpdateResult(skipCount = 1)
+
             // Check if disabled
-            if (!it.subscription.enabled) {
+            if (!subscription.enabled) {
                 return SubscriptionUpdateResult(skipCount = 1)
             }
 
             // Validate subscription info
             if (TextUtils.isEmpty(it.guid)
-                || TextUtils.isEmpty(it.subscription.remarks)
-                || TextUtils.isEmpty(it.subscription.url)
+                || TextUtils.isEmpty(subscription.remarks)
+                || TextUtils.isEmpty(subscription.url)
             ) {
                 return SubscriptionUpdateResult(skipCount = 1)
             }
 
-            val url = HttpUtil.toIdnUrl(it.subscription.url)
+            val url = HttpUtil.toIdnUrl(subscription.url)
             if (!Utils.isValidUrl(url)) {
                 return SubscriptionUpdateResult(failureCount = 1)
             }
-            if (!it.subscription.allowInsecureUrl) {
+            if (!subscription.allowInsecureUrl) {
                 if (!Utils.isValidSubUrl(url)) {
                     return SubscriptionUpdateResult(failureCount = 1)
                 }
             }
-            LogUtil.i(AppConfig.TAG, url)
+            LogUtil.i(AppConfig.TAG, "Updating subscription: ${subscription.remarks}")
             // Cache-buster: provider/CDN caches were returning stale copies,
             // freezing the traffic/expiry numbers between updates.
             val fetchUrl = if (url.contains("?")) "$url&_t=${System.currentTimeMillis()}"
                            else "$url?_t=${System.currentTimeMillis()}"
-            val userAgent = it.subscription.userAgent
-            val requestHeaders = it.subscription.requestHeaders
+            val userAgent = subscription.userAgent
+            val requestHeaders = subscription.requestHeaders
             val proxyUsername = SettingsManager.getSocksUsername()
             val proxyPassword = SettingsManager.getSocksPassword()
 
@@ -616,14 +639,29 @@ object AngConfigManager {
                 return SubscriptionUpdateResult(failureCount = 1)
             }
             val configText = fetched.body
+            currentCoroutineContext().ensureActive()
 
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
-                it.subscription.lastUpdated = System.currentTimeMillis()
-                applySubscriptionMetadata(it.subscription, fetched.headers)
-                MmkvManager.encodeSubscription(it.guid, it.subscription)
+                val latest = MmkvManager.decodeSubscription(it.guid)
+                    ?: return SubscriptionUpdateResult(failureCount = 1)
+                val settingsUnchanged = latest.url == subscription.url &&
+                        latest.remarks == subscription.remarks &&
+                        latest.enabled == subscription.enabled &&
+                        latest.autoUpdate == subscription.autoUpdate &&
+                        latest.updateInterval == subscription.updateInterval &&
+                        latest.filter == subscription.filter &&
+                        latest.allowInsecureUrl == subscription.allowInsecureUrl &&
+                        latest.userAgent == subscription.userAgent &&
+                        latest.requestHeaders == subscription.requestHeaders
+                if (!settingsUnchanged) {
+                    return SubscriptionUpdateResult(failureCount = 1)
+                }
+                latest.lastUpdated = System.currentTimeMillis()
+                applySubscriptionMetadata(latest, fetched.headers)
+                MmkvManager.encodeSubscription(it.guid, latest)
                 com.aras.client.util.SubscriptionUpdateNotifier.notify(it.guid)
-                LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
+                LogUtil.i(AppConfig.TAG, "Subscription updated: ${latest.remarks}, $count configs")
                 return SubscriptionUpdateResult(
                     configCount = count,
                     successCount = 1

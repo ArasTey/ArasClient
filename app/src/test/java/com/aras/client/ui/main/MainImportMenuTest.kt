@@ -6,12 +6,18 @@ import org.junit.Test
 class MainImportMenuTest {
 
     @Test
+    fun moreMenuIncludesSelectedSubscriptionPing() {
+        assertEquals(true, MainMoreMenuAction.PingSelectedSubscription in MainMoreMenuAction.entries)
+    }
+
+    @Test
     fun regularShareMenuContainsOnlyShareActions() {
         val expected = listOf(
             ServerMenuAction.ShareQRCode,
             ServerMenuAction.ShareClipboard,
             ServerMenuAction.ShareFullContent,
             ServerMenuAction.ShareTxtFile,
+            ServerMenuAction.ShareArasc,
         )
         assertEquals(expected, serverMenuActions(isComplexProfile = false, includeManagementActions = false))
     }

@@ -89,8 +89,20 @@ object CountryResolver {
         )
     }
 
-    private val flagRegex = Regex("[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]")
     private val isoTokenRegex = Regex("(^|[^a-zA-Z])([a-zA-Z]{2})([^a-zA-Z]|$)")
+
+    private fun findFlag(text: String): String {
+        for (index in 0..text.length - 4) {
+            if (text[index] in '\uD83C'..'\uD83D' &&
+                text[index + 1] in '\uDDE6'..'\uDDFF' &&
+                text[index + 2] in '\uD83C'..'\uD83D' &&
+                text[index + 3] in '\uDDE6'..'\uDDFF'
+            ) {
+                return text.substring(index, index + 4)
+            }
+        }
+        return ""
+    }
 
     private fun isoToFlag(iso: String): String {
         val base = 0x1F1E6 - 'A'.code
@@ -103,50 +115,76 @@ object CountryResolver {
     /**
      * Returns the flag emoji for the profile's country, or "" when unknown.
      *
-     * Default priority: the provider's own naming (flag emoji, ISO code,
-     * country name) always wins — subscription panels deliberately label
-     * nodes with a country while many share one IP behind a CDN/worker, so
-     * a GeoIP lookup would be wrong there. The server-IP lookup ([geoIso],
-     * from GeoIPResolver) is only used when the name carries no country hint.
-     *
-     * When [preferGeoIp] is true (the server this flag belongs to is the one
-     * we actually connected to), the real IP country wins: a provider's
-     * remarks label is just marketing, the tunnel lands on the IP's real
-     * country, so the flag must match the IP, not the label.
+     * When [preferGeoIp] is true, a valid country resolved from the server IP
+     * wins over provider naming. This is the card policy: the displayed flag
+     * represents where the config endpoint is located. If GeoIP is unavailable,
+     * provider flag/ISO/country/city text is used as a safe fallback.
      */
+    fun withoutFlags(value: String): String {
+        val result = StringBuilder(value.length)
+        var index = 0
+        while (index < value.length) {
+            if (index + 3 < value.length &&
+                value[index] in '\uD83C'..'\uD83D' &&
+                value[index + 1] in '\uDDE6'..'\uDDFF' &&
+                value[index + 2] in '\uD83C'..'\uD83D' &&
+                value[index + 3] in '\uDDE6'..'\uDDFF'
+            ) {
+                index += 4
+            } else {
+                result.append(value[index])
+                index++
+            }
+        }
+        return result.toString().replace(Regex("\\s+"), " ").trim()
+    }
+
+    /** Converts an ISO code, English country name, known region, or existing flag to a flag. */
+    fun flagForCountry(country: String?): String {
+        val raw = country?.trim().orEmpty()
+        if (raw.isBlank()) return ""
+        findFlag(raw).takeIf { it.isNotBlank() }?.let { return it }
+        normalizeIso(raw)?.let { return isoToFlag(it) }
+        return resolveCountryText(raw)
+    }
+
+    private fun normalizeIso(value: String): String? = value
+        .trim()
+        .uppercase(Locale.ROOT)
+        .takeIf { it.length == 2 && it in isoCodes }
+
+    private fun resolveCountryText(raw: String): String {
+        val text = raw.lowercase(Locale.ROOT)
+        isoTokenRegex.findAll(text).forEach { match ->
+            normalizeIso(match.groupValues[2])?.let { return isoToFlag(it) }
+        }
+        nameToIso.entries
+            .sortedByDescending { it.key.length }
+            .firstOrNull { (name, _) -> name in text }
+            ?.let { (_, iso) -> return isoToFlag(iso) }
+        cityToIso.entries
+            .sortedByDescending { it.key.length }
+            .firstOrNull { (city, _) -> city in text }
+            ?.let { (_, iso) -> return isoToFlag(iso) }
+        return ""
+    }
+
     fun resolve(
         profile: ProfileItem,
         geoIso: String = "",
         preferGeoIp: Boolean = false
     ): String {
         val raw = "${profile.remarks} ${profile.description.orEmpty()}"
-        val text = raw.lowercase(Locale.ROOT)
 
-        // 0) Connected server: the IP's real country wins over the label.
-        if (preferGeoIp && geoIso.length == 2) return isoToFlag(geoIso)
+        // 0) Cards and the connected profile prefer the resolved server-IP country.
+        val validGeoIso = normalizeIso(geoIso)
+        if (preferGeoIp && validGeoIso != null) return isoToFlag(validGeoIso)
 
-        // 1) Existing flag emoji wins.
-        flagRegex.find(raw)?.let { return it.value }
+        // 1) Provider flag/country text remains the fallback when GeoIP is unavailable.
+        findFlag(raw).takeIf { it.isNotBlank() }?.let { return it }
+        resolveCountryText(raw).takeIf { it.isNotBlank() }?.let { return it }
 
-        // 2) Standalone ISO-2 token that is a real country code.
-        isoTokenRegex.findAll(text).forEach { m ->
-            val iso = m.groupValues[2].uppercase(Locale.ROOT)
-            if (iso in isoCodes) return isoToFlag(iso)
-        }
-
-        // 3) Full English country name.
-        nameToIso.forEach { (name, iso) ->
-            if (text.contains(name)) return isoToFlag(iso)
-        }
-
-        // 4) Well-known city / region.
-        cityToIso.forEach { (city, iso) ->
-            if (text.contains(city)) return isoToFlag(iso)
-        }
-
-        // 5) Server-IP lookup — only when the name had no country hint at all.
-        if (geoIso.length == 2) return isoToFlag(geoIso)
-
-        return ""
+        // 2) Server-IP lookup when the name carried no usable country hint.
+        return validGeoIso?.let(::isoToFlag).orEmpty()
     }
 }

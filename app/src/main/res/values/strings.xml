@@ -10,6 +10,8 @@
     <string name="action_stop_service">Stop service</string>
     <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>
+    <string name="title_ping_selected_subscription">Ping all in this subscription</string>
+    <string name="toast_select_subscription_for_ping">Select a subscription first</string>
     <string name="migration_fail">Data migration failed!</string>
     <string name="pull_down_to_refresh">Please pull down to refresh!</string>
 
@@ -18,6 +20,18 @@
     <string name="toast_permission_denied">Permission denied</string>
     <string name="toast_permission_denied_notification">Notification permission denied</string>
     <string name="notification_action_more">Tap for more</string>
+    <string name="app_quick_connect_tile_name">Update &amp; Connect</string>
+    <string name="quick_connect_tile_running">Updating subscription…</string>
+    <string name="quick_connect_progress_stopping">Stopping current connection…</string>
+    <string name="quick_connect_progress_updating">Updating selected subscription…</string>
+    <string name="quick_connect_progress_pinging">Pinging subscription servers…</string>
+    <string name="quick_connect_progress_sorting">Sorting subscription servers…</string>
+    <string name="quick_connect_progress_connecting">Connecting to the fastest server…</string>
+    <string name="quick_connect_success">Subscription updated and connected</string>
+    <string name="quick_connect_failure">Update and connect failed</string>
+    <string name="quick_connect_no_server">No reachable server was found</string>
+    <string name="quick_connect_vpn_permission">Allow VPN access in ArasClient first</string>
+    <string name="quick_connect_already_running">An update is already running</string>
     <string name="toast_services_start">Starting service</string>
     <string name="toast_services_stop">Stopping service</string>
     <string name="toast_services_success">Service started successfully</string>

@@ -9,6 +9,7 @@ import com.aras.client.contracts.ServiceControl
 import com.aras.client.core.CoreServiceManager
 import com.aras.client.handler.AppLocaleManager
 import com.aras.client.handler.NotificationManager
+import com.aras.client.helper.MessageHelper
 import com.aras.client.root.RootProxyManager
 import com.aras.client.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
@@ -56,7 +57,13 @@ class CoreRootService : Service(), ServiceControl {
         }
 
         setupJob = CoroutineScope(Dispatchers.IO).launch {
-            if (!RootProxyManager.start(this@CoreRootService)) {
+            val started = RootProxyManager.start(this@CoreRootService)
+            MessageHelper.sendMsg2UI(
+                this@CoreRootService,
+                if (started) AppConfig.MSG_ROOT_SETUP_SUCCESS else AppConfig.MSG_ROOT_SETUP_FAILURE,
+                "",
+            )
+            if (!started) {
                 LogUtil.e(AppConfig.TAG, "StartCore-Root: failed to start root mode, stopping")
                 stopService()
             }

@@ -59,11 +59,23 @@ internal object ProfileReplacement {
         replacementServers: Set<String>,
         protectedServer: String?,
         serversReferencedByOtherGroups: Set<String>?,
+    ): Set<String> = findRemovablePayloads(
+        replacedServers = replacedServers,
+        replacementServers = replacementServers,
+        protectedServers = protectedServer?.let(::setOf) ?: emptySet(),
+        serversReferencedByOtherGroups = serversReferencedByOtherGroups,
+    )
+
+    fun findRemovablePayloads(
+        replacedServers: Collection<String>,
+        replacementServers: Set<String>,
+        protectedServers: Set<String>,
+        serversReferencedByOtherGroups: Set<String>?,
     ): Set<String> {
         if (serversReferencedByOtherGroups == null) return emptySet()
 
         return replacedServers.filterTo(linkedSetOf()) { guid ->
-            guid != protectedServer &&
+            guid !in protectedServers &&
                     guid !in replacementServers &&
                     guid !in serversReferencedByOtherGroups
         }

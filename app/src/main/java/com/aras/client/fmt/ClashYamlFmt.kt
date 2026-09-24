@@ -1,6 +1,7 @@
 package com.aras.client.fmt
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.SafeConstructor
@@ -11,9 +12,19 @@ import java.util.Base64
 object ClashYamlFmt {
     private const val MAX_CHARACTERS = 2_000_000
     private val proxyKey = Regex("(?m)^\\s*(?:[\"']?proxies[\"']?)\\s*:")
+    private val leadingProxyKey = Regex("^\\s*\\{\\s*[\"']?proxies[\"']?\\s*:\\s*\\[")
 
-    fun isClashYaml(text: String): Boolean = proxyKey.containsMatchIn(text) ||
-        Regex("^\\s*\\{\\s*[\"']?proxies[\"']?\\s*:").containsMatchIn(text)
+    fun isClashYaml(text: String): Boolean {
+        val normalized = normalize(text)
+        if (proxyKey.containsMatchIn(normalized) || leadingProxyKey.containsMatchIn(normalized)) {
+            return true
+        }
+        if (!normalized.trimStart().startsWith('{')) return false
+        return runCatching {
+            val root = JsonParser.parseString(normalized)
+            root.isJsonObject && root.asJsonObject.get("proxies")?.isJsonArray == true
+        }.getOrDefault(false)
+    }
 
     fun toLinks(text: String): List<String> {
         require(text.length <= MAX_CHARACTERS) { "Clash YAML is too large" }
@@ -24,7 +35,7 @@ object ClashYamlFmt {
             isAllowDuplicateKeys = false
             setAllowRecursiveKeys(false)
         }
-        val root = Yaml(SafeConstructor(options)).load<Any>(text) as? Map<*, *>
+        val root = Yaml(SafeConstructor(options)).load<Any>(normalize(text)) as? Map<*, *>
             ?: throw IllegalArgumentException("Expected a Clash YAML mapping")
         val proxies = root["proxies"] as? List<*>
             ?: throw IllegalArgumentException("Clash YAML must contain a proxies list")
@@ -131,6 +142,8 @@ object ClashYamlFmt {
         require(it is Boolean)
         it
     } ?: default
+
+    private fun normalize(text: String): String = text.removePrefix("\uFEFF")
 
     private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
     private fun base64(value: String): String = Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8))

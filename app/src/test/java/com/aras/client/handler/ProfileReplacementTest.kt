@@ -115,6 +115,18 @@ class ProfileReplacementTest {
     }
 
     @Test
+    fun `keeps both old and replacement selections during publish`() {
+        val result = ProfileReplacement.findRemovablePayloads(
+            replacedServers = listOf("old-selected", "orphan"),
+            replacementServers = setOf("new-selected"),
+            protectedServers = setOf("old-selected", "new-selected"),
+            serversReferencedByOtherGroups = emptySet(),
+        )
+
+        assertEquals(setOf("orphan"), result)
+    }
+
+    @Test
     fun `keeps all payloads when another group index is unreadable`() {
         val result = ProfileReplacement.findRemovablePayloads(
             replacedServers = listOf("candidate"),

@@ -8,9 +8,11 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.aras.client.AppConfig
+import com.aras.client.dto.QuickConnectMessage
 import com.aras.client.dto.SubscriptionUpdateMessage
 import com.aras.client.dto.TestServiceMessage
 import com.aras.client.service.CoreTestService
+import com.aras.client.service.QuickConnectService
 import com.aras.client.service.SubscriptionUpdateService
 import com.aras.client.util.LogUtil
 import java.io.Serializable
@@ -102,6 +104,27 @@ object MessageHelper {
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to send message to test service", e)
+        }
+    }
+
+    fun sendMsg2QuickConnectService(
+        ctx: Context,
+        message: QuickConnectMessage,
+    ): Boolean {
+        return try {
+            val intent = Intent().apply {
+                component = ComponentName(ctx, QuickConnectService::class.java)
+                putExtra("content", message)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ContextCompat.startForegroundService(ctx, intent)
+            } else {
+                ctx.startService(intent)
+            }
+            true
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to start quick connect service", e)
+            false
         }
     }
 

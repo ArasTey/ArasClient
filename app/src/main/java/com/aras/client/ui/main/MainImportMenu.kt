@@ -56,6 +56,7 @@ enum class MainMoreMenuAction(@StringRes val labelRes: Int) {
     ExportSubTxt(R.string.title_export_sub_txt),
     LocateSelected(R.string.title_locate_selected_config),
     SortByTestResults(R.string.title_sort_by_test_results),
+    PingSelectedSubscription(R.string.title_ping_selected_subscription),
     TestAll(R.string.title_ping_all_server),
     TestAllRealPing(R.string.title_real_ping_all_server),
     UpdateSubscriptions(R.string.title_sub_update)

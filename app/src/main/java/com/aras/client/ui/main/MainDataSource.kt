@@ -1,5 +1,6 @@
 package com.aras.client.ui.main
 
+import com.aras.client.dto.BatchImportResult
 import com.aras.client.dto.SubscriptionUpdateResult
 import com.aras.client.dto.TestServiceMessage
 import com.aras.client.dto.entities.ProfileItem
@@ -49,11 +50,11 @@ interface MainDataSource : Closeable {
     suspend fun importBatchConfig(
         server: String?,
         subscriptionId: String,
-        updateUI: Boolean
-    ): Pair<Int, Int>
+        append: Boolean
+    ): BatchImportResult
 
     fun updateConfigViaSubAll(): SubscriptionUpdateResult
-    fun updateConfigViaSub(subscriptionCache: SubscriptionCache): SubscriptionUpdateResult
+    suspend fun updateConfigViaSub(subscriptionCache: SubscriptionCache): SubscriptionUpdateResult
 
     fun shareNonCustomConfigsToClipboard(guids: List<String>): Int
     fun share2QRCode(guid: String): android.graphics.Bitmap?

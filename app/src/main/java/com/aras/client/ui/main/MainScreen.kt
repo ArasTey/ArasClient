@@ -58,10 +58,9 @@ fun MainScreen(
         onPauseOrDispose { mainViewModel.setMainScreenActive(false) }
     }
     val selectedGuid = uiState.selectedGuid
-    // Ping-aware bottom bar: green when connected with a measured (>= 0) ping,
-    // red when connected but the last ping failed or hasn't been measured.
+    // Ping-aware bottom bar: green only for a successful positive delay.
     val hasPing = if (isRunning && selectedGuid != null) {
-        (MmkvManager.decodeServerAffiliationInfo(selectedGuid)?.testDelayMillis ?: -1L) >= 0L
+        (MmkvManager.decodeServerAffiliationInfo(selectedGuid)?.testDelayMillis ?: -1L) > 0L
     } else false
     val doubleColumnDisplay = uiState.doubleColumnDisplay
     val confirmRemove = uiState.confirmRemove
@@ -196,6 +195,7 @@ fun MainScreen(
                             MainMoreMenuAction.ExportSubTxt -> onAction(MainAction.ExportGroupTxt)
                             MainMoreMenuAction.LocateSelected -> onAction(MainAction.LocateSelectedServer)
                             MainMoreMenuAction.SortByTestResults -> onAction(MainAction.SortByTestResults)
+                            MainMoreMenuAction.PingSelectedSubscription -> onAction(MainAction.PingSelectedSubscription)
                             MainMoreMenuAction.TestAll -> onAction(MainAction.TestAllServers)
                             MainMoreMenuAction.TestAllRealPing -> onAction(MainAction.TestRealAllServers)
                             MainMoreMenuAction.UpdateSubscriptions -> onAction(MainAction.UpdateSubscriptions)

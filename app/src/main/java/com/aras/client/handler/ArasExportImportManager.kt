@@ -1,11 +1,16 @@
 package com.aras.client.handler
 
+import com.aras.client.AngApplication
 import com.aras.client.AppConfig
 import com.aras.client.core.ArascContainer
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.dto.entities.SubscriptionItem
 import com.aras.client.util.JsonUtil
 import com.aras.client.util.LogUtil
+import java.io.File
+import java.io.RandomAccessFile
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * Business logic for the proprietary ".arasc" export/import format.
@@ -49,28 +54,51 @@ object ArasExportImportManager {
 
     // ------------------------------------------------------------- protected set
 
-    /** GUIDs of profiles imported from a Protected container. */
-    private val protectedGuids: MutableSet<String> by lazy {
+    private val protectedMutationLock = ReentrantLock()
+
+    private inline fun <T> withProtectedMutationLock(block: () -> T): T =
+        protectedMutationLock.withLock {
+            val directory = File(AngApplication.application.filesDir, "metadata-locks")
+            if (!directory.isDirectory && !directory.mkdirs() && !directory.isDirectory) {
+                error("Unable to create metadata lock directory")
+            }
+            RandomAccessFile(File(directory, "protected-guids.lock"), "rw").use { file ->
+                file.channel.lock().use { block() }
+            }
+        }
+
+    /** Reads MMKV on every access so daemon writes are immediately visible to the UI process. */
+    private fun protectedGuids(): MutableSet<String> {
         val raw = MmkvManager.decodeSettingsString(AppConfig.PREF_ARASC_PROTECTED_GUIDS) ?: ""
-        raw.split(",").filter { it.isNotBlank() }.toMutableSet()
+        return raw.split(",").filter { it.isNotBlank() }.toMutableSet()
     }
 
-    private fun persistProtected() {
+    private fun persistProtected(guids: Set<String>) {
         MmkvManager.encodeSettings(
-            AppConfig.PREF_ARASC_PROTECTED_GUIDS, protectedGuids.joinToString(",")
+            AppConfig.PREF_ARASC_PROTECTED_GUIDS,
+            guids.filter { it.isNotBlank() }.joinToString(","),
         )
     }
 
-    fun isProtected(guid: String): Boolean = protectedGuids.contains(guid)
+    fun isProtected(guid: String): Boolean = guid in protectedGuids()
 
     /** Marks guids as protected at the data layer (used by the Free sub). */
-    fun markProtected(guid: String) {
-        protectedGuids.add(guid)
-        persistProtected()
+    fun markProtected(guid: String) = markProtected(listOf(guid))
+
+    fun markProtected(guids: Collection<String>) {
+        if (guids.isEmpty()) return
+        withProtectedMutationLock {
+            val current = protectedGuids()
+            if (current.addAll(guids)) persistProtected(current)
+        }
     }
 
-    fun forgetProtected(guids: List<String>) {
-        if (guids.any { protectedGuids.remove(it) }) persistProtected()
+    fun forgetProtected(guids: Collection<String>) {
+        if (guids.isEmpty()) return
+        withProtectedMutationLock {
+            val current = protectedGuids()
+            if (current.removeAll(guids.toSet())) persistProtected(current)
+        }
     }
 
     // ------------------------------------------------------------- export
@@ -195,6 +223,7 @@ object ArasExportImportManager {
      */
     private fun importPayload(payload: ArascPayload, markProtected: Boolean): Int {
         var imported = 0
+        val newlyProtected = mutableSetOf<String>()
 
         // v2: recreate real subscriptions (URL etc) first; configs land in them.
         val linkMap = mutableMapOf<String, String>() // original guid -> new guid
@@ -226,12 +255,12 @@ object ArasExportImportManager {
                 profile.subscriptionId = subId
                 val guid = MmkvManager.encodeServerConfig("", profile)
                 if (markProtected) {
-                    protectedGuids.add(guid)
+                    newlyProtected.add(guid)
                 }
                 imported++
             }
         }
-        if (protectedGuids.isNotEmpty()) persistProtected()
+        ArasExportImportManager.markProtected(newlyProtected)
         return imported
     }
 }

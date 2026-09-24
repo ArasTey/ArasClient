@@ -85,9 +85,27 @@ class ClashYamlFmtTest {
     }
 
     @Test
+    fun importsStrictJsonWhenProxiesIsNotTheFirstProperty() {
+        val json = """
+            {"mixed-port":7890,"mode":"rule","proxies":[{"name":"NL","type":"trojan","server":"example.com","port":443,"password":"secret","sni":"example.com"}]}
+        """.trimIndent()
+        assertTrue(ClashYamlFmt.isClashYaml(json))
+        val link = ClashYamlFmt.toLinks(json).single()
+        assertTrue(link.startsWith("trojan://"))
+    }
+
+    @Test
+    fun importsBomPrefixedMinifiedJson() {
+        val json = "\uFEFF{\"dns\":{\"enable\":true},\"proxies\":[{\"name\":\"US\",\"type\":\"vmess\",\"server\":\"example.com\",\"port\":443,\"uuid\":\"abc\",\"alterId\":0}]}"
+        assertTrue(ClashYamlFmt.isClashYaml(json))
+        assertTrue(ClashYamlFmt.toLinks(json).single().startsWith("vmess://"))
+    }
+
+    @Test
     fun leavesOrdinaryLinksAndJsonAlone() {
         assertFalse(ClashYamlFmt.isClashYaml("vless://abc@example.com:443?security=tls#proxies"))
         assertFalse(ClashYamlFmt.isClashYaml("{\"outbounds\": []}"))
+        assertFalse(ClashYamlFmt.isClashYaml("{\"proxies\":null}"))
         assertTrue(ClashYamlFmt.isClashYaml("{proxies: []}"))
     }
 }

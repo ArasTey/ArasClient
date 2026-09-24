@@ -8,7 +8,9 @@ import androidx.core.content.ContextCompat
 import com.aras.client.AngApplication
 import com.aras.client.AppConfig
 import com.aras.client.R
+import com.aras.client.dto.BatchImportResult
 import com.aras.client.dto.ConnectionTestResult
+import com.aras.client.dto.QuickConnectResult
 import com.aras.client.dto.SubscriptionUpdateResult
 import com.aras.client.dto.TestServiceMessage
 import com.aras.client.dto.entities.ProfileItem
@@ -69,6 +71,12 @@ class MainRepository(
                 AppConfig.MSG_MEASURE_CONFIG_FINISH -> MainServiceEvent.MeasureConfigFinish(
                     safeIntent.getStringExtra("content")
                 )
+
+                AppConfig.MSG_QUICK_CONNECT_STARTED -> MainServiceEvent.QuickConnectStarted
+                AppConfig.MSG_QUICK_CONNECT_SUCCESS,
+                AppConfig.MSG_QUICK_CONNECT_FAILURE -> safeIntent
+                    .serializable<QuickConnectResult>("content")
+                    ?.let(MainServiceEvent::QuickConnectFinished)
 
                 else -> null
             }
@@ -193,13 +201,13 @@ class MainRepository(
     override suspend fun importBatchConfig(
         server: String?,
         subscriptionId: String,
-        updateUI: Boolean
-    ): Pair<Int, Int> = AngConfigManager.importBatchConfig(server, subscriptionId, updateUI)
+        append: Boolean
+    ): BatchImportResult = AngConfigManager.importBatchConfig(server, subscriptionId, append)
 
     override fun updateConfigViaSubAll(): SubscriptionUpdateResult =
         AngConfigManager.updateConfigViaSubAll()
 
-    override fun updateConfigViaSub(subscriptionCache: SubscriptionCache): SubscriptionUpdateResult =
+    override suspend fun updateConfigViaSub(subscriptionCache: SubscriptionCache): SubscriptionUpdateResult =
         AngConfigManager.updateConfigViaSub(subscriptionCache)
 
     override fun shareNonCustomConfigsToClipboard(guids: List<String>): Int =

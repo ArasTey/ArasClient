@@ -2,13 +2,13 @@ package com.aras.client.util
 
 import com.aras.client.AppConfig
 import com.aras.client.handler.MmkvManager
-import com.aras.client.util.JsonUtil
-import com.aras.client.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,18 +16,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.InetAddress
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/**
- * Resolves a config host to its country (ISO-2) and caches it per host.
- *
- * Uses the free ip-api.com batch endpoint (no key, up to 100 IPs per call):
- *   POST http://ip-api.com/batch?fields=status,countryCode,query
- * Hosts are resolved to IPs in parallel with a short timeout; results are
- * cached both in memory (per process) and MMKV (persistent), so a ping round
- * only ever geolocates each host once.
- */
+/** Resolves config hosts to an IP country and caches the ISO code per hostname. */
 object GeoIPResolver {
 
     private const val BATCH_URL = "http://ip-api.com/batch?fields=status,countryCode,query"
@@ -36,6 +29,10 @@ object GeoIPResolver {
     private const val DNS_TIMEOUT_MS = 4000L
 
     private val memCache = ConcurrentHashMap<String, String>()
+    private val refreshMutex = Mutex()
+    private val validIsoCodes by lazy {
+        Locale.getISOCountries().map { it.uppercase(Locale.ROOT) }.toSet()
+    }
     private val client by lazy {
         OkHttpClient.Builder()
             .connectTimeout(8, TimeUnit.SECONDS)
@@ -46,22 +43,20 @@ object GeoIPResolver {
     fun cached(host: String): String {
         if (host.isBlank()) return ""
         memCache[host]?.let { return it }
-        val persisted = MmkvManager.decodeSettingsString(CACHE_PREFIX + host) ?: ""
+        val persisted = normalizeIso(
+            MmkvManager.decodeSettingsString(CACHE_PREFIX + host)
+        ).orEmpty()
         if (persisted.isNotBlank()) memCache[host] = persisted
         return persisted
     }
 
-    /**
-     * Resolves and caches countries for the given hosts. Missing entries are
-     * looked up (DNS + GeoIP) in parallel batches; failures are silent.
-     */
-    suspend fun refresh(hosts: List<String>) {
+    /** Concurrent callers share one refresh pass; the second sees the first pass's cache. */
+    suspend fun refresh(hosts: List<String>) = refreshMutex.withLock {
         val missing = hosts
             .filter { it.isNotBlank() && cached(it).isBlank() }
             .distinct()
-        if (missing.isEmpty()) return
+        if (missing.isEmpty()) return@withLock
 
-        // 1) DNS: host -> IP (parallel, bounded)
         val resolved = coroutineScope {
             val semaphore = Semaphore(20)
             missing.map { host ->
@@ -78,17 +73,15 @@ object GeoIPResolver {
                 }
             }.awaitAll().filterNotNull().toMap()
         }
-        if (resolved.isEmpty()) return
+        if (resolved.isEmpty()) return@withLock
 
-        // 2) GeoIP: batch lookups of 100 IPs each.
-        resolved.values.chunked(BATCH_SIZE).forEach { batch ->
+        resolved.values.distinct().chunked(BATCH_SIZE).forEach { batch ->
             try {
                 val body = JsonUtil.toJson(batch).toRequestBody("application/json".toMediaType())
                 val request = Request.Builder().url(BATCH_URL).post(body).build()
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@use
                     val json = response.body?.string() ?: return@use
-                    // ip-api/batch returns a JSON *array* — parse with Gson directly
                     val root = try {
                         com.google.gson.JsonParser.parseString(json)
                     } catch (e: Exception) {
@@ -96,17 +89,22 @@ object GeoIPResolver {
                         return@use
                     }
                     if (!root.isJsonArray) return@use
-                    root.asJsonArray.forEach { el ->
-                        val obj = el.takeIf { it.isJsonObject }?.asJsonObject ?: return@forEach
+
+                    val codeByIp = mutableMapOf<String, String>()
+                    root.asJsonArray.forEach { element ->
+                        val obj = element.takeIf { it.isJsonObject }?.asJsonObject
+                            ?: return@forEach
                         val ip = obj.get("query")?.takeIf { it.isJsonPrimitive }?.asString
                             ?: return@forEach
-                        val code = obj.get("countryCode")?.takeIf { it.isJsonPrimitive }?.asString
-                            ?: return@forEach
-                        if (code.length == 2) {
-                            resolved.entries.firstOrNull { it.value == ip }?.let { (host, _) ->
-                                memCache[host] = code.uppercase()
-                                MmkvManager.encodeSettings(CACHE_PREFIX + host, code.uppercase())
-                            }
+                        val code = normalizeIso(
+                            obj.get("countryCode")?.takeIf { it.isJsonPrimitive }?.asString
+                        ) ?: return@forEach
+                        codeByIp[ip] = code
+                    }
+                    resolved.forEach { (host, ip) ->
+                        codeByIp[ip]?.let { code ->
+                            memCache[host] = code
+                            MmkvManager.encodeSettings(CACHE_PREFIX + host, code)
                         }
                     }
                 }
@@ -115,4 +113,9 @@ object GeoIPResolver {
             }
         }
     }
+
+    private fun normalizeIso(value: String?): String? = value
+        ?.trim()
+        ?.uppercase(Locale.ROOT)
+        ?.takeIf { it.length == 2 && it in validIsoCodes }
 }

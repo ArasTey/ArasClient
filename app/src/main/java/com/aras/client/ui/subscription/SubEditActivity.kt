@@ -1,5 +1,6 @@
 package com.aras.client.ui.subscription
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
 import androidx.compose.foundation.layout.Column
@@ -31,11 +32,13 @@ import com.aras.client.dto.entities.SubscriptionItem
 import com.aras.client.enums.EConfigType
 import com.aras.client.extension.toLongEx
 import com.aras.client.extension.toast
+import com.aras.client.extension.toastError
 import com.aras.client.extension.toastSuccess
 import com.aras.client.handler.MmkvManager
 import com.aras.client.handler.SettingsChangeManager
 import com.aras.client.handler.SettingsManager
 import com.aras.client.handler.SubscriptionUpdater
+import com.aras.client.handler.SubscriptionWorkflowLock
 import com.aras.client.ui.base.BaseComponentActivity
 import com.aras.client.ui.compose.AppTopBar
 import com.aras.client.ui.compose.DeleteConfirmDialog
@@ -44,14 +47,23 @@ import com.aras.client.ui.compose.FormTextField
 import com.aras.client.ui.compose.NavigationBarsSpacer
 import com.aras.client.ui.compose.SettingsSwitchItem
 import com.aras.client.ui.compose.verticalScrollbar
+import com.aras.client.ui.main.SubscriptionNavigation
+import com.aras.client.util.LogUtil
 import com.aras.client.util.Utils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+object SubscriptionEditorResult {
+    const val EXTRA_SUBSCRIPTION_ID = SubscriptionNavigation.EXTRA_SUBSCRIPTION_ID
+}
 
 class SubEditActivity : BaseComponentActivity() {
     private val editSubId by lazy { intent.getStringExtra("subId").orEmpty() }
     private lateinit var suggestions: List<String>
     private lateinit var subItem: SubscriptionItem
+    private var saveInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,18 +114,52 @@ class SubEditActivity : BaseComponentActivity() {
             return false
         }
 
-        MmkvManager.encodeSubscription(editSubId, subItem)
-        SubscriptionUpdater.syncOne(subId = editSubId)
-        SettingsChangeManager.makeSetupGroupTab()
-        toastSuccess(R.string.toast_success)
-        finish()
+        if (saveInProgress) return false
+        saveInProgress = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val lockId = editSubId.ifBlank { "new-${System.nanoTime()}" }
+                val savedSubId = SubscriptionWorkflowLock.withLock(
+                    this@SubEditActivity,
+                    lockId,
+                ) {
+                    MmkvManager.encodeSubscription(editSubId, subItem)
+                }
+                if (editSubId.isNotBlank()) SubscriptionUpdater.syncOne(subId = savedSubId)
+                withContext(Dispatchers.Main) {
+                    if (editSubId.isBlank()) {
+                        setResult(
+                            RESULT_OK,
+                            Intent().putExtra(
+                                SubscriptionEditorResult.EXTRA_SUBSCRIPTION_ID,
+                                savedSubId,
+                            )
+                        )
+                    } else {
+                        SettingsChangeManager.makeSetupGroupTab()
+                    }
+                    toastSuccess(R.string.toast_success)
+                    finish()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Failed to save subscription", e)
+                withContext(Dispatchers.Main) {
+                    saveInProgress = false
+                    toastError(R.string.toast_failure)
+                }
+            }
+        }
         return true
     }
 
     private fun deleteServer(): Boolean {
         if (editSubId.isNotEmpty()) {
             lifecycleScope.launch(Dispatchers.IO) {
-                SettingsManager.removeSubscriptionWithDefault(editSubId)
+                SubscriptionWorkflowLock.withLock(this@SubEditActivity, editSubId) {
+                    SettingsManager.removeSubscriptionWithDefault(editSubId)
+                }
                 SettingsChangeManager.makeSetupGroupTab()
                 launch(Dispatchers.Main) { finish() }
             }

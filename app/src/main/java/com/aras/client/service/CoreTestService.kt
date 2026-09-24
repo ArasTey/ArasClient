@@ -118,12 +118,17 @@ class CoreTestService : Service() {
         }
 
         if (guidsList.isNotEmpty()) {
+            val expectedMembers = guidsList.toSet()
             lateinit var worker: RealPingWorkerService
             worker = RealPingWorkerService(
                 context = this,
                 guids = guidsList,
                 onlyTcp = message.onlyTcp,
-                onEvent = { event -> handleWorkerEvent(event, message) { activeWorkers.remove(worker) } }
+                onEvent = { event ->
+                    handleWorkerEvent(event, message, expectedMembers) {
+                        activeWorkers.remove(worker)
+                    }
+                }
             )
             activeWorkers.add(worker)
             worker.start()
@@ -133,7 +138,12 @@ class CoreTestService : Service() {
         }
     }
 
-    private fun handleWorkerEvent(event: RealPingEvent, message: TestServiceMessage, onWorkerDone: () -> Unit) {
+    private fun handleWorkerEvent(
+        event: RealPingEvent,
+        message: TestServiceMessage,
+        expectedMembers: Set<String>,
+        onWorkerDone: () -> Unit,
+    ) {
         when (event) {
             is RealPingEvent.Progress -> {
                 NotificationHelper.updateNotification(
@@ -146,18 +156,27 @@ class CoreTestService : Service() {
             }
 
             is RealPingEvent.Result -> {
-                MmkvManager.encodeServerTestDelayMillis(event.guid, event.delayMillis)
-                MessageHelper.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_SUCCESS, event.guid)
+                if (event.guid in expectedMembers &&
+                    MmkvManager.decodeServerConfig(event.guid) != null
+                ) {
+                    MmkvManager.encodeServerTestDelayMillis(event.guid, event.delayMillis)
+                    MessageHelper.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_SUCCESS, event.guid)
+                }
             }
 
             is RealPingEvent.Finish -> {
                 if (message.subscriptionId.isNotEmpty()) {
-                    if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_REMOVE_INVALID_AFTER_TEST, false)) {
-                        AngConfigManager.removeInvalidServer(message.subscriptionId)
-                    }
+                    val currentMembers = MmkvManager.decodeServerList(message.subscriptionId).toSet()
+                    val roundStillCurrent = expectedMembers.isNotEmpty() &&
+                            expectedMembers.all { it in currentMembers }
+                    if (roundStillCurrent) {
+                        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_REMOVE_INVALID_AFTER_TEST, false)) {
+                            AngConfigManager.removeInvalidServer(message.subscriptionId)
+                        }
 
-                    if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, false)) {
-                        AngConfigManager.sortByTestResultsForSub(message.subscriptionId)
+                        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, false)) {
+                            AngConfigManager.sortByTestResultsForSub(message.subscriptionId)
+                        }
                     }
                 }
 

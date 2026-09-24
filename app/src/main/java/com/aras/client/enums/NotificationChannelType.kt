@@ -18,5 +18,10 @@ enum class NotificationChannelType(
         channelId = "core_test_channel",
         channelName = "Core Test Service",
         notificationId = 12
+    ),
+    QUICK_CONNECT(
+        channelId = "quick_connect_channel",
+        channelName = "Update and Connect",
+        notificationId = 14
     )
 }

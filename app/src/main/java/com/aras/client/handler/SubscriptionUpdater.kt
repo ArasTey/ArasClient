@@ -42,15 +42,17 @@ object SubscriptionUpdater {
                 ExistingPeriodicWorkPolicy.KEEP
             }
 
-        MmkvManager.decodeSubscriptions()
-            .filter { it.subscription.autoUpdate && it.subscription.url.isNotEmpty() }
-            .forEach { sub ->
+        MmkvManager.decodeSubscriptions().forEach { sub ->
+            if (!sub.subscription.enabled) {
+                cancelOne(context, sub.guid)
+            } else if (sub.subscription.autoUpdate && sub.subscription.url.isNotEmpty()) {
                 scheduleOne(
                     context = context,
                     subId = sub.guid,
                     existingWorkPolicy = existingWorkPolicy
                 )
             }
+        }
         LogUtil.i(
             AppConfig.TAG,
             "SubscriptionUpdater: sync complete forceReschedule=$forceReschedule"
@@ -102,14 +104,15 @@ object SubscriptionUpdater {
     ) {
         val subItem = MmkvManager.decodeSubscription(subId) ?: return
         val rw = RemoteWorkManager.getInstance(context)
-        if (!subItem.autoUpdate) {
+        if (!subItem.enabled || !subItem.autoUpdate) {
             cancelOne(context, subId)
             LogUtil.d(AppConfig.TAG, "SubscriptionUpdater: cancelled task for ${subItem.remarks}")
             return
         }
 
         if (subItem.url.isEmpty()) {
-            LogUtil.i(AppConfig.TAG, "SubscriptionUpdater: url isEmpty for ${subItem.remarks}, skip")
+            cancelOne(context, subId)
+            LogUtil.i(AppConfig.TAG, "SubscriptionUpdater: url isEmpty for ${subItem.remarks}, cancelled")
             return
         }
 

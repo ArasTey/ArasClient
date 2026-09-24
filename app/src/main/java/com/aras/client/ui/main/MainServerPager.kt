@@ -56,6 +56,7 @@ import com.aras.client.dto.entities.ServersCache
 import com.aras.client.extension.isComplexType
 import com.aras.client.extension.nullIfBlank
 import com.aras.client.handler.AngConfigManager
+import com.aras.client.handler.FreeSubManager
 import com.aras.client.handler.ArasExportImportManager
 import com.aras.client.handler.MmkvManager
 import com.aras.client.ui.compose.ReorderableGridItem
@@ -68,6 +69,16 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import kotlin.math.abs
+
+private fun cardRemarks(profile: ProfileItem, country: String): String {
+    if (country.isBlank()) return profile.remarks
+    return com.aras.client.util.CountryResolver.withoutFlags(profile.remarks)
+        .ifBlank {
+            profile.server?.takeIf { it.isNotBlank() }
+                ?: profile.description?.takeIf { it.isNotBlank() }
+                ?: "Server"
+        }
+}
 
 @Composable
 fun GroupPagerPage(
@@ -98,7 +109,9 @@ fun GroupPagerPage(
         mainViewModel.serversForGroup(groupId)
     }
     val servers by serverFlow.collectAsStateWithLifecycle()
-    val canReorder = groupId.isNotEmpty() && searchQuery.isEmpty()
+    val canReorder = groupId.isNotEmpty() &&
+            !FreeSubManager.isFreeSubId(groupId) &&
+            searchQuery.isEmpty()
     Column {
         SubscriptionInfoBar(
             groupId = groupId,
@@ -351,14 +364,14 @@ private fun ServerItemRow(
     } else ""
     val isProtected = ArasExportImportManager.isProtected(serverCache.guid)
     val protectedDescription = stringResource(R.string.protected_config_hidden)
-
+    val country = com.aras.client.util.CountryResolver.resolve(
+        profile,
+        geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
+        preferGeoIp = true
+    )
     ServerListItem(
-        country = com.aras.client.util.CountryResolver.resolve(
-            profile,
-            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-            preferGeoIp = serverCache.guid == selectedGuid
-        ),
-        remarks = profile.remarks,
+        country = country,
+        remarks = cardRemarks(profile, country),
         statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
             protectedDescription
         else
@@ -397,13 +410,14 @@ private fun ServerItemColumn(
     val subRemarks = if (subscriptionId.isEmpty()) {
         MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks?.firstOrNull()?.toString() ?: ""
     } else ""
+    val country = com.aras.client.util.CountryResolver.resolve(
+        profile,
+        geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
+        preferGeoIp = true
+    )
     ServerListItem(
-        country = com.aras.client.util.CountryResolver.resolve(
-            profile,
-            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-            preferGeoIp = serverCache.guid == selectedGuid
-        ),
-        remarks = profile.remarks,
+        country = country,
+        remarks = cardRemarks(profile, country),
         statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
             stringResource(R.string.protected_config_hidden)
         else
