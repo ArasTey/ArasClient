@@ -135,6 +135,7 @@ class MainViewModel(
     private var testFinishJob: Job? = null
 
     private val initialPageReady = CompletableDeferred<Unit>()
+    private var initializeStarted = false
 
     // ---------- Service events ----------
     init {
@@ -172,6 +173,15 @@ class MainViewModel(
                     val firstResult = uiState.value.status !is MainStatus.ConnectionTest
                     _uiState.update { it.copy(status = MainStatus.ConnectionTest(event.result)) }
                     if (firstResult) showStatusMessage()
+                    if (firstResult || !event.result.country.isNullOrBlank()) {
+                        val groupId = _uiState.value.selectedGroupId
+                        viewModelScope.launch {
+                            val loaded = withContext(ioDispatcher) {
+                                loadGroup(groupId, forceRefresh = true)
+                            }
+                            updateGroupUi(groupId, loaded)
+                        }
+                    }
                 }
             }
 
@@ -357,6 +367,8 @@ class MainViewModel(
 
     // ---------- Initialization ----------
     fun initialize() {
+        if (initializeStarted) return
+        initializeStarted = true
         maybeAnnounceUpdate()
 
         viewModelScope.launch(preloadDispatcher) {
@@ -401,7 +413,8 @@ class MainViewModel(
             ServersCache(
                 guid = guid,
                 profile = profile.copy(),
-                testDelayMillis = affiliation?.testDelayMillis ?: 0L
+                testDelayMillis = affiliation?.testDelayMillis ?: 0L,
+                testCountryCode = affiliation?.countryCode,
             )
         }
 
@@ -1050,6 +1063,7 @@ class MainViewModel(
 
     fun testCurrentServerRealPing() {
         clearStatusMessage()
+        _uiState.value.selectedGuid?.let(MmkvManager::clearServerTestCountry)
         acceptCurrentPingMessages = mainScreenActive
         _uiState.update { it.copy(status = MainStatus.Testing) }
         dataSource.testCurrentServerRealPing()

@@ -93,10 +93,13 @@ object AppConfig {
     const val PREF_AUTO_CONNECT_FASTEST = "pref_auto_connect_fastest"
     const val PREF_ONBOARDING_DONE = "pref_onboarding_done"
     const val PREF_QUICK_SETTINGS_TILES_INFO_SHOWN = "pref_quick_settings_tiles_info_shown"
+    const val PREF_QUICK_CONNECT_RUNNING = "pref_quick_connect_running"
     const val PREF_ARASC_PROTECTED_GUIDS = "pref_arasc_protected_guids"
     const val PREF_SHOW_SUB_INFO = "pref_show_sub_info"
     const val PREF_SHOW_SUB_ANNOUNCEMENT = "pref_show_sub_announcement"
     const val PREF_FREE_SUB_ENABLED = "pref_free_sub_enabled"
+    const val PREF_FREE_SYNC_LAST_ATTEMPT = "pref_free_sync_last_attempt"
+    const val PREF_FREE_SYNC_LAST_URL = "pref_free_sync_last_url"
     const val PREF_GEOIP_LAST_REFRESH = "pref_geoip_last_refresh"
 
     /** Reserved guid of the built-in Free group — cannot be edited or deleted. */

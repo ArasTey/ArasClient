@@ -289,6 +289,8 @@ fun MainScreen(
                             else { -> context.startActivity(Intent(context, SubEditActivity::class.java).putExtra("subId", group.id)) },
                             onUpdateSubscription = if (group.id.isEmpty()) null
                             else { -> mainViewModel.importConfigViaSub(group.id) },
+                            onPingSubscription = if (group.id.isEmpty()) null
+                            else { { onAction(MainAction.PingSelectedSubscription) } },
                             onRemoveSubscription = if (group.id.isEmpty() ||
                                 group.id == com.aras.client.handler.FreeSubManager.FREE_SUB_ID
                             ) null else { -> mainViewModel.removeSubscription(group.id) },

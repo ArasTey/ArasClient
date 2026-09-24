@@ -352,10 +352,13 @@
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:process=":RunSoArasDaemon">
             <intent-filter>
-                <action android:name="android.service.quicksettings.action.QSTile"/>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
             </intent-filter>
             <meta-data
                 android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
                 android:value="true" />
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
@@ -367,15 +370,18 @@
             android:enabled="true"
             android:exported="true"
             android:foregroundServiceType="specialUse"
-            android:icon="@drawable/ic_stat_name"
+            android:icon="@drawable/ic_speedtest_24dp"
             android:label="@string/app_quick_connect_tile_name"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:process=":RunSoArasDaemon">
             <intent-filter>
-                <action android:name="android.service.quicksettings.action.QSTile" />
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
             <meta-data
                 android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
                 android:value="true" />
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

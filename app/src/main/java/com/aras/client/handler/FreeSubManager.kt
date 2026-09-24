@@ -14,6 +14,7 @@ object FreeSubManager {
 
     const val FREE_SUB_ID = "freesub-protected"
     private const val FREE_SUB_REMARKS = "Free"
+    private const val FREE_SYNC_RETRY_COOLDOWN_MS = 5 * 60 * 1000L
 
     const val DEFAULT_URL =
         "https://raw.githubusercontent.com/ArasTey/freesub/main/config.txt"
@@ -26,6 +27,21 @@ object FreeSubManager {
     /** Fetches and transactionally replaces the complete Free profile list. */
     suspend fun sync(context: Context) = syncMutex.withLock {
         try {
+            val now = System.currentTimeMillis()
+            val url = currentUrl(context)
+            val lastAttempt = MmkvManager.decodeSettingsLong(
+                AppConfig.PREF_FREE_SYNC_LAST_ATTEMPT,
+                0L,
+            )
+            val lastUrl = MmkvManager.decodeSettingsString(
+                AppConfig.PREF_FREE_SYNC_LAST_URL
+            ).orEmpty()
+            if (now - lastAttempt < FREE_SYNC_RETRY_COOLDOWN_MS && lastUrl == url) {
+                return@withLock
+            }
+            MmkvManager.encodeSettings(AppConfig.PREF_FREE_SYNC_LAST_ATTEMPT, now)
+            MmkvManager.encodeSettings(AppConfig.PREF_FREE_SYNC_LAST_URL, url)
+
             val subscription = ensureSubscription(context)
             val result = AngConfigManager.updateConfigViaSub(
                 SubscriptionCache(FREE_SUB_ID, subscription)

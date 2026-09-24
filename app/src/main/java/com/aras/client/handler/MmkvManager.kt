@@ -503,6 +503,24 @@ object MmkvManager {
         serverAffStorage.encode(guid, JsonUtil.toJson(aff))
     }
 
+    fun encodeServerTestCountry(guid: String, country: String?, ipAddress: String?) {
+        if (guid.isBlank()) return
+        val aff = decodeServerAffiliationInfo(guid) ?: ServerAffiliationInfo()
+        aff.countryCode = country?.trim()?.takeIf { it.isNotEmpty() }
+        aff.ipAddress = ipAddress?.trim()?.takeIf { it.isNotEmpty() }
+        aff.countryTestedAt = System.currentTimeMillis()
+        serverAffStorage.encode(guid, JsonUtil.toJson(aff))
+    }
+
+    fun clearServerTestCountry(guid: String) {
+        if (guid.isBlank()) return
+        val aff = decodeServerAffiliationInfo(guid) ?: return
+        aff.countryCode = null
+        aff.ipAddress = null
+        aff.countryTestedAt = 0L
+        serverAffStorage.encode(guid, JsonUtil.toJson(aff))
+    }
+
     /**
      * Clears all test delay results.
      *
@@ -512,6 +530,9 @@ object MmkvManager {
         keys?.forEach { key ->
             decodeServerAffiliationInfo(key)?.let { aff ->
                 aff.testDelayMillis = 0
+                aff.countryCode = null
+                aff.ipAddress = null
+                aff.countryTestedAt = 0L
                 serverAffStorage.encode(key, JsonUtil.toJson(aff))
             }
         }

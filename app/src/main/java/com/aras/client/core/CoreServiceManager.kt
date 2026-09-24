@@ -29,6 +29,7 @@ import com.aras.client.helper.MessageHelper
 import com.aras.client.service.DialerNativeService
 import com.aras.client.service.DialerWebviewService
 import com.aras.client.service.NetworkMonitor
+import com.aras.client.service.QSTileService
 import com.aras.client.util.LogUtil
 import com.aras.client.util.Utils
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +53,11 @@ object CoreServiceManager {
 
     @Volatile
     private var isReloading = false
+
+    private fun notifyTileState(service: Service, what: Int, content: String = "") {
+        MessageHelper.sendMsg2UI(service, what, content)
+        QSTileService.requestStateRefresh(service)
+    }
 
     /** Tun descriptor the core was started with, null in the proxy only and root run modes. */
     private var currentVpnInterface: ParcelFileDescriptor? = null
@@ -102,7 +108,7 @@ object CoreServiceManager {
         } catch (e: Exception) {
             val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message", e)
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+            notifyTileState(service, AppConfig.MSG_STATE_START_FAILURE, message)
             NotificationManager.cancelNotification()
             return false
         }
@@ -138,7 +144,7 @@ object CoreServiceManager {
             if (CoreNativeManager.awgIsRunning()) {
                 // Tunnel already up (e.g. reload triggered by a subscription
                 // update) — leave it as-is.
-                MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+                notifyTileState(service, AppConfig.MSG_STATE_START_SUCCESS)
                 return
             }
             val pfd = vpnInterface ?: error("VPN interface missing for AmneziaWG")
@@ -149,7 +155,7 @@ object CoreServiceManager {
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: AWG UAPI:\n$uapi")
             CoreNativeManager.awgTurnOn(fd, uapi, 1280)
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: standalone AmneziaWG tunnel up")
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+            notifyTileState(service, AppConfig.MSG_STATE_START_SUCCESS)
             ConnectionStatsManager.onSessionStarted()
             return
         }
@@ -202,7 +208,7 @@ object CoreServiceManager {
         }
 
         if (!isReload) {
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+            notifyTileState(service, AppConfig.MSG_STATE_START_SUCCESS)
         }
         NotificationManager.startSpeedNotification()
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
@@ -245,7 +251,7 @@ object CoreServiceManager {
         }
 
         ConnectionStatsManager.onSessionStopped()
-        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+        notifyTileState(service, AppConfig.MSG_STATE_STOP_SUCCESS)
         NotificationManager.cancelNotification()
 
         try {
@@ -304,7 +310,7 @@ object CoreServiceManager {
         } catch (e: Exception) {
             val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to reload core: $message", e)
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+            notifyTileState(service, AppConfig.MSG_STATE_START_FAILURE, message)
             false
         } finally {
             isReloading = false
@@ -355,6 +361,8 @@ object CoreServiceManager {
 
         CoroutineScope(Dispatchers.IO).launch {
             val service = getService() ?: return@launch
+            val testedGuid = MmkvManager.getSelectServer()
+            MmkvManager.clearServerTestCountry(testedGuid.orEmpty())
             var time = -1L
             var errorStr = ""
 
@@ -382,6 +390,11 @@ object CoreServiceManager {
             // Only fetch IP info if the delay test was successful
             if (time >= 0) {
                 SpeedtestManager.getRemoteIPInfo()?.let { ip ->
+                    MmkvManager.encodeServerTestCountry(
+                        guid = testedGuid.orEmpty(),
+                        country = ip.country,
+                        ipAddress = ip.ipAddress,
+                    )
                     MessageHelper.sendMsg2UI(
                         service,
                         AppConfig.MSG_MEASURE_DELAY_RESULT,
