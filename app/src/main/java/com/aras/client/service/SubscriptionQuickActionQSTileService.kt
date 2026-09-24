@@ -83,7 +83,7 @@ class SubscriptionQuickActionQSTileService : TileService() {
 
     private fun renderRunning() {
         val tile = qsTile ?: return
-        tile.icon = Icon.createWithResource(applicationContext, R.drawable.ic_speedtest_24dp)
+        tile.icon = Icon.createWithResource(applicationContext, R.drawable.ic_stat_name)
         tile.state = Tile.STATE_ACTIVE
         tile.label = getString(R.string.quick_connect_tile_running)
         setSubtitle(tile, subscriptionRemarks())
@@ -97,7 +97,7 @@ class SubscriptionQuickActionQSTileService : TileService() {
             renderUnavailable()
             return
         }
-        tile.icon = Icon.createWithResource(applicationContext, R.drawable.ic_speedtest_24dp)
+        tile.icon = Icon.createWithResource(applicationContext, R.drawable.ic_stat_name)
         tile.state = Tile.STATE_INACTIVE
         tile.label = getString(R.string.app_quick_connect_tile_name)
         setSubtitle(tile, failure?.let(::failureLabel) ?: subscriptionRemarks())
@@ -106,7 +106,7 @@ class SubscriptionQuickActionQSTileService : TileService() {
 
     private fun renderUnavailable() {
         val tile = qsTile ?: return
-        tile.icon = Icon.createWithResource(applicationContext, R.drawable.ic_speedtest_24dp)
+        tile.icon = Icon.createWithResource(applicationContext, R.drawable.ic_stat_name)
         tile.state = Tile.STATE_UNAVAILABLE
         tile.label = getString(R.string.app_quick_connect_tile_name)
         setSubtitle(tile, getString(R.string.toast_select_subscription_for_ping))

@@ -344,6 +344,7 @@
 
         <service
             android:name=".service.QSTileService"
+            android:enabled="true"
             android:exported="true"
             android:foregroundServiceType="specialUse"
             android:icon="@drawable/ic_stat_name"
@@ -353,6 +354,9 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QSTile"/>
             </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="tile" />
@@ -360,14 +364,22 @@
 
         <service
             android:name=".service.SubscriptionQuickActionQSTileService"
+            android:enabled="true"
             android:exported="true"
-            android:icon="@drawable/ic_speedtest_24dp"
+            android:foregroundServiceType="specialUse"
+            android:icon="@drawable/ic_stat_name"
             android:label="@string/app_quick_connect_tile_name"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:process=":RunSoArasDaemon">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QSTile" />
             </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="tile" />
         </service>
 
         <!-- =====================Tasker===================== -->
