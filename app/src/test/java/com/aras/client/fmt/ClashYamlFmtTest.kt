@@ -1,6 +1,7 @@
 package com.aras.client.fmt
 
 import com.aras.client.handler.AngConfigManager
+import com.aras.client.fmt.ShadowsocksFmt
 import org.junit.Assert.*
 import org.junit.Test
 import java.net.URI
@@ -68,8 +69,28 @@ class ClashYamlFmtTest {
     }
 
     @Test
+    fun convertsShadowsocksV2rayPlugin() {
+        val json = """
+            {"proxies":[{"name":"SS WS","type":"ss","server":"example.com","port":443,"cipher":"aes-128-gcm","password":"secret","plugin":"v2ray-plugin","client-fingerprint":"chrome","plugin-opts":{"mode":"websocket","host":"cdn.example.com","path":"/proxy","tls":true}}]}
+        """.trimIndent()
+        val generatedLink = ClashYamlFmt.toLinks(json).single()
+        assertTrue(generatedLink.contains("plugin=v2ray-plugin%3Bmode%3Dwebsocket"))
+        val profile = ShadowsocksFmt.parse(
+            "ss://aes-128-gcm:secret@example.com:443" +
+                    "?plugin=v2ray-plugin%3Bmode%3Dwebsocket%3Bhost%3Dcdn.example.com" +
+                    "%3Bpath%3D%2Fproxy%3Btls%3Bfp%3Dchrome#SS"
+        )!!
+        assertEquals("shadowsocks", profile.configType.name.lowercase())
+        assertEquals("ws", profile.network)
+        assertEquals("tls", profile.security)
+        assertEquals("/proxy", profile.path)
+        assertEquals("cdn.example.com", profile.host)
+        assertEquals("chrome", profile.fingerPrint)
+    }
+
+    @Test
     fun rejectsUnsupportedOptionsRatherThanDowngrading() {
-        for (extra in listOf("plugin: v2ray-plugin", "certificate: cert.pem", "dialer-proxy: upstream")) {
+        for (extra in listOf("plugin: obfs-local", "certificate: cert.pem", "dialer-proxy: upstream")) {
             assertThrows(IllegalArgumentException::class.java) {
                 ClashYamlFmt.toLinks("proxies: [{type: ss, server: example.com, port: 443, password: secret, cipher: aes-128-gcm, $extra}]")
             }

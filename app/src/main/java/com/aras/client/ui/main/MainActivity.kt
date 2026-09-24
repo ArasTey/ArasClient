@@ -8,6 +8,9 @@ import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -177,6 +180,14 @@ class MainActivity : HelperBaseComponentActivity() {
         var showOnboarding by remember {
             mutableStateOf(!MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_DONE, false))
         }
+        var showQuickSettingsInfo by remember {
+            mutableStateOf(
+                !MmkvManager.decodeSettingsBool(
+                    AppConfig.PREF_QUICK_SETTINGS_TILES_INFO_SHOWN,
+                    false,
+                )
+            )
+        }
         val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
 
         if (showOnboarding) {
@@ -185,6 +196,25 @@ class MainActivity : HelperBaseComponentActivity() {
                     MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_DONE, true)
                     showOnboarding = false
                 }
+            )
+        }
+        if (!showOnboarding && showQuickSettingsInfo) {
+            val dismissQuickSettingsInfo = {
+                MmkvManager.encodeSettings(
+                    AppConfig.PREF_QUICK_SETTINGS_TILES_INFO_SHOWN,
+                    true,
+                )
+                showQuickSettingsInfo = false
+            }
+            AlertDialog(
+                onDismissRequest = dismissQuickSettingsInfo,
+                title = { Text(stringResource(R.string.quick_settings_tiles_title)) },
+                text = { Text(stringResource(R.string.quick_settings_tiles_message)) },
+                confirmButton = {
+                    TextButton(onClick = dismissQuickSettingsInfo) {
+                        Text(stringResource(R.string.action_got_it))
+                    }
+                },
             )
         }
 

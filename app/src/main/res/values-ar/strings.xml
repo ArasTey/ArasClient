@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">ArasClient</string>
-    <string name="app_widget_name">التبديل</string>
-    <string name="app_tile_name">التبديل</string>
+    <string name="app_widget_name">اتصال / قطع</string>
+    <string name="app_tile_name">آراس: اتصال / قطع</string>
     <string name="app_tile_first_use">أول استخدام لهذه الميزة، يرجى استخدام التطبيق لإضافة خادم</string>
     <string name="navigation_drawer_open">فتح درج التنقل</string>
     <string name="navigation_drawer_close">إغلاق درج التنقل</string>
@@ -18,6 +18,12 @@
     <string name="toast_permission_denied">تعذر الحصول على الإذن</string>
     <string name="toast_permission_denied_notification">تعذر الحصول على إذن الإشعارات</string>
     <string name="notification_action_more">انقر للمزيد</string>
+    <string name="app_quick_connect_tile_name">تحديث واتصال</string>
+    <string name="quick_settings_tiles_title">أضف بلاطتي ArasClient</string>
+    <string name="quick_settings_tiles_message">افتح الإعدادات السريعة، اضغط تحرير، ثم أضف كلتا البلاطتين: «آراس: اتصال / قطع» و«تحديث واتصال». لا يضيف Android بلاطات التطبيقات الخارجية تلقائيًا.</string>
+    <string name="action_got_it">فهمت</string>
+    <string name="title_ping_selected_subscription">اختبار كامل الاشتراك</string>
+    <string name="toast_select_subscription_for_ping">اختر اشتراكًا أولاً</string>
     <string name="toast_services_start">بدء الخدمات</string>
     <string name="toast_services_stop">إيقاف الخدمات</string>
     <string name="toast_services_success">نجاح بدء الخدمات</string>

@@ -74,6 +74,7 @@ object ShadowsocksFmt : FmtBase() {
                             config.sni = queryPairs["host"]
                         }
                     }
+                    queryPairs["fp"]?.let { config.fingerPrint = it }
                 } else if (plugin.contains("obfs=http")) {
                     config.network = NetworkType.TCP.type
                     config.headerType = "http"

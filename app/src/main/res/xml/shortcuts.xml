@@ -16,6 +16,19 @@
     </shortcut>
     <shortcut
         android:enabled="true"
+        android:icon="@drawable/ic_qu_switch_24dp"
+        android:shortcutDisabledMessage="@string/app_quick_connect_tile_name"
+        android:shortcutId="shortcuts_update_connect"
+        android:shortcutLongLabel="@string/app_quick_connect_tile_name"
+        android:shortcutShortLabel="@string/app_quick_connect_tile_name">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.aras.client.ui.shortcut.ScQuickConnectActivity"
+            android:targetPackage="com.aras.client" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
         android:icon="@drawable/ic_qu_scan_24dp"
         android:shortcutDisabledMessage="@string/menu_item_import_config_qrcode"
         android:shortcutId="shortcuts_scan"

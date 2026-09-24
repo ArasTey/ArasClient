@@ -61,7 +61,12 @@ object ClashYamlFmt {
             else -> throw IllegalArgumentException("Unsupported proxy type")
         }
         val transportKeys = setOf("tls", "servername", "sni", "skip-cert-verify", "client-fingerprint", "alpn", "network", "ws-opts", "grpc-opts", "reality-opts")
-        require(proxy.keys.all { it in commonKeys + typeKeys + if (type == "ss") emptySet() else transportKeys })
+        val allowedKeys = if (type == "ss") {
+            commonKeys + typeKeys + setOf("plugin", "plugin-opts", "client-fingerprint")
+        } else {
+            commonKeys + typeKeys + transportKeys
+        }
+        require(proxy.keys.all { it in allowedKeys })
         require(proxy["ip-version"] == null || proxy["ip-version"] == "dual")
         val host = proxy.string("server").removeSurrounding("[", "]")
         require(host.none { it.isWhitespace() || it in "/?#@" })
@@ -72,7 +77,9 @@ object ClashYamlFmt {
         val credential = proxy.string(if (type in setOf("vmess", "vless")) "uuid" else "password")
         if (type == "ss") {
             val cipher = proxy.string("cipher")
-            return "ss://${base64("$cipher:$credential")}@$address#${encode(name)}"
+            val plugin = shadowsocksPlugin(proxy)
+            val query = plugin?.let { "?plugin=${encode(it)}" }.orEmpty()
+            return "ss://${base64("$cipher:$credential")}@$address$query#${encode(name)}"
         }
         val network = proxy.optional("network") ?: "tcp"
         require(network in setOf("tcp", "ws", "grpc"))
@@ -128,6 +135,30 @@ object ClashYamlFmt {
             proxy.optional("flow")?.let { query["flow"] = it }
         }
         return "$type://${encode(credential)}@$address?${query.entries.joinToString("&") { "${it.key}=${encode(it.value)}" }}#${encode(name)}"
+    }
+
+    private fun shadowsocksPlugin(proxy: Map<*, *>): String? {
+        val plugin = proxy.optional("plugin") ?: run {
+            require(proxy["plugin-opts"] == null) { "Shadowsocks plugin-opts requires plugin" }
+            return null
+        }
+        require(plugin.equals("v2ray-plugin", ignoreCase = true)) {
+            "Unsupported Shadowsocks plugin"
+        }
+        val options = proxy["plugin-opts"]?.let {
+            it as? Map<*, *> ?: throw IllegalArgumentException("Invalid plugin-opts")
+        } ?: emptyMap<Any, Any>()
+        require(options.keys.all { it in setOf("mode", "host", "path", "tls") })
+
+        val parts = mutableListOf("v2ray-plugin")
+        val mode = options.optional("mode") ?: "websocket"
+        require(mode == "websocket")
+        parts += "mode=$mode"
+        options.optional("host")?.let { parts += "host=$it" }
+        options.optional("path")?.let { parts += "path=$it" }
+        if (options.boolean("tls", false)) parts += "tls"
+        proxy.optional("client-fingerprint")?.let { parts += "fp=$it" }
+        return parts.joinToString(";")
     }
 
     private fun Map<*, *>.optional(key: String): String? = get(key)?.let {

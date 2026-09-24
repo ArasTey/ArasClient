@@ -1,5 +1,7 @@
 package com.aras.client.handler
 
+import android.os.SystemClock
+
 import com.aras.client.AngApplication
 import com.aras.client.AppConfig
 import com.aras.client.core.ArascContainer
@@ -54,6 +56,7 @@ object ArasExportImportManager {
 
     // ------------------------------------------------------------- protected set
 
+    private const val PROTECTED_CACHE_TTL_MS = 1_000L
     private val protectedMutationLock = ReentrantLock()
 
     private inline fun <T> withProtectedMutationLock(block: () -> T): T =
@@ -67,17 +70,36 @@ object ArasExportImportManager {
             }
         }
 
-    /** Reads MMKV on every access so daemon writes are immediately visible to the UI process. */
-    private fun protectedGuids(): MutableSet<String> {
+    @Volatile
+    private var cachedProtectedGuids: Set<String> = emptySet()
+
+    @Volatile
+    private var protectedCacheLoadedAt = 0L
+
+    private fun readProtectedFromStorage(): MutableSet<String> {
         val raw = MmkvManager.decodeSettingsString(AppConfig.PREF_ARASC_PROTECTED_GUIDS) ?: ""
         return raw.split(",").filter { it.isNotBlank() }.toMutableSet()
     }
 
+    private fun protectedGuids(): Set<String> {
+        val now = SystemClock.elapsedRealtime()
+        if (now - protectedCacheLoadedAt < PROTECTED_CACHE_TTL_MS) {
+            return cachedProtectedGuids
+        }
+        return readProtectedFromStorage().also { loaded ->
+            cachedProtectedGuids = loaded.toSet()
+            protectedCacheLoadedAt = now
+        }
+    }
+
     private fun persistProtected(guids: Set<String>) {
+        val filtered = guids.filter { it.isNotBlank() }.toSet()
         MmkvManager.encodeSettings(
             AppConfig.PREF_ARASC_PROTECTED_GUIDS,
-            guids.filter { it.isNotBlank() }.joinToString(","),
+            filtered.joinToString(","),
         )
+        cachedProtectedGuids = filtered
+        protectedCacheLoadedAt = SystemClock.elapsedRealtime()
     }
 
     fun isProtected(guid: String): Boolean = guid in protectedGuids()
@@ -88,7 +110,7 @@ object ArasExportImportManager {
     fun markProtected(guids: Collection<String>) {
         if (guids.isEmpty()) return
         withProtectedMutationLock {
-            val current = protectedGuids()
+            val current = readProtectedFromStorage()
             if (current.addAll(guids)) persistProtected(current)
         }
     }
@@ -96,7 +118,7 @@ object ArasExportImportManager {
     fun forgetProtected(guids: Collection<String>) {
         if (guids.isEmpty()) return
         withProtectedMutationLock {
-            val current = protectedGuids()
+            val current = readProtectedFromStorage()
             if (current.removeAll(guids.toSet())) persistProtected(current)
         }
     }

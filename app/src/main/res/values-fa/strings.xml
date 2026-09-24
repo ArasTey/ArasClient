@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">ArasClient</string>
-    <string name="app_widget_name">تعویض</string>
-    <string name="app_tile_name">تعویض</string>
+    <string name="app_widget_name">اتصال / قطع</string>
+    <string name="app_tile_name">آراس: اتصال / قطع</string>
     <string name="app_tile_first_use">برای اولین استفاده از این قابلیت، لطفاً ابتدا از داخل برنامه یک سرور اضافه کنید</string>
     <string name="navigation_drawer_open">باز کردن منو کشویی</string>
     <string name="navigation_drawer_close">بستن منو کشویی</string>
@@ -18,6 +18,12 @@
     <string name="toast_permission_denied">امکان دریافت مجوز وجود ندارد</string>
     <string name="toast_permission_denied_notification">امکان دریافت مجوز ارسال اعلان وجود ندارد</string>
     <string name="notification_action_more">برای اطلاعات بیشتر کلیک کنید</string>
+    <string name="app_quick_connect_tile_name">آپدیت و اتصال</string>
+    <string name="quick_settings_tiles_title">افزودن دو کاشی آراس</string>
+    <string name="quick_settings_tiles_message">کشویید و وارد تنظیمات سریع شوید، ویرایش را بزنید و هر دو کاشی «آراس: اتصال / قطع» و «آپدیت و اتصال» را اضافه کنید. اندروید کاشی‌های برنامه‌های دیگر را خودکار اضافه نمی‌کند.</string>
+    <string name="action_got_it">متوجه شدم</string>
+    <string name="title_ping_selected_subscription">پینگ کل ساب</string>
+    <string name="toast_select_subscription_for_ping">اول یک ساب انتخاب کنید</string>
     <string name="toast_services_start">شروع خدمات</string>
     <string name="toast_services_stop">توقف سرویس</string>
     <string name="toast_services_success">سرویس با موفقیت شروع شد</string>

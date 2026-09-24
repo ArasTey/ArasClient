@@ -193,6 +193,12 @@
             android:process=":RunSoArasDaemon"
             android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
         <activity
+            android:name=".ui.shortcut.ScQuickConnectActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:process=":RunSoArasDaemon"
+            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
+        <activity
             android:name=".ui.shortcut.ScStartActivity"
             android:excludeFromRecents="true"
             android:exported="false"

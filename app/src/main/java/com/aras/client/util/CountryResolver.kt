@@ -55,6 +55,10 @@ object CountryResolver {
         map
     }
 
+    private val nameEntriesByLength by lazy {
+        nameToIso.entries.sortedByDescending { it.key.length }
+    }
+
     /** VPN city / region names → ISO-2 (cities only; country names live above). */
     private val cityToIso: Map<String, String> by lazy {
         mapOf(
@@ -87,6 +91,10 @@ object CountryResolver {
             "kuala lumpur" to "MY", "bangkok" to "TH",
             "sao paulo" to "BR", "mexico city" to "MX",
         )
+    }
+
+    private val cityEntriesByLength by lazy {
+        cityToIso.entries.sortedByDescending { it.key.length }
     }
 
     private val isoTokenRegex = Regex("(^|[^a-zA-Z])([a-zA-Z]{2})([^a-zA-Z]|$)")
@@ -158,12 +166,10 @@ object CountryResolver {
         isoTokenRegex.findAll(text).forEach { match ->
             normalizeIso(match.groupValues[2])?.let { return isoToFlag(it) }
         }
-        nameToIso.entries
-            .sortedByDescending { it.key.length }
+        nameEntriesByLength
             .firstOrNull { (name, _) -> name in text }
             ?.let { (_, iso) -> return isoToFlag(iso) }
-        cityToIso.entries
-            .sortedByDescending { it.key.length }
+        cityEntriesByLength
             .firstOrNull { (city, _) -> city in text }
             ?.let { (_, iso) -> return isoToFlag(iso) }
         return ""

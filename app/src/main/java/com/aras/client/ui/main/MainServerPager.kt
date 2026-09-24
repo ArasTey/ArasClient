@@ -358,21 +358,36 @@ private fun ServerItemRow(
     onTestServer: (String) -> Unit
 ) {
     val profile = serverCache.profile
-    val subRemarks = if (subscriptionId.isEmpty()) {
-        MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks?.firstOrNull()
-            ?.toString() ?: ""
-    } else ""
-    val isProtected = ArasExportImportManager.isProtected(serverCache.guid)
+    val subRemarks = remember(subscriptionId, profile.subscriptionId) {
+        if (subscriptionId.isEmpty()) {
+            MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks?.firstOrNull()
+                ?.toString() ?: ""
+        } else ""
+    }
+    val isProtected = remember(serverCache.guid) {
+        ArasExportImportManager.isProtected(serverCache.guid)
+    }
     val protectedDescription = stringResource(R.string.protected_config_hidden)
-    val country = com.aras.client.util.CountryResolver.resolve(
-        profile,
-        geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-        preferGeoIp = true
-    )
+    val country = remember(
+        serverCache.guid,
+        serverCache.testDelayMillis,
+        profile.server,
+        profile.remarks,
+        profile.description,
+    ) {
+        com.aras.client.util.CountryResolver.resolve(
+            profile,
+            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
+            preferGeoIp = true
+        )
+    }
+    val displayRemarks = remember(serverCache.guid, profile.remarks, country) {
+        cardRemarks(profile, country)
+    }
     ServerListItem(
         country = country,
-        remarks = cardRemarks(profile, country),
-        statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
+        remarks = displayRemarks,
+        statistics = if (isProtected)
             protectedDescription
         else
             profile.description.nullIfBlank()
@@ -389,7 +404,7 @@ private fun ServerItemRow(
         onRemove = { onRemoveServer(serverCache.guid) },
         onMore = { onMoreServer(serverCache.guid, profile) },
         onTest = { onTestServer(serverCache.guid) },
-        isProtected = ArasExportImportManager.isProtected(serverCache.guid)
+        isProtected = isProtected
     )
 }
 
@@ -407,18 +422,35 @@ private fun ServerItemColumn(
     onTestServer: (String) -> Unit
 ) {
     val profile = serverCache.profile
-    val subRemarks = if (subscriptionId.isEmpty()) {
-        MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks?.firstOrNull()?.toString() ?: ""
-    } else ""
-    val country = com.aras.client.util.CountryResolver.resolve(
-        profile,
-        geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-        preferGeoIp = true
-    )
+    val subRemarks = remember(subscriptionId, profile.subscriptionId) {
+        if (subscriptionId.isEmpty()) {
+            MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks?.firstOrNull()
+                ?.toString() ?: ""
+        } else ""
+    }
+    val isProtected = remember(serverCache.guid) {
+        ArasExportImportManager.isProtected(serverCache.guid)
+    }
+    val country = remember(
+        serverCache.guid,
+        serverCache.testDelayMillis,
+        profile.server,
+        profile.remarks,
+        profile.description,
+    ) {
+        com.aras.client.util.CountryResolver.resolve(
+            profile,
+            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
+            preferGeoIp = true
+        )
+    }
+    val displayRemarks = remember(serverCache.guid, profile.remarks, country) {
+        cardRemarks(profile, country)
+    }
     ServerListItem(
         country = country,
-        remarks = cardRemarks(profile, country),
-        statistics = if (ArasExportImportManager.isProtected(serverCache.guid))
+        remarks = displayRemarks,
+        statistics = if (isProtected)
             stringResource(R.string.protected_config_hidden)
         else
             profile.description.nullIfBlank() ?: AngConfigManager.generateDescription(profile),
@@ -434,7 +466,7 @@ private fun ServerItemColumn(
         onRemove = { onRemoveServer(serverCache.guid) },
         onMore = { onMoreServer(serverCache.guid, profile) },
         onTest = { onTestServer(serverCache.guid) },
-        isProtected = ArasExportImportManager.isProtected(serverCache.guid)
+        isProtected = isProtected
     )
 }
 

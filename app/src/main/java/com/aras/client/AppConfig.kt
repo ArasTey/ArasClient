@@ -92,6 +92,7 @@ object AppConfig {
     const val PREF_SHOW_DELAY_CHIPS = "pref_show_delay_chips"
     const val PREF_AUTO_CONNECT_FASTEST = "pref_auto_connect_fastest"
     const val PREF_ONBOARDING_DONE = "pref_onboarding_done"
+    const val PREF_QUICK_SETTINGS_TILES_INFO_SHOWN = "pref_quick_settings_tiles_info_shown"
     const val PREF_ARASC_PROTECTED_GUIDS = "pref_arasc_protected_guids"
     const val PREF_SHOW_SUB_INFO = "pref_show_sub_info"
     const val PREF_SHOW_SUB_ANNOUNCEMENT = "pref_show_sub_announcement"
