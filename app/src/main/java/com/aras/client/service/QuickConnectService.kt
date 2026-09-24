@@ -65,6 +65,7 @@ class QuickConnectService : Service() {
             return START_NOT_STICKY
         }
         workflowStarted = true
+        MmkvManager.encodeSettings(AppConfig.PREF_QUICK_CONNECT_RUNNING, true)
         NotificationHelper.startForeground(
             this,
             NotificationChannelType.QUICK_CONNECT,

@@ -50,6 +50,7 @@ fun SubscriptionInfoBar(
     modifier: Modifier = Modifier,
     onEditSubscription: (() -> Unit)? = null,
     onUpdateSubscription: (() -> Unit)? = null,
+    onPingSubscription: (() -> Unit)? = null,
     onRemoveSubscription: (() -> Unit)? = null,
     onCopySubscriptionUrl: (() -> Unit)? = null,
     isProtectedSubscription: Boolean = false,
@@ -95,6 +96,7 @@ fun SubscriptionInfoBar(
             groupId = groupId,
             onEdit = onEditSubscription.takeUnless { isProtectedSubscription },
             onUpdate = onUpdateSubscription,
+            onPing = onPingSubscription,
             onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
             onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription }
         )
@@ -106,6 +108,7 @@ private fun SubscriptionActions(
     groupId: String,
     onEdit: (() -> Unit)?,
     onUpdate: (() -> Unit)?,
+    onPing: (() -> Unit)?,
     onRemove: (() -> Unit)?,
     onCopy: (() -> Unit)?
 ) {
@@ -118,6 +121,13 @@ private fun SubscriptionActions(
     ) {
         onEdit?.let { SubBarAction(R.drawable.ic_edit_24dp, R.string.acc_edit, onClick = it) }
         onUpdate?.let { SubBarAction(R.drawable.ic_check_update_24dp, R.string.sub_bar_update, onClick = it) }
+        onPing?.let {
+            SubBarAction(
+                R.drawable.ic_speedtest_24dp,
+                R.string.title_ping_selected_subscription,
+                onClick = it,
+            )
+        }
         onCopy?.let { SubBarAction(R.drawable.ic_copy, R.string.share_method_clipboard, onClick = it) }
         onRemove?.let {
             SubBarAction(R.drawable.ic_delete_24dp, R.string.acc_delete,

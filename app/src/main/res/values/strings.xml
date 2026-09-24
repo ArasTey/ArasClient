@@ -20,7 +20,7 @@
     <string name="toast_permission_denied">Permission denied</string>
     <string name="toast_permission_denied_notification">Notification permission denied</string>
     <string name="notification_action_more">Tap for more</string>
-    <string name="app_quick_connect_tile_name" tools:ignore="MissingTranslation">Update &amp; Connect</string>
+    <string name="app_quick_connect_tile_name" tools:ignore="MissingTranslation">Aras: Update &amp; Connect</string>
     <string name="quick_settings_tiles_title" tools:ignore="MissingTranslation">Add the two ArasClient tiles</string>
     <string name="quick_settings_tiles_message" tools:ignore="MissingTranslation">Open Quick Settings, tap Edit, then add both ArasClient tiles: “Aras: Connect / Disconnect” and “Update &amp; Connect”. Android does not add third-party tiles automatically.</string>
     <string name="action_got_it" tools:ignore="MissingTranslation">Got it</string>

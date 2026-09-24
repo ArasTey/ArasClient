@@ -156,6 +156,12 @@ object CountryResolver {
         return resolveCountryText(raw)
     }
 
+    fun resolveCardCountry(
+        profile: ProfileItem,
+        geoIso: String,
+        testedCountry: String?,
+    ): String = flagForCountry(testedCountry).ifBlank { resolve(profile, geoIso, preferGeoIp = true) }
+
     private fun normalizeIso(value: String): String? = value
         .trim()
         .uppercase(Locale.ROOT)

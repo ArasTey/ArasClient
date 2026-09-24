@@ -18,6 +18,23 @@ class CountryResolverTest {
     }
 
     @Test
+    fun `actual connection ping country overrides host geoip on card`() {
+        val profile = ProfileItem.create(EConfigType.VMESS).apply {
+            remarks = "Germany"
+            server = "node.example"
+        }
+
+        assertEquals(
+            "🇩🇪",
+            CountryResolver.resolveCardCountry(
+                profile = profile,
+                geoIso = "NL",
+                testedCountry = "DE",
+            )
+        )
+    }
+
+    @Test
     fun `provider country remains fallback when geoip is unavailable`() {
         val profile = ProfileItem.create(EConfigType.VMESS).apply {
             remarks = "Germany"

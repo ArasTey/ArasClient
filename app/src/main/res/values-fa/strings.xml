@@ -18,7 +18,7 @@
     <string name="toast_permission_denied">امکان دریافت مجوز وجود ندارد</string>
     <string name="toast_permission_denied_notification">امکان دریافت مجوز ارسال اعلان وجود ندارد</string>
     <string name="notification_action_more">برای اطلاعات بیشتر کلیک کنید</string>
-    <string name="app_quick_connect_tile_name">آپدیت و اتصال</string>
+    <string name="app_quick_connect_tile_name">آراس: آپدیت و اتصال</string>
     <string name="quick_settings_tiles_title">افزودن دو کاشی آراس</string>
     <string name="quick_settings_tiles_message">کشویید و وارد تنظیمات سریع شوید، ویرایش را بزنید و هر دو کاشی «آراس: اتصال / قطع» و «آپدیت و اتصال» را اضافه کنید. اندروید کاشی‌های برنامه‌های دیگر را خودکار اضافه نمی‌کند.</string>
     <string name="action_got_it">متوجه شدم</string>

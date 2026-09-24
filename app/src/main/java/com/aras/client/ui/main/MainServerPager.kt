@@ -100,6 +100,7 @@ fun GroupPagerPage(
     onTestServer: (String) -> Unit,
     onEditSubscription: (() -> Unit)? = null,
     onUpdateSubscription: (() -> Unit)? = null,
+    onPingSubscription: (() -> Unit)? = null,
     onRemoveSubscription: (() -> Unit)? = null,
     onCopySubscriptionUrl: (() -> Unit)? = null,
     isProtectedSubscription: Boolean = false,
@@ -117,6 +118,7 @@ fun GroupPagerPage(
             groupId = groupId,
             onEditSubscription = onEditSubscription,
             onUpdateSubscription = onUpdateSubscription,
+            onPingSubscription = onPingSubscription,
             onRemoveSubscription = onRemoveSubscription,
             onCopySubscriptionUrl = onCopySubscriptionUrl,
             isProtectedSubscription = isProtectedSubscription
@@ -371,14 +373,15 @@ private fun ServerItemRow(
     val country = remember(
         serverCache.guid,
         serverCache.testDelayMillis,
+        serverCache.testCountryCode,
         profile.server,
         profile.remarks,
         profile.description,
     ) {
-        com.aras.client.util.CountryResolver.resolve(
-            profile,
+        com.aras.client.util.CountryResolver.resolveCardCountry(
+            profile = profile,
             geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-            preferGeoIp = true
+            testedCountry = serverCache.testCountryCode,
         )
     }
     val displayRemarks = remember(serverCache.guid, profile.remarks, country) {
@@ -434,14 +437,15 @@ private fun ServerItemColumn(
     val country = remember(
         serverCache.guid,
         serverCache.testDelayMillis,
+        serverCache.testCountryCode,
         profile.server,
         profile.remarks,
         profile.description,
     ) {
-        com.aras.client.util.CountryResolver.resolve(
-            profile,
+        com.aras.client.util.CountryResolver.resolveCardCountry(
+            profile = profile,
             geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-            preferGeoIp = true
+            testedCountry = serverCache.testCountryCode,
         )
     }
     val displayRemarks = remember(serverCache.guid, profile.remarks, country) {

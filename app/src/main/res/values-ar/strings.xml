@@ -18,7 +18,7 @@
     <string name="toast_permission_denied">تعذر الحصول على الإذن</string>
     <string name="toast_permission_denied_notification">تعذر الحصول على إذن الإشعارات</string>
     <string name="notification_action_more">انقر للمزيد</string>
-    <string name="app_quick_connect_tile_name">تحديث واتصال</string>
+    <string name="app_quick_connect_tile_name">آراس: تحديث واتصال</string>
     <string name="quick_settings_tiles_title">أضف بلاطتي ArasClient</string>
     <string name="quick_settings_tiles_message">افتح الإعدادات السريعة، اضغط تحرير، ثم أضف كلتا البلاطتين: «آراس: اتصال / قطع» و«تحديث واتصال». لا يضيف Android بلاطات التطبيقات الخارجية تلقائيًا.</string>
     <string name="action_got_it">فهمت</string>
