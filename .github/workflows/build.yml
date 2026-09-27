@@ -22,7 +22,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ArasTey/xray-core
-          ref: main
+          # Pinned by tag, not to a branch: the core is built from source here, so
+          # what it is has to be the same on every run of a given release.
+          ref: aras-core-26.9.27
           path: xray-core-src
 
       - name: Set up Go
