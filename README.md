@@ -63,28 +63,31 @@ It also supports proxy chains and policy groups where supported by the underlyin
 
 Use **Add Aether config manually**, found in the import menu directly below *Import .arasc File*.
 
-An Aether config is a gateway profile — a WARP-style key plus the transport to dial it with — so ArasClient
-models it directly and lowers it onto a real outbound:
+Aether's data path is not something ArasClient can dial with its own outbound: the tunnel needs a
+scanned WARP endpoint and a WARP identity, and both live in the aether core. So the core runs as a
+child process and the profile's outbound is a SOCKS hop to its loopback listener — which is what the
+Aether app and PattNG both do.
 
-- **Protocol** — `wireguard` (the default, and what the Aether app itself uses) or `masque`
-- **Obfuscation** — `auto` applies AmneziaWG junk packets, `off` sends none
-- **IP version** — `ipv4` additionally forces IPv4 on the tunnel
-- **address / port** — the gateway, plus the WireGuard key fields or the MASQUE SNI/path
+The core ships in the APK as `libaether.so`, with Psiphon's client and Tor's pluggable transport
+beside it, for `arm64-v8a`, `armeabi-v7a` and `x86_64`. It is packaged rather than downloaded at
+runtime because a file in the app's data directory is not executable on Android 10 and later, and only
+`nativeLibraryDir` is. This costs about 54 MB of native library per ABI.
 
-What ArasClient deliberately does **not** reproduce is the Aether daemon's own runtime: scan mode, *Scan
-for an endpoint*, *Get a new WARP key*, Psiphon, Tor and nested modes. Those belong to the `aether`
-process, not to a core config, so they are not offered here rather than being present and inert.
+**What the editor offers**, all of it carried in `aether://` links and `.arasc` files:
 
-To drive the real daemon instead, run Aether alongside ArasClient and point a SOCKS profile at its
-listener:
+- **Protocol** — `wg`, `masque`, `gool` and `mim`, the last two being the two-hop tunnels
+- **Scan mode**, **obfuscation**, **IP version** and the MASQUE **transport**
+- ClientHello **fragmentation** and **ECH** on the h2 carrier
+- **Scan for an endpoint** and **Get a new WARP key**, both running a short-lived core; a renewal that
+  fails leaves the working identity in place
+- **Psiphon** and **Tor**, each inside the tunnel, around it, or alone with no WARP
 
-1. Start Aether bound to loopback, e.g. `aether --bind 127.0.0.1:1819`. It has no authentication — never
-   bind it to a LAN or WAN address.
-2. In ArasClient, add a `SOCKS` server with address `127.0.0.1` and port `1819`.
-3. To keep your usual server as the outer hop, put both in a proxy chain; ArasClient links the hops with
-   `sockopt.dialerProxy`.
+Two pairings the core refuses are caught in the editor rather than at connect time, because each is a
+configuration that builds and then does not work: either carrier in *reverse* needs `masque`, and the
+two of them go together only nested, one inside the tunnel and the other around it.
 
-Aether profiles round-trip through `aether://` share links and `.arasc` files.
+Aether profiles are import-only in the sense that there is no fixed single endpoint to type in — leave
+the address empty and the core sweeps for a reachable gateway and keeps the fastest it finds.
 
 ---
 
