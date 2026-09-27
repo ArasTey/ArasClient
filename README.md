@@ -89,6 +89,14 @@ two of them go together only nested, one inside the tunnel and the other around 
 Aether profiles are import-only in the sense that there is no fixed single endpoint to type in — leave
 the address empty and the core sweeps for a reachable gateway and keeps the fastest it finds.
 
+**A WARP gateway usually does not answer a plain ping, and its exit address reads as Iranian.** Both
+are expected: the address Cloudflare hands out is not a host that answers ICMP, and the exit it routes
+to is geolocated that way. Judge these profiles by whether they connect, not by the ping column.
+
+If Cloudflare ever stops accepting a saved device, the core says so on startup and the tunnel
+handshakes while carrying nothing. **Reset WARP key** forgets the identity and the remembered
+endpoint so the next start registers a new one.
+
 ---
 
 ## ⚡ Smart Connect

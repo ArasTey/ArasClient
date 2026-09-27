@@ -25,6 +25,9 @@ import org.mockito.Mockito.mockStatic
  */
 class AetherFmtTest {
 
+    /** What AngConfigManager.shareConfig prepends to what a parser returns. */
+    private val SCHEME = "aether://"
+
     private lateinit var mockLog: MockedStatic<Log>
 
     @Before
@@ -63,7 +66,7 @@ class AetherFmtTest {
 
         val uri = AetherFmt.toUri(AetherFmt.parse(link)!!)
 
-        assertEquals(link, uri)
+        assertEquals(link.removePrefix(SCHEME), uri)
     }
 
     @Test
@@ -88,7 +91,7 @@ class AetherFmtTest {
         assertEquals("1.1.1.1", config.aetherDns)
         assertEquals("DE", config.aetherExitLoc)
 
-        assertEquals(link, AetherFmt.toUri(config))
+        assertEquals(link.removePrefix(SCHEME), AetherFmt.toUri(config))
     }
 
     @Test
@@ -180,7 +183,7 @@ class AetherFmtTest {
         assertEquals("obfs4 1.2.3.4:443", config.aetherTorBridgeLines)
         assertEquals("cloudflare,github", config.aetherPsiphonCdnSets)
 
-        val again = AetherFmt.parse(AetherFmt.toUri(config))!!
+        val again = AetherFmt.parse(SCHEME + AetherFmt.toUri(config))!!
         assertEquals(config.aetherPsiphon, again.aetherPsiphon)
         assertEquals(config.aetherPsiphonCdnSets, again.aetherPsiphonCdnSets)
         assertEquals(config.aetherTor, again.aetherTor)
@@ -275,5 +278,49 @@ class AetherFmtTest {
         assertEquals(listOf("cloudflare", "github"), parsed.map { it.type })
         assertEquals("cloudflare,github", AetherPsiphonCdnSet.join(parsed))
         assertNull(AetherPsiphonCdnSet.join(emptyList()))
+    }
+
+    @Test
+    fun `a shared link carries the scheme exactly once`() {
+        // AngConfigManager.shareConfig prepends the config type's own scheme, so the
+        // parser must not add one of its own: that is what produced aether://aether://
+        // on export.
+        val config = AetherFmt.parse(
+            "aether://[2606:4700:d1::bc72:61c5]:1070?protocol=wg&scan=balanced" +
+                "&noize=balanced&ip=v6#%D9%81%D9%81"
+        )!!
+
+        val exported = "aether://" + AetherFmt.toUri(config)
+
+        assertEquals(
+            "aether://[2606:4700:d1::bc72:61c5]:1070?protocol=wg&scan=balanced" +
+                "&noize=balanced&ip=v6#%D9%81%D9%81",
+            exported,
+        )
+        assertEquals(1, exported.split("aether://").size - 1)
+    }
+
+    @Test
+    fun `a profile with no remarks is given one on the way out`() {
+        val config = AetherFmt.parse(
+            "aether://198.51.100.9:2408?protocol=wg&scan=balanced&ip=v4"
+        )!!
+        config.remarks = ""
+
+        val exported = AetherFmt.toUri(config)
+
+        assertTrue("an empty fragment is not a name", !exported.endsWith("#"))
+        assertTrue(exported.contains("#Aether"))
+    }
+
+    @Test
+    fun `a non-ascii remark survives a round trip`() {
+        val link = "aether://[2606:4700:d1::bc72:61c5]:1070?protocol=wg&scan=balanced&ip=v6#%D9%81%D9%81"
+
+        val config = AetherFmt.parse(link)!!
+        val remarks = config.remarks
+        assertTrue("the remark should not come back empty", remarks.isNotBlank())
+
+        assertEquals(link, SCHEME + AetherFmt.toUri(config))
     }
 }

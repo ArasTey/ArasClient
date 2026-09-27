@@ -15,8 +15,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -388,13 +390,15 @@ class ServerAetherActivity : BaseServerActivity() {
         val scanLabel = stringResource(R.string.server_lab_aether_scan)
         val workingLabel = stringResource(R.string.server_lab_aether_working)
         val scanNeedsKeyLabel = stringResource(R.string.server_lab_aether_scan_needs_key)
+        val resetLabel = stringResource(R.string.server_lab_aether_reset_key)
+        val noteLabel = stringResource(R.string.server_lab_aether_note)
         val onKeyLabel = stringResource(R.string.server_lab_aether_vpn_on)
         val offKeyLabel = stringResource(R.string.server_lab_aether_vpn_off)
 
         // The two steps are in order on purpose: the core cannot sweep for a gateway
         // without an identity to sweep with, so the scan stays unavailable until a key
         // is on disk, and a key that is already there is never asked for twice.
-        val key = identity?.primary
+        val key = identity.primary
         val hasKey = key != null
 
         fun runOneShot(label: String, block: ((String) -> Unit) -> Unit) {
@@ -546,6 +550,30 @@ class ServerAetherActivity : BaseServerActivity() {
                         }
                     )
                 }
+
+                Spacer(Modifier.height(12.dp))
+                TextButton(
+                    enabled = busy == null && hasKey,
+                    onClick = {
+                        if (busy != null) return@TextButton
+                        busy = resetLabel
+                        log.clear()
+                        scope.launch(Dispatchers.IO) {
+                            AetherIdentityManager.reset(context)
+                            runOnUiThread {
+                                identity = AetherIdentityManager.status(context, protocol)
+                                busy = null
+                            }
+                        }
+                    },
+                ) { Text(resetLabel) }
+
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    noteLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 if (log.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))

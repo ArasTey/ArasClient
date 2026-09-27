@@ -78,12 +78,13 @@ object AetherIdentityManager {
         return runCatching {
             val values = HashMap<String, String>()
             file.forEachLine { line ->
-                // Only top-level keys; the files nest a multiline block that can carry
-                // lookalike lines that are not this device's identity.
-                if (line.isBlank() || line.startsWith(" ") || line.startsWith("[")) {
-                    if (line.startsWith("[")) return@forEachLine
+                // Only a top-level key is this device's identity. The files nest
+                // blocks, and a key of the same name inside one belongs to something
+                // else - so the line is judged before it is trimmed, not after.
+                if (line.isBlank() || line.startsWith("[") || line.first().isWhitespace()) {
+                    return@forEachLine
                 }
-                val match = identityField.find(line.trim()) ?: return@forEachLine
+                val match = identityField.find(line) ?: return@forEachLine
                 values[match.groupValues[1]] = match.groupValues[2]
             }
             val device = values["device_id"]?.takeIf { it.isNotBlank() } ?: return null
@@ -129,6 +130,35 @@ object AetherIdentityManager {
     private fun isReady(protocol: AetherProtocol, line: String): Boolean =
         if (protocol.twoHops) hopIdentitiesReady.containsMatchIn(line)
         else identityReady.containsMatchIn(line)
+
+    /**
+     * Forgets the identity, so the next start registers a fresh device.
+     *
+     * Cloudflare can stop accepting a device that is still in the file: the handshake
+     * keeps succeeding and no traffic passes, which is why the core checks the saved
+     * identity on startup and says so. This is the way out of that without waiting for
+     * it. The last known endpoint goes with it, so the next start sweeps again rather
+     * than reusing a gateway that was only working for the old identity.
+     */
+    fun reset(context: Context) {
+        val work = workDir(context)
+        val removed = ALL_FILES.filter { name ->
+            File(work, name).takeIf { it.isFile }?.also { it.delete() } != null
+        }
+        // The lastconn files are named aether-<transport>-lastconn.toml; anything left
+        // in the work dir that is not ours to keep is left alone.
+        work.listFiles()?.filter { it.name.endsWith("-lastconn.toml") }?.forEach { it.delete() }
+        LogUtil.i(AppConfig.TAG, "AetherIdentity: forgot ${removed.size} identity files; the next start registers a new device")
+    }
+
+    /** Whether a saved identity is the one the core says Cloudflare no longer accepts. */
+    fun rejectedByCloudflare(line: String): Boolean =
+        line.contains("no longer accepts the saved identity") ||
+            line.contains("the tunnel will handshake but carry no traffic")
+
+    private val ALL_FILES = listOf(
+        BASE_FILE, MASQUE_FILE, MASQUE_INNER_FILE, WIREGUARD_FILE, WIREGUARD_INNER_FILE,
+    )
 
     private data class Stashed(val name: String, val file: File)
 

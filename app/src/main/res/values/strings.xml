@@ -95,6 +95,8 @@
     <string name="server_lab_aether_vpn_on">Turn the VPN ON first — registering with Cloudflare has to reach their API.</string>
     <string name="server_lab_aether_vpn_off">Turn the VPN OFF first, so the sweep sees the network you will actually use.</string>
     <string name="server_lab_aether_key_ready">Key ready</string>
+    <string name="server_lab_aether_reset_key">Reset WARP key</string>
+    <string name="server_lab_aether_note">A WARP gateway often does not answer a plain ping, and its exit address reads as Iranian — both are normal. Check the connection, not the ping.</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
     <string name="sub_setting_announcement">Announcement</string>
     <string name="sub_setting_creator_message">Creator message</string>

@@ -34,8 +34,6 @@ import java.net.URI
  */
 object AetherFmt : FmtBase() {
 
-    private const val SCHEME = "aether://"
-
     fun parse(str: String): ProfileItem? {
         val config = ProfileItem.create(EConfigType.AETHER)
 
@@ -137,7 +135,12 @@ object AetherFmt : FmtBase() {
 
         val endpoint = AetherEndpoint.of(config.server, config.serverPort).takeUnless { protocol.twoHops }
         val queryText = query.entries.joinToString("&") { "${it.key}=${Utils.encodeURIComponent(it.value)}" }
-        return "${SCHEME}${endpoint ?: ""}?$queryText#${Utils.encodeURIComponent(config.remarks)}"
+        // No scheme here: AngConfigManager.shareConfig prepends the config type's own
+        // scheme, and adding it here too is what produced aether://aether:// on export.
+        // A profile with no remarks gets one, since an empty fragment is not a name
+        // anyone can pick out of a list.
+        val remarks = config.remarks.takeIf { it.isNotBlank() } ?: defaultRemarks(config)
+        return "${endpoint ?: ""}?$queryText#${Utils.encodeURIComponent(remarks)}"
     }
 
 
@@ -281,6 +284,15 @@ object AetherFmt : FmtBase() {
     /** A list as the core reads it, comma or space separated, written back with commas alone. */
     private fun commaList(text: String?): String? =
         text?.split(Regex("[,\\s]+"))?.filter { it.isNotEmpty() }?.joinToString(",")?.ifEmpty { null }
+
+    /** The name a profile is given when it has none of its own. */
+    fun defaultRemarks(config: ProfileItem): String {
+        val where = config.server?.takeIf { it.isNotBlank() }
+            ?: config.aetherWiwOuter?.takeIf { it.isNotBlank() }
+            ?: return "Aether"
+        val protocol = AetherProtocol.fromString(config.aetherProtocol).type
+        return "Aether $protocol ${where.substringBeforeLast(':')}"
+    }
 
     /** The loopback port [text] names for the core to listen on, null when it names none. */
     fun listenPortOf(text: String?): Int? = text?.trim()?.toIntOrNull()?.takeIf { it in 1..65535 }

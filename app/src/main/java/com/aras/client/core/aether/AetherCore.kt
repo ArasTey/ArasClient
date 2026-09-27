@@ -43,14 +43,20 @@ data class AetherCore(val arguments: List<String>) {
                     )
                 )
 
-        /** The core a hand-written command line asks for, or null when it is not one we can run. */
+        /**
+         * The core a hand-written command line asks for, or null when it is not one we
+         * can run.
+         *
+         * The program is dropped: the app runs its own copy of the core whatever the
+         * name says, so only the arguments matter. A command with no arguments is not
+         * one - it would start a core on the default port, which is the very collision
+         * the profile's own port is there to avoid.
+         */
         fun ofCommand(command: String): AetherCore? {
             val parts = command.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-            if (parts.isEmpty()) return null
-            val (head, tail) = if (parts.first().endsWith("aether")) parts.first() to parts.drop(1)
-            else parts.first() to parts.drop(1)
-            if (head.isEmpty()) return null
-            return AetherCore(tail)
+            if (parts.size < 2) return null
+            if (parts.none { it.startsWith("--") }) return null
+            return AetherCore(parts.drop(1))
         }
 
         private fun quoted(argument: String): String =
