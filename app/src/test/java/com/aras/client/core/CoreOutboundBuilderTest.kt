@@ -253,69 +253,45 @@ class CoreOutboundBuilderTest {
     }
 
     @Test
-    fun `an aether profile lowers onto a wireguard outbound with junk packets`() {
+    fun `an aether profile dials the aether core's loopback listener`() {
         val item = ProfileItem(
             configType = EConfigType.AETHER,
-            remarks = "warp",
-            server = "engage.cloudflareclient.com",
-            serverPort = "2408",
-            publicKey = "pub",
-            secretKey = "sec",
-            localAddress = "172.16.0.2/32",
+            server = "2606:4700:d1::a29f:c0d1",
+            serverPort = "928",
             aetherProtocol = "wg",
-            aetherIpVersion = "v4",
-            aetherObfuscation = "auto",
         )
 
         val outbound = CoreOutboundBuilder.convert(item)
 
-        assertNotNull(outbound)
-        assertEquals("wireguard", outbound!!.protocol)
-        // WireGuard keeps the local addresses on the outbound and the dial target on
-        // the peer, so the endpoint is what proves the gateway was carried through.
-        assertEquals(listOf("172.16.0.2/32"), outbound.settings?.address)
-        assertEquals("engage.cloudflareclient.com:2408", outbound.settings?.peers?.firstOrNull()?.endpoint)
-        // IPv4 preference, and the userspace device because junk packets need it.
-        assertEquals("forceIPv4", outbound.settings?.domainStrategy)
-        assertEquals(true, outbound.settings?.noKernelTun)
-        assertEquals(4, outbound.settings?.peers?.firstOrNull()?.junkPacketCount)
-        assertEquals(listOf(3), outbound.settings?.peers?.firstOrNull()?.cookiePacketJunkHeader)
+        // The core holds the WARP identity, so the app's outbound is a SOCKS hop to it.
+        assertEquals("socks", outbound?.protocol)
+        assertEquals(AppConfig.LOOPBACK, outbound?.settings?.address)
+        assertEquals(AppConfig.PORT_AETHER_SOCKS.toInt(), outbound?.settings?.port)
     }
 
     @Test
-    fun `an aether profile with obfuscation off sends no junk packets`() {
+    fun `an aether profile honours its own listen port`() {
         val item = ProfileItem(
             configType = EConfigType.AETHER,
-            server = "1.2.3.4",
-            serverPort = "2408",
-            publicKey = "pub",
-            secretKey = "sec",
-            aetherProtocol = "wg",
-            aetherObfuscation = "off",
+            aetherListenPort = "10820",
         )
 
-        val peer = CoreOutboundBuilder.convert(item)?.settings?.peers?.firstOrNull()
-
-        assertNotNull(peer)
-        assertNull(peer!!.junkPacketCount)
+        assertEquals(10820, CoreOutboundBuilder.convert(item)?.settings?.port)
     }
 
     @Test
-    fun `an aether masque profile lowers onto the masque transport`() {
+    fun `a malformed aether listen port falls back to the default`() {
+        // Falling back beats dropping the profile: the core is still reachable on the
+        // default, and the editor is where a bad port is actually reported.
         val item = ProfileItem(
             configType = EConfigType.AETHER,
-            server = "1.2.3.4",
-            serverPort = "443",
-            aetherProtocol = "masque",
-            aetherObfuscation = "auto",
+            aetherListenPort = "70000",
         )
 
-        val outbound = CoreOutboundBuilder.convert(item)
-
-        assertEquals("masque", outbound?.protocol)
-        assertEquals(NetworkType.MASQUE.type, outbound?.streamSettings?.network)
-        // Junk packets are peer-level WireGuard knobs; a MASQUE tunnel has none.
-        assertNull(outbound?.settings?.peers)
+        assertEquals(
+            AppConfig.PORT_AETHER_SOCKS.toInt(),
+            CoreOutboundBuilder.convert(item)?.settings?.port,
+        )
     }
 
     @Test

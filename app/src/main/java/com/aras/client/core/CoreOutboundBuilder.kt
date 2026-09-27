@@ -5,9 +5,7 @@ import com.google.gson.JsonObject
 import com.aras.client.AppConfig
 import com.aras.client.dto.XrayConfig.OutboundBean
 import com.aras.client.dto.entities.ProfileItem
-import com.aras.client.enums.AetherIpVersion
-import com.aras.client.enums.AetherObfuscation
-import com.aras.client.enums.AetherProtocol
+import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.enums.EConfigType
 import com.aras.client.enums.NetworkType
 import com.aras.client.extension.isNotNullEmpty
@@ -443,47 +441,24 @@ object CoreOutboundBuilder {
     /**
      * Aether / gateway profile.
      *
-     * An Aether config is a gateway profile — a WARP-style key plus the transport to
-     * dial it with — so it lowers onto an ordinary outbound: WireGuard (the default,
-     * and what the Aether app itself uses) or MASQUE. gool and mim are the core's
-     * two-hop tunnels and are not reproducible here; they need the aether process.
+     * The tunnel is dialled by the aether core — a separate process that holds the WARP
+     * identity and the scanned endpoint — so the outbound here is a SOCKS hop to that
+     * process's loopback listener. Building a WireGuard or MASQUE outbound instead would
+     * be wrong: the credentials live in the core, not in the profile.
      *
-     * What this deliberately does NOT reproduce is the Aether daemon's own runtime:
-     * endpoint scanning, Psiphon and Tor nesting. Those need the aether process, not
-     * a core config. The parts that do map are honoured: obfuscation applies
-     * AmneziaWG junk packets, and an IPv4 preference forces v4.
+     * The hop can therefore only be the entry hop of a chain, since it reaches loopback
+     * and nothing beyond it.
      */
     private fun toOutboundAether(profileItem: ProfileItem): OutboundBean? {
-        val outbound = when (AetherProtocol.fromString(profileItem.aetherProtocol)) {
-            AetherProtocol.MASQUE -> toOutboundMasque(profileItem)
-            else -> toOutboundWireguard(profileItem)
-        } ?: return null
-
-        if (AetherObfuscation.fromString(profileItem.aetherObfuscation) != AetherObfuscation.OFF &&
-            outbound.protocol.equals(EConfigType.WIREGUARD.name, true)
-        ) {
-            // Junk packets are peer-level and only meaningful on a WireGuard-family
-            // outbound; a MASQUE tunnel has no equivalent knob. Anything other than
-            // "off" means the core would add them, so apply the standard set here.
-            outbound.settings?.peers?.firstOrNull()?.let { peer ->
-                peer.junkPacketCount = 4
-                peer.junkPacketMinSize = 40
-                peer.junkPacketMaxSize = 70
-                peer.initPacketJunkSize = 15
-                peer.responsePacketJunkSize = 20
-                peer.initPacketJunkHeader = listOf(1)
-                peer.responsePacketJunkHeader = listOf(2)
-                peer.cookiePacketJunkHeader = listOf(3)
-                peer.transportPacketJunkHeader = listOf(4)
-            }
-            // Kernel TUN cannot apply junk packets, so force the userspace device.
-            outbound.settings?.noKernelTun = true
+        // listenPort() applies the default when the profile names none; listenPortOf()
+        // only reads what is there, so using it here would drop an unset profile.
+        val port = AetherCoreManager.listenPort(profileItem)
+        val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
+        outbound.settings?.let { settings ->
+            settings.address = AppConfig.LOOPBACK
+            settings.port = port
+            settings.level = AppConfig.DEFAULT_LEVEL
         }
-
-        if (AetherIpVersion.fromString(profileItem.aetherIpVersion) == AetherIpVersion.V4) {
-            outbound.settings?.domainStrategy = "forceIPv4"
-        }
-
         return outbound
     }
 

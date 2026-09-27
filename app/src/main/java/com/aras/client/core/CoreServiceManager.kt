@@ -36,6 +36,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import com.aras.client.extension.delay
 import kotlinx.coroutines.launch
+import com.aras.client.core.aether.AetherCore
+import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.core.CoreCallbackHandler
 import com.aras.client.core.CoreController
 import com.aras.client.core.ProcessFinder
@@ -160,6 +162,25 @@ object CoreServiceManager {
             return
         }
 
+        // An Aether profile is dialled by the aether core, a separate process holding the
+        // WARP identity and the scanned endpoint. Its outbound is a SOCKS hop to that
+        // process, so the core has to be up and listening before the Xray config that
+        // dials it is built — the same ordering constraint AmneziaWG has above.
+        if (config.configType == EConfigType.AETHER) {
+            if (!AetherCoreManager.isAvailable(service)) {
+                error("This build does not carry the aether core")
+            }
+            val core = AetherCore.of(config)
+            LogUtil.i(AppConfig.TAG, "StartCore-Manager: aether core: ${core.command}")
+            if (!AetherCoreManager.start(service, core) { line ->
+                    LogUtil.d(AppConfig.TAG, "aether | $line")
+                }
+            ) {
+                AetherCoreManager.stop()
+                error("The aether core did not start; see the log for its own error")
+            }
+        }
+
         val result = CoreConfigManager.getXrayConfig(service, guid)
         LogUtil.d(AppConfig.TAG, result.content)
         if (!result.status) {
@@ -238,6 +259,10 @@ object CoreServiceManager {
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop AWG tunnel", e)
         }
+
+        // The aether core is a child process; stopping it here keeps it from outliving
+        // the session it was started for.
+        AetherCoreManager.stop()
 
         if (isRunning()) {
             CoroutineScope(Dispatchers.IO).launch {
