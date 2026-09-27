@@ -59,6 +59,24 @@ ArasClient supports the following configuration types exposed by the client:
 
 It also supports proxy chains and policy groups where supported by the underlying configuration/core.
 
+### Using Aether with ArasClient
+
+[Aether](https://github.com/patterniha/Aether) (by patterniha) is **not a server config type** — it is a separate
+Rust application that discovers a reachable gateway and exposes a **local SOCKS5 proxy**. It ships no
+Android library, no share-link format, and no JSON profile, so there is nothing for ArasClient to import.
+
+To send ArasClient's traffic out through it, run Aether alongside ArasClient and point a SOCKS profile at
+its listener:
+
+1. Start Aether bound to loopback, e.g. `aether --bind 127.0.0.1:1819`. It has no authentication — never
+   bind it to a LAN or WAN address.
+2. In ArasClient, add a `SOCKS` server with address `127.0.0.1` and port `1819`.
+3. To keep your usual server as the outer hop, put both in a proxy chain; ArasClient links the hops with
+   `sockopt.dialerProxy`.
+
+For a WARP exit without a second app, use a `masque://` profile instead — MASQUE over HTTP/3 to a WARP
+endpoint is the same data path Aether itself uses, and it is supported natively by the bundled core.
+
 ---
 
 ## ⚡ Smart Connect

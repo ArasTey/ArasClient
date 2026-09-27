@@ -253,6 +253,27 @@ class CoreOutboundBuilderTest {
     }
 
     @Test
+    fun `a socks profile can target a local aether gateway`() {
+        // Aether (patterniha/Aether) is a standalone app that exposes a local SOCKS5
+        // listener. Pointing a SOCKS profile at it — optionally as the first hop of a
+        // proxy chain, which CoreConfigManager links with sockopt.dialerProxy — routes
+        // ArasClient's traffic out through Aether's WARP tunnel.
+        val item = ProfileItem(
+            configType = EConfigType.SOCKS,
+            remarks = "aether",
+            server = "127.0.0.1",
+            serverPort = "1819",
+        )
+
+        val outbound = CoreOutboundBuilder.convert(item)
+
+        assertNotNull(outbound)
+        assertEquals("socks", outbound!!.protocol)
+        assertEquals("127.0.0.1", outbound.settings?.address)
+        assertEquals(1819, outbound.settings?.port)
+    }
+
+    @Test
     fun `a profile with a non-numeric port is skipped instead of throwing`() {
         // convertProfile2Outbound only guards a null return, so a thrown
         // NumberFormatException here would abort the whole config build.
