@@ -327,7 +327,6 @@ class AetherCoreTest {
         )
         assertEquals("direct", direct.valueOf("--psiphon-mode"))
         assertNull(direct.valueOf("--psiphon-cdn-ips"))
-        assertNull(direct.valueOf("--psiphon-cdn-sets"))
 
         val cdn = AetherCoreManager.buildArguments(
             profile {
@@ -340,23 +339,25 @@ class AetherCoreTest {
             port = 10819,
         )
         assertEquals("1.2.3.4", cdn.valueOf("--psiphon-cdn-ips"))
-        assertEquals("cloudflare,github", cdn.valueOf("--psiphon-cdn-sets"))
+        // aether 2.1 has no flag for the edge lists; --psiphon-mode and the client's
+        // own built-in list decide. The profile keeps the field for link round-trip.
+        assertTrue(cdn.none { it.startsWith("--psiphon-cdn-sets") })
     }
 
     @Test
-    fun `the bundled psiphon server list is offered unless the profile asks for a fresh one`() {
-        fun listFlag(keepBundled: Boolean?) = AetherCoreManager.buildArguments(
+    fun `the server list is never a flag the core would reject`() {
+        // aether 2.1 takes the list through its psiphon config, not a flag, and
+        // refuses the whole command line over one it does not know.
+        val arguments = AetherCoreManager.buildArguments(
             profile {
                 aetherProtocol = "wg"
                 aetherPsiphon = "chain"
-                aetherPsiphonBundledList = keepBundled
+                aetherPsiphonBundledList = null
             },
             port = 10819,
-        ).valueOf("--psiphon-server-entries")
-
-        assertEquals("shipped-list", listFlag(null))
-        assertEquals("shipped-list", listFlag(true))
-        assertNull(listFlag(false))
+        )
+        assertTrue("--psiphon-server-entries" !in arguments)
+        assertTrue("shipped-list" !in arguments)
     }
 
     @Test

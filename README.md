@@ -82,6 +82,10 @@ runtime because a file in the app's data directory is not executable on Android 
   fails leaves the working identity in place
 - **Psiphon** and **Tor**, each inside the tunnel, around it, or alone with no WARP
 
+A note on Psiphon in this build: the server list is handed over through the core's own
+psiphon config, and the profile's CDN edge-list field is kept for link round-trip but has
+no effect — aether 2.1 decides the edge lists from the Psiphon mode and its built-in list.
+
 Two pairings the core refuses are caught in the editor rather than at connect time, because each is a
 configuration that builds and then does not work: either carrier in *reverse* needs `masque`, and the
 two of them go together only nested, one inside the tunnel and the other around it.

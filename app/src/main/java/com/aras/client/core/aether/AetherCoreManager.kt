@@ -120,8 +120,6 @@ object AetherCoreManager {
     const val CERT_DIR_ENV = "SSL_CERT_DIR"
     const val PSIPHON_CONFIG_ENV = "AETHER_PSIPHON_CONFIG"
     const val PSIPHON_DIR_ENV = "AETHER_PSIPHON_DIR"
-    const val PSIPHON_SERVER_ENTRIES = "--psiphon-server-entries"
-    const val SHIPPED_LIST = "shipped-list"
 
     private val psiphonReady = Regex("psiphon ready|proxy started: psiphon", RegexOption.IGNORE_CASE)
     private val torReady = Regex("tor ready|proxy started: tor", RegexOption.IGNORE_CASE)
@@ -280,15 +278,12 @@ object AetherCoreManager {
                     profile.aetherPsiphonCdnSni?.takeIf { it.isNotBlank() }
                         ?.let { addAll(listOf("--psiphon-cdn-sni", it)) }
                 }
-                if (shape != AetherPsiphonMode.DIRECT) {
-                    AetherPsiphonCdnSet.join(AetherPsiphonCdnSet.parse(profile.aetherPsiphonCdnSets))
-                        ?.let { addAll(listOf("--psiphon-cdn-sets", it)) }
-                }
+                // aether 2.1 has no --psiphon-cdn-sets: which edge lists the client
+                // tries is decided by --psiphon-mode and its own list. The profile
+                // still carries the field so a link from a newer client round-trips.
                 profile.aetherPsiphonRegion?.takeIf { it.isNotBlank() }
                     ?.let { addAll(listOf("--psiphon-region", it)) }
-                if (profile.aetherPsiphonBundledList != false) {
-                    addAll(listOf(PSIPHON_SERVER_ENTRIES, SHIPPED_LIST))
-                }
+
             }
             addAll(listOf("--log-level", logLevel))
         }
@@ -371,7 +366,7 @@ object AetherCoreManager {
             return null
         }
         val process = try {
-            ProcessBuilder(listOf(exe.absolutePath) + withShippedList(context, arguments))
+            ProcessBuilder(listOf(exe.absolutePath) + arguments)
                 .directory(workDir(context))
                 .redirectErrorStream(true)
                 .apply { environment().putAll(coreEnvironment(context, markSession = false)) }
@@ -457,27 +452,10 @@ object AetherCoreManager {
     }
 
     /**
-     * [arguments] with the shipped-list placeholder replaced by the unpacked server list.
-     *
-     * The core is told `shipped-list`, a word it looks for beside itself, which is no
-     * use inside an APK. The real file is unpacked from the bundled list on the way in;
-     * when the list cannot be unpacked the placeholder is left, so the core goes and
-     * fetches a list itself rather than being handed nothing.
+     * The transports Tor's pluggable transport is asked for, in the core's own names.
+     * One binary speaks all of them, so the same path is offered for each.
      */
-    private fun withShippedList(context: Context, arguments: List<String>): List<String> {
-        val index = arguments.indexOf(PSIPHON_SERVER_ENTRIES)
-        if (index < 0 || index + 1 >= arguments.size) return arguments
-        if (arguments[index + 1] != SHIPPED_LIST) return arguments
-        val work = workDir(context)
-        val entries = PsiphonServerList.entriesFile(
-            assetDir = File(Utils.userAssetPath(context)),
-            workDir = work,
-        ) ?: return arguments
-        LogUtil.i(AppConfig.TAG, "AetherCore: Psiphon starts with ${entries.name} from the bundled list")
-        return arguments.toMutableList().apply { this[index + 1] = entries.absolutePath }
-    }
 
-    /** The transports Tor's pluggable transport is asked for, in the core's own names. */
     internal val torTransports = listOf("obfs4", "obfs4proxy", "snowflake", "conjure", "meek")
 
     /** The certificate directories of this device that exist, joined the way Go reads them. */
@@ -500,6 +478,15 @@ object AetherCoreManager {
      * Android has no resolver configuration a Linux-built program could read, so
      * Psiphon is given resolvers of its own for the names it looks up itself.
      */
+    /**
+     * The settings laid over the core's own Psiphon configuration.
+     *
+     * Two things go in it. The resolvers, because Android has no resolver
+     * configuration a Linux-built program could read, and Psiphon looks names up
+     * itself, alone or around the tunnel. And the server list, unpacked from the
+     * bundled one, so a fresh install has servers before it can reach a list on its
+     * own: aether 2.1 takes the list here rather than by a flag of its own.
+     */
     private fun psiphonOverlay(context: Context): File? {
         val dir = File(context.filesDir, "aether-psiphon").apply { mkdirs() }
         val file = File(dir, "config.json")
@@ -507,10 +494,28 @@ object AetherCoreManager {
             .filter { com.aras.client.util.Utils.isPureIpAddress(it) }
             .joinToString(",")
             .ifBlank { DEFAULT_RESOLVERS }
+        val entries = PsiphonServerList.entriesFile(
+            assetDir = File(Utils.userAssetPath(context)),
+            workDir = workDir(context),
+        )?.let { entriesFile ->
+            runCatching {
+                entriesFile.readLines().filter { it.isNotBlank() }
+            }.getOrNull()
+        }
         return runCatching {
-            file.writeText("""{"PropagationChannels":[],"RemoteDnsAddresses":[""" +
+            val parts = mutableListOf<String>()
+            parts += """"RemoteDnsAddresses":[""" +
                 resolvers.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                    .joinToString(",") { """"$it"""" } + "]}")
+                    .joinToString(",") { com.aras.client.util.JsonUtil.toJson(it) } + "]"
+            if (!entries.isNullOrEmpty()) {
+                LogUtil.i(
+                    AppConfig.TAG,
+                    "AetherCore: Psiphon starts with ${entries.size} servers from the bundled list",
+                )
+                parts += """"ServerEntryList":[""" +
+                    entries.joinToString(",") { com.aras.client.util.JsonUtil.toJson(it) } + "]"
+            }
+            file.writeText("{" + parts.joinToString(",") + "}")
             file
         }.getOrNull()
     }
@@ -539,7 +544,7 @@ object AetherCoreManager {
             LogUtil.e(AppConfig.TAG, "AetherCore: ${exe.name} is not present or not executable")
             return false
         }
-        val builder = ProcessBuilder(listOf(exe.absolutePath) + withShippedList(context, core.arguments))
+        val builder = ProcessBuilder(listOf(exe.absolutePath) + core.arguments)
             .directory(workDir(context))
             .redirectErrorStream(true)
         builder.environment().putAll(coreEnvironment(context, markSession = true))
