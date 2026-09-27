@@ -13,12 +13,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.aras.client.core.aether.AetherCore
 import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.core.aether.AetherIdentityManager
 import com.aras.client.core.aether.AetherIdentityStatus
 import com.aras.client.enums.AetherProtocol
 import com.aras.client.enums.AetherPsiphon
 import com.aras.client.enums.AetherTor
+import com.aras.client.fmt.AetherFmt
 import com.aras.client.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.aras.client.AppConfig
 import com.aras.client.R
+import com.aras.client.dto.entities.ProfileItem
+import com.aras.client.extension.nullIfBlank
+import com.aras.client.extension.toastError
 import com.aras.client.enums.EConfigType
 import com.aras.client.ui.compose.FormDropdownField
 import com.aras.client.ui.compose.FormTextField
@@ -175,10 +180,74 @@ class ServerAetherActivity : BaseServerActivity() {
                 keyboardType = KeyboardType.Number
             )
 
+            FormTextField(
+                stringResource(R.string.server_lab_aether_command),
+                uiState.aetherCommand,
+                { uiState.aetherCommand = it },
+            )
+
             AetherCarriersSection(uiState)
 
             AetherIdentitySection(uiState, scope)
         }
+    }
+
+    /**
+     * Refuses a profile the core would not take.
+     *
+     * Each of these builds a valid-looking config and then fails to connect, so they
+     * are caught here rather than left to be discovered on a network.
+     */
+    override fun validateProtocolConfig(config: ProfileItem): Boolean {
+        config.aetherCommand?.nullIfBlank()?.let { command ->
+            if (AetherCore.ofCommand(command) == null) {
+                toastError(R.string.server_lab_aether_command_bad)
+                return false
+            }
+        }
+        when (AetherFmt.normalize(config)) {
+            null -> Unit
+            AetherFmt.Problem.PSIPHON_NEEDS_MASQUE, AetherFmt.Problem.TOR_NEEDS_MASQUE -> {
+                toastError(R.string.server_lab_aether_needs_masque)
+                return false
+            }
+
+            AetherFmt.Problem.TOR_PSIPHON_CONFLICT -> {
+                toastError(R.string.server_lab_aether_tor_psiphon_conflict)
+                return false
+            }
+
+            AetherFmt.Problem.TOR_BRIDGES_MISSING -> {
+                toastError(R.string.server_lab_aether_tor_bridges_missing)
+                return false
+            }
+
+            AetherFmt.Problem.INVALID_EXIT_LOC -> {
+                toastError(R.string.server_lab_aether_exit_loc_bad)
+                return false
+            }
+
+            AetherFmt.Problem.INVALID_DNS -> {
+                toastError(R.string.server_lab_aether_dns_bad)
+                return false
+            }
+
+            AetherFmt.Problem.INVALID_PEER -> {
+                toastError(R.string.server_lab_aether_peer_bad)
+                return false
+            }
+
+            AetherFmt.Problem.INVALID_HOP, AetherFmt.Problem.SHARED_HOP -> {
+                toastError(R.string.server_lab_aether_hop_bad)
+                return false
+            }
+
+            AetherFmt.Problem.INVALID_LISTEN_PORT -> {
+                toastError(R.string.server_lab_aether_listen_port_bad)
+                return false
+            }
+        }
+        return true
     }
 
     /**

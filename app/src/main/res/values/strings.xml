@@ -58,6 +58,7 @@
     <string name="server_lab_aether_dns">Resolvers</string>
     <string name="server_lab_aether_exit_loc">Exit location rule</string>
     <string name="server_lab_aether_listen_port">Local listen port</string>
+    <string name="server_lab_aether_command">Aether command, used in place of these settings</string>
     <string name="server_lab_aether_scan">Scan for an endpoint</string>
     <string name="server_lab_aether_new_key">Get a new WARP key</string>
     <string name="server_lab_aether_identity">WARP identity</string>
@@ -78,6 +79,13 @@
     <string name="server_lab_aether_tor_relays">Bridge source</string>
     <string name="server_lab_aether_needs_masque">This setting needs the masque protocol: it carries TCP only, and WARP WireGuard endpoints answer on UDP.</string>
     <string name="server_lab_aether_tor_psiphon_conflict">Tor and Psiphon go together only nested, one inside the tunnel and the other around it.</string>
+    <string name="server_lab_aether_command_bad">That aether command cannot be run.</string>
+    <string name="server_lab_aether_tor_bridges_missing">Tor bridges are set to the profile\'s own, but no bridge lines were given.</string>
+    <string name="server_lab_aether_exit_loc_bad">The exit rule must be country codes, e.g. DE,NL, optionally prefixed with !</string>
+    <string name="server_lab_aether_dns_bad">A resolver must be an address, with or without a port.</string>
+    <string name="server_lab_aether_peer_bad">The gateway must be an IP address with a port.</string>
+    <string name="server_lab_aether_hop_bad">A two hop tunnel needs two different gateways, each an IP with a port.</string>
+    <string name="server_lab_aether_listen_port_bad">That listen port cannot be used.</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
     <string name="sub_setting_announcement">Announcement</string>
     <string name="sub_setting_creator_message">Creator message</string>
@@ -265,7 +273,7 @@
     <string name="server_lab_pinned_ca256">Certificate fingerprint (SHA-256)</string>
     <string name="server_lab_browser_dialer">Enable Browser Dialer</string>
     <string name="server_lab_browser_dialer_tip">Only supports xhttp (packet-up) and ws outbound; TLS-related settings may be ignored or conflict</string>
-    <string name="toast_allow_insecure_deprecated">Current node uses an unencrypted connection. Your communication may be directly viewed by network intermediate facilities controlled by authoritarian governments.\nFor security reasons, such nodes cannot be connected via Xray core version 26.2.6+.\nIf it is a self-built node, please enable security encryption such as TLS, or pin the certificate pinnedCA256.\nIf it is a provider node, please contact the service provider to complete the technical upgrade. If the service provider refuses to cooperate, it is recommended to switch to a provider that pays more attention to user security.</string>
+    <string name="toast_allow_insecure_deprecated">Current node uses an unencrypted connection. Your communication may be directly viewed by network intermediate facilities controlled by authoritarian governments.\nFor security reasons, such nodes cannot be connected on current Xray cores.\nIf it is a self-built node, please enable security encryption such as TLS, or pin the certificate with pinnedCA256.\nIf it is a provider node, please contact the service provider to complete the technical upgrade. If the service provider refuses to cooperate, it is recommended to switch to a provider that pays more attention to user security.</string>
     <string name="pinned_ca256_action_fetch">Fetch certificate fingerprint</string>
     <string name="toast_fetch_cert_sha256_success">Certificate fingerprint fetched successfully</string>
     <string name="toast_fetch_cert_sha256_failed">Failed to fetch certificate fingerprint</string>

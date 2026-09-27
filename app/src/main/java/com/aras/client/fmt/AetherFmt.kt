@@ -164,10 +164,23 @@ object AetherFmt : FmtBase() {
      * the tunnel and the other around it.
      */
     fun normalize(config: ProfileItem): Problem? =
-        normalizeDns(config)
+        normalizeListenPort(config)
+            ?: normalizeDns(config)
             ?: normalizeExitLoc(config)
             ?: normalizePsiphon(config)
             ?: normalizeTor(config)
+
+    /** The listen port, when the profile names one, has to name a port. */
+    private fun normalizeListenPort(config: ProfileItem): Problem? {
+        val text = config.aetherListenPort?.trim().orEmpty()
+        if (text.isEmpty()) {
+            config.aetherListenPort = null
+            return null
+        }
+        if (listenPortOf(text) == null) return Problem.INVALID_LISTEN_PORT
+        config.aetherListenPort = text
+        return null
+    }
 
     /** The resolvers, each an address with or without a port; written back comma-separated. */
     private fun normalizeDns(config: ProfileItem): Problem? {

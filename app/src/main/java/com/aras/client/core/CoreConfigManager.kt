@@ -307,9 +307,11 @@ object CoreConfigManager {
         existingTags: MutableSet<String>,
         xrayConfig: XrayConfig,
     ) {
-        val chainOutbounds = resolvedOutbound.resolvedProfiles
-            .mapNotNull { convertProfile2Outbound(it) }
-            .toMutableList()
+        // Pair each outbound with the profile it came from: an Aether profile lowers to a
+        // socks outbound, so the outbound alone cannot say which hop it was.
+        val hopPairs = resolvedOutbound.resolvedProfiles
+            .mapNotNull { profile -> convertProfile2Outbound(profile)?.let { it to profile } }
+        val chainOutbounds = hopPairs.map { it.first }.toMutableList()
         if (chainOutbounds.isEmpty()) {
             LogUtil.w(AppConfig.TAG, "PROXYCHAIN resolved outbound '${resolvedOutbound.tag}' has no valid profiles, skipping")
             return
@@ -337,6 +339,20 @@ object CoreConfigManager {
             LogUtil.w(
                 AppConfig.TAG,
                 "PROXYCHAIN resolved outbound '${resolvedOutbound.tag}' has colliding hop tags, skipping"
+            )
+            return
+        }
+
+        // An Aether hop reaches only the aether core on loopback, so it can carry the
+        // hops before it but must itself be the one that dials the internet: nothing
+        // can be dialed through it, and it cannot be dialed through anything. That is
+        // the last hop of the chain.
+        val aetherAt = hopPairs.indexOfLast { it.second.configType == EConfigType.AETHER }
+        if (aetherAt >= 0 && aetherAt != chainOutbounds.lastIndex) {
+            LogUtil.w(
+                AppConfig.TAG,
+                "PROXYCHAIN resolved outbound '${resolvedOutbound.tag}' has an Aether hop that is not " +
+                    "the exit hop, skipping: the core it dials is on loopback and cannot be chained through"
             )
             return
         }

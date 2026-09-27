@@ -18,6 +18,7 @@ import com.aras.client.enums.AetherScanMode
 import com.aras.client.enums.AetherTransport
 import com.aras.client.fmt.AetherFmt
 import com.aras.client.handler.SettingsManager
+import com.aras.client.util.Utils
 import com.aras.client.util.LogUtil
 import java.io.File
 import java.io.IOException
@@ -56,6 +57,7 @@ object AetherCoreManager {
      * this is how a later session recognises and reaps such an orphan.
      */
     const val OWNER_ENV = "ARASCLIENT_AETHER_OWNER"
+
 
     /** Set on the session core and on no other, so a scan or a test core can be told apart. */
     const val SESSION_ENV = "ARASCLIENT_AETHER_SESSION"
@@ -325,13 +327,14 @@ object AetherCoreManager {
         onOutput: (String) -> Unit,
         ready: (String) -> Boolean,
     ): String? {
+        reapStale()
         val exe = binary(context)
         if (!exe.canExecute()) {
             LogUtil.e(AppConfig.TAG, "AetherCore: ${exe.name} is not present or not executable")
             return null
         }
         val process = try {
-            ProcessBuilder(listOf(exe.absolutePath) + arguments)
+            ProcessBuilder(listOf(exe.absolutePath) + withShippedList(context, arguments))
                 .directory(workDir(context))
                 .redirectErrorStream(true)
                 .apply { environment().putAll(coreEnvironment(context, markSession = false)) }
@@ -399,6 +402,27 @@ object AetherCoreManager {
         }
     }
 
+    /**
+     * [arguments] with the shipped-list placeholder replaced by the unpacked server list.
+     *
+     * The core is told `shipped-list`, a word it looks for beside itself, which is no
+     * use inside an APK. The real file is unpacked from the bundled list on the way in;
+     * when the list cannot be unpacked the placeholder is left, so the core goes and
+     * fetches a list itself rather than being handed nothing.
+     */
+    private fun withShippedList(context: Context, arguments: List<String>): List<String> {
+        val index = arguments.indexOf(PSIPHON_SERVER_ENTRIES)
+        if (index < 0 || index + 1 >= arguments.size) return arguments
+        if (arguments[index + 1] != SHIPPED_LIST) return arguments
+        val work = workDir(context)
+        val entries = PsiphonServerList.entriesFile(
+            assetDir = File(Utils.userAssetPath(context)),
+            workDir = work,
+        ) ?: return arguments
+        LogUtil.i(AppConfig.TAG, "AetherCore: Psiphon starts with ${entries.name} from the bundled list")
+        return arguments.toMutableList().apply { this[index + 1] = entries.absolutePath }
+    }
+
     /** The transports Tor's pluggable transport is asked for, in the core's own names. */
     internal val torTransports = listOf("obfs4", "obfs4proxy", "snowflake", "conjure", "meek")
 
@@ -455,12 +479,13 @@ object AetherCoreManager {
         onOutput: (String) -> Unit,
     ): Boolean {
         stop()
+        reapStale()
         val exe = binary(context)
         if (!exe.canExecute()) {
             LogUtil.e(AppConfig.TAG, "AetherCore: ${exe.name} is not present or not executable")
             return false
         }
-        val builder = ProcessBuilder(listOf(exe.absolutePath) + core.arguments)
+        val builder = ProcessBuilder(listOf(exe.absolutePath) + withShippedList(context, core.arguments))
             .directory(workDir(context))
             .redirectErrorStream(true)
         builder.environment().putAll(coreEnvironment(context, markSession = true))
@@ -536,6 +561,37 @@ object AetherCoreManager {
             block()
         } finally {
             if (startedHere) stop()
+        }
+    }
+
+    /**
+     * Kills a core left behind by an app process that died.
+     *
+     * Rust ignores SIGPIPE and the core has no parent-death handling, so a core whose
+     * owner was killed keeps running and keeps its loopback listener — which then stops
+     * the next session from binding it. Every core is started with the owning pid in its
+     * environment, and [OWNER_PID] is a process of ours, so anything carrying it and
+     * still alive is an orphan of this app and nothing else.
+     */
+    fun reapStale() {
+        val mine = android.os.Process.myPid()
+        runCatching {
+            File("/proc").listFiles()
+                ?.filter { it.isDirectory && it.name.toIntOrNull() != null }
+                ?.forEach { dir ->
+                    val pid = dir.name.toIntOrNull() ?: return@forEach
+                    if (pid == mine) return@forEach
+                    val environ = runCatching { File(dir, "environ").readBytes() }.getOrNull()
+                        ?: return@forEach
+                    val env = environ.toString(Charsets.ISO_8859_1)
+                    if (!env.contains("$OWNER_ENV=$mine")) return@forEach
+                    LogUtil.w(AppConfig.TAG, "AetherCore: reaping core left behind in pid $pid")
+                    runCatching {
+                        android.os.Process.killProcess(pid)
+                    }
+                }
+        }.onFailure {
+            LogUtil.d(AppConfig.TAG, "AetherCore: no stale core to reap (${it.message})")
         }
     }
 
