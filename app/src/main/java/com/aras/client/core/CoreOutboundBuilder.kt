@@ -310,23 +310,14 @@ object CoreOutboundBuilder {
             return list?.takeIf { it.isNotEmpty() }
         }
 
-        outboundBean.settings?.peers?.firstOrNull()?.let { peer ->
-            peer.junkPacketCount = parseJunkInt(profileItem.junkPacketCount)
-            peer.junkPacketMinSize = parseJunkInt(profileItem.junkPacketMinSize)
-            peer.junkPacketMaxSize = parseJunkInt(profileItem.junkPacketMaxSize)
-            peer.initPacketJunkSize = parseJunkInt(profileItem.initPacketJunkSize)
-            peer.responsePacketJunkSize = parseJunkInt(profileItem.responsePacketJunkSize)
-            peer.initPacketJunkHeader = parseJunkHeader(profileItem.initPacketJunkHeader)
-            peer.responsePacketJunkHeader = parseJunkHeader(profileItem.responsePacketJunkHeader)
-            peer.cookiePacketJunkHeader = parseJunkHeader(profileItem.cookiePacketJunkHeader)
-            peer.transportPacketJunkHeader = parseJunkHeader(profileItem.transportPacketJunkHeader)
-        }
         // Cloudflare WARP endpoints filter IPv6 handshakes; the v6 fallback
         // dial fails with "network is unreachable". Prefer IPv4 here and
         // drop v6 local addresses so the tunnel binds v4 only.
         // Profiles imported before the junk params existed (or with defaults)
         // carry none — apply AmneziaWG's standard obfuscation defaults at
         // connection time so old saved profiles work without re-import.
+        // This must run before the values are copied onto the peer, otherwise
+        // the defaults only take effect on a later rebuild.
         fun blank(v: String?) = v.isNullOrBlank()
         if (blank(profileItem.junkPacketCount) && blank(profileItem.junkPacketMinSize) &&
             blank(profileItem.junkPacketMaxSize) && blank(profileItem.initPacketJunkSize) &&
@@ -343,6 +334,18 @@ object CoreOutboundBuilder {
             profileItem.responsePacketJunkHeader = "2"
             profileItem.cookiePacketJunkHeader = "3"
             profileItem.transportPacketJunkHeader = "4"
+        }
+
+        outboundBean.settings?.peers?.firstOrNull()?.let { peer ->
+            peer.junkPacketCount = parseJunkInt(profileItem.junkPacketCount)
+            peer.junkPacketMinSize = parseJunkInt(profileItem.junkPacketMinSize)
+            peer.junkPacketMaxSize = parseJunkInt(profileItem.junkPacketMaxSize)
+            peer.initPacketJunkSize = parseJunkInt(profileItem.initPacketJunkSize)
+            peer.responsePacketJunkSize = parseJunkInt(profileItem.responsePacketJunkSize)
+            peer.initPacketJunkHeader = parseJunkHeader(profileItem.initPacketJunkHeader)
+            peer.responsePacketJunkHeader = parseJunkHeader(profileItem.responsePacketJunkHeader)
+            peer.cookiePacketJunkHeader = parseJunkHeader(profileItem.cookiePacketJunkHeader)
+            peer.transportPacketJunkHeader = parseJunkHeader(profileItem.transportPacketJunkHeader)
         }
         // Kernel TUN cannot apply AmneziaWG junk packets — always use the
         // userspace (gVisor) TUN for AWG profiles.
@@ -372,8 +375,12 @@ object CoreOutboundBuilder {
             profileItem.security = AppConfig.TLS
         }
 
+        // populateTransportSettings derives the transport from profileItem.network, so
+        // it has to be set on the profile — assigning it to the stream settings first
+        // was silently overwritten and left the anytls branch unreachable.
+        profileItem.network = NetworkType.ANYTLS.type
+
         val sni = outboundBean.streamSettings?.let {
-            it.network = NetworkType.ANYTLS.type
             populateTransportSettings(it, profileItem)
         }
 

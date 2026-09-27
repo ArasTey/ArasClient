@@ -163,6 +163,7 @@ object CoreServiceManager {
         val result = CoreConfigManager.getXrayConfig(service, guid)
         LogUtil.d(AppConfig.TAG, result.content)
         if (!result.status) {
+            LogUtil.e(AppConfig.TAG, "Config build failed: ${result.errorMessage}")
             error(result.errorMessage.ifBlank { "Failed to get Xray config" })
         }
 
@@ -186,6 +187,11 @@ object CoreServiceManager {
         coreController.startLoop(result.content, tunFd)
 
         if (!isRunning()) {
+            // The core parses the config in Go and reports *why* it refused only through
+            // its own log. Dump the config at error level so a rejection stays
+            // diagnosable from a release build, where the debug-level dump above is
+            // compiled away.
+            LogUtil.e(AppConfig.TAG, "Core failed to start. Generated config:\n${result.content}")
             error("Core failed to start")
         }
 

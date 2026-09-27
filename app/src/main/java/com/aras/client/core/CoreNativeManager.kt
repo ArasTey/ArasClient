@@ -55,16 +55,37 @@ object CoreNativeManager {
     /**
      * Get Xray core version.
      *
-     * @return Version string of the Xray core
+     * Never throws: the About and update screens must still render if the native
+     * library is broken. A failure here is logged at error level, because
+     * "Unknown" on the About screen is the only symptom of a broken binding and
+     * is otherwise invisible.
+     *
+     * @return Version string of the Xray core, or "Unknown" if it cannot be read
      */
     fun getLibVersion(): String {
         return try {
-            ArasCore.checkVersionX()
+            ArasCore.checkVersionX().also {
+                if (it.isBlank()) {
+                    LogUtil.e(AppConfig.TAG, "Core reported a blank version string")
+                }
+            }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to check Xray version", e)
-            "Unknown"
+            UNKNOWN_VERSION
         }
     }
+
+    /**
+     * Strict counterpart of [getLibVersion] for callers that must not proceed with an
+     * unknown core. Throws instead of returning a placeholder.
+     */
+    fun requireLibVersion(): String {
+        val raw = ArasCore.checkVersionX()
+        check(raw.isNotBlank()) { "Core reported a blank version string" }
+        return raw
+    }
+
+    const val UNKNOWN_VERSION = "Unknown"
 
     /**
      * Measure outbound connection delay.
