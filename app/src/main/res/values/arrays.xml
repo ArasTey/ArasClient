@@ -22,18 +22,39 @@
     </string-array>
 
     <string-array name="aether_protocols" translatable="false">
-        <item>wireguard</item>
+        <item>wg</item>
         <item>masque</item>
+        <item>gool</item>
+        <item>mim</item>
     </string-array>
 
     <string-array name="aether_ip_versions" translatable="false">
-        <item>ipv4</item>
-        <item>ipv6</item>
+        <item>v4</item>
+        <item>v6</item>
+        <item>both</item>
     </string-array>
 
     <string-array name="aether_obfuscations" translatable="false">
-        <item>off</item>
         <item>auto</item>
+        <item>off</item>
+        <item>light</item>
+        <item>firewall</item>
+        <item>balanced</item>
+        <item>gfw</item>
+        <item>aggressive</item>
+    </string-array>
+
+    <string-array name="aether_scan_modes" translatable="false">
+        <item>balanced</item>
+        <item>turbo</item>
+        <item>thorough</item>
+        <item>verified</item>
+        <item>ironclad</item>
+    </string-array>
+
+    <string-array name="aether_transports" translatable="false">
+        <item>h3</item>
+        <item>h2</item>
     </string-array>
 
     <string-array name="networks" translatable="false">
@@ -59,7 +80,7 @@
         <item>utp</item>
         <item>wechat-video</item>
         <item>dtls</item>
-        <item>wireguard</item>
+        <item>wg</item>
         <item>dns</item>
     </string-array>
 

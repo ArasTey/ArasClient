@@ -57,9 +57,20 @@ class ServerUiState(
     xdriveRemoteFolder: String = "",
     xdriveSecrets: String = "",
     xdriveExtra: String = "",
-    aetherProtocol: String = "wireguard",
-    aetherIpVersion: String = "ipv4",
+    aetherProtocol: String = "wg",
+    aetherTransport: String = "h3",
+    aetherScanMode: String = "balanced",
     aetherObfuscation: String = "auto",
+    aetherIpVersion: String = "v4",
+    aetherWiwOuter: String = "",
+    aetherWiwInner: String = "",
+    aetherFragment: Boolean = false,
+    aetherFragmentSize: String = "",
+    aetherFragmentDelay: String = "",
+    aetherEch: Boolean = false,
+    aetherDns: String = "",
+    aetherExitLoc: String = "",
+    aetherListenPort: String = "",
     finalMask: String = "",
     seed: String = "",
     kcpMtu: String = "",
@@ -123,8 +134,19 @@ class ServerUiState(
     var xdriveSecrets by mutableStateOf(xdriveSecrets)
     var xdriveExtra by mutableStateOf(xdriveExtra)
     var aetherProtocol by mutableStateOf(aetherProtocol)
-    var aetherIpVersion by mutableStateOf(aetherIpVersion)
+    var aetherTransport by mutableStateOf(aetherTransport)
+    var aetherScanMode by mutableStateOf(aetherScanMode)
     var aetherObfuscation by mutableStateOf(aetherObfuscation)
+    var aetherIpVersion by mutableStateOf(aetherIpVersion)
+    var aetherWiwOuter by mutableStateOf(aetherWiwOuter)
+    var aetherWiwInner by mutableStateOf(aetherWiwInner)
+    var aetherFragment by mutableStateOf(aetherFragment)
+    var aetherFragmentSize by mutableStateOf(aetherFragmentSize)
+    var aetherFragmentDelay by mutableStateOf(aetherFragmentDelay)
+    var aetherEch by mutableStateOf(aetherEch)
+    var aetherDns by mutableStateOf(aetherDns)
+    var aetherExitLoc by mutableStateOf(aetherExitLoc)
+    var aetherListenPort by mutableStateOf(aetherListenPort)
     var finalMask by mutableStateOf(finalMask)
     var seed by mutableStateOf(seed)
     var kcpMtu by mutableStateOf(kcpMtu)
@@ -205,8 +227,19 @@ class ServerUiState(
             xdriveSecrets = xdriveSecrets.nullIfBlank(),
             xdriveExtra = xdriveExtra.nullIfBlank(),
             aetherProtocol = aetherProtocol,
-            aetherIpVersion = aetherIpVersion,
+            aetherTransport = aetherTransport,
+            aetherScanMode = aetherScanMode,
             aetherObfuscation = aetherObfuscation,
+            aetherIpVersion = aetherIpVersion,
+            aetherWiwOuter = aetherWiwOuter.nullIfBlank(),
+            aetherWiwInner = aetherWiwInner.nullIfBlank(),
+            aetherFragment = aetherFragment,
+            aetherFragmentSize = aetherFragmentSize.nullIfBlank(),
+            aetherFragmentDelay = aetherFragmentDelay.nullIfBlank(),
+            aetherEch = aetherEch,
+            aetherDns = aetherDns.nullIfBlank(),
+            aetherExitLoc = aetherExitLoc.nullIfBlank(),
+            aetherListenPort = aetherListenPort.nullIfBlank(),
             finalMask = finalMask.nullIfBlank(),
             seed = seed.nullIfBlank(),
             kcpMtu = kcpMtu.toIntOrNull(),
@@ -278,9 +311,20 @@ class ServerUiState(
                 xdriveRemoteFolder = initialConfig.xdriveRemoteFolder ?: "",
                 xdriveSecrets = initialConfig.xdriveSecrets ?: "",
                 xdriveExtra = initialConfig.xdriveExtra ?: "",
-                aetherProtocol = initialConfig.aetherProtocol ?: "wireguard",
-                aetherIpVersion = initialConfig.aetherIpVersion ?: "ipv4",
+                aetherProtocol = initialConfig.aetherProtocol ?: "wg",
+                aetherTransport = initialConfig.aetherTransport ?: "h3",
+                aetherScanMode = initialConfig.aetherScanMode ?: "balanced",
                 aetherObfuscation = initialConfig.aetherObfuscation ?: "auto",
+                aetherIpVersion = initialConfig.aetherIpVersion ?: "v4",
+                aetherWiwOuter = initialConfig.aetherWiwOuter ?: "",
+                aetherWiwInner = initialConfig.aetherWiwInner ?: "",
+                aetherFragment = initialConfig.aetherFragment == true,
+                aetherFragmentSize = initialConfig.aetherFragmentSize ?: "",
+                aetherFragmentDelay = initialConfig.aetherFragmentDelay ?: "",
+                aetherEch = initialConfig.aetherEch == true,
+                aetherDns = initialConfig.aetherDns ?: "",
+                aetherExitLoc = initialConfig.aetherExitLoc ?: "",
+                aetherListenPort = initialConfig.aetherListenPort ?: "",
                 finalMask = initialConfig.finalMask ?: "",
                 seed = initialConfig.seed ?: "",
                 kcpMtu = initialConfig.kcpMtu?.toString() ?: "",

@@ -243,17 +243,11 @@ object AppConfig {
     const val AETHER = "aether://"
     const val ARASFMTS = "xrayn://"
 
-    /** Aether profile transports: the gateway protocol we dial. */
-    const val AETHER_PROTOCOL_WIREGUARD = "wireguard"
-    const val AETHER_PROTOCOL_MASQUE = "masque"
+    /** Where the aether core is published; the app fetches its own Android build from here. */
+    const val AETHER_URL = "https://github.com/CluvexStudio/aether"
 
-    /** Aether IP version preference. */
-    const val AETHER_IPV4 = "ipv4"
-    const val AETHER_IPV6 = "ipv6"
-
-    /** Aether obfuscation: whether to apply AmneziaWG junk packets. */
-    const val AETHER_OBFUSCATION_OFF = "off"
-    const val AETHER_OBFUSCATION_AUTO = "auto"
+    /** The loopback port an aether core listens on unless the profile says otherwise. */
+    const val PORT_AETHER_SOCKS = "10819"
 
     /** Give a good name to this, IDK*/
     const val VPN = "VPN"

@@ -83,11 +83,26 @@ data class ProfileItem(
     /** Raw JSON for any further xdriveSettings keys not modelled individually. */
     var xdriveExtra: String? = null,
 
-    // Aether / gateway profile. `aetherProtocol` picks the transport we dial
-    // (wireguard or masque); the rest shape the generated outbound.
+    // Aether / gateway profile. Field names match PattNG's so a .arasc file moves
+    // between the two clients unchanged; values are the ones aether itself uses
+    // (protocol "wg" not "wireguard", ip "v6" not "ipv6", obfuscation under "noize").
     var aetherProtocol: String? = null,
-    var aetherIpVersion: String? = null,
+    var aetherTransport: String? = null,
+    var aetherScanMode: String? = null,
     var aetherObfuscation: String? = null,
+    var aetherIpVersion: String? = null,
+    /** Two-hop tunnels (gool, mim) name their outer and inner gateway instead of one endpoint. */
+    var aetherWiwOuter: String? = null,
+    var aetherWiwInner: String? = null,
+    var aetherFragment: Boolean? = null,
+    var aetherFragmentSize: String? = null,
+    var aetherFragmentDelay: String? = null,
+    var aetherEch: Boolean? = null,
+    var aetherDns: String? = null,
+    var aetherExitLoc: String? = null,
+    var aetherListenPort: String? = null,
+    /** A command line used in place of the settings. */
+    var aetherCommand: String? = null,
     @Deprecated("Use pinnedCA256")
     var pinSHA256: String? = null,
     var bandwidthDown: String? = null,

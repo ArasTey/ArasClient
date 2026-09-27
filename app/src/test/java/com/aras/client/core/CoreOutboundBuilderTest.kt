@@ -262,9 +262,9 @@ class CoreOutboundBuilderTest {
             publicKey = "pub",
             secretKey = "sec",
             localAddress = "172.16.0.2/32",
-            aetherProtocol = AppConfig.AETHER_PROTOCOL_WIREGUARD,
-            aetherIpVersion = AppConfig.AETHER_IPV4,
-            aetherObfuscation = AppConfig.AETHER_OBFUSCATION_AUTO,
+            aetherProtocol = "wg",
+            aetherIpVersion = "v4",
+            aetherObfuscation = "auto",
         )
 
         val outbound = CoreOutboundBuilder.convert(item)
@@ -290,8 +290,8 @@ class CoreOutboundBuilderTest {
             serverPort = "2408",
             publicKey = "pub",
             secretKey = "sec",
-            aetherProtocol = AppConfig.AETHER_PROTOCOL_WIREGUARD,
-            aetherObfuscation = AppConfig.AETHER_OBFUSCATION_OFF,
+            aetherProtocol = "wg",
+            aetherObfuscation = "off",
         )
 
         val peer = CoreOutboundBuilder.convert(item)?.settings?.peers?.firstOrNull()
@@ -306,8 +306,8 @@ class CoreOutboundBuilderTest {
             configType = EConfigType.AETHER,
             server = "1.2.3.4",
             serverPort = "443",
-            aetherProtocol = AppConfig.AETHER_PROTOCOL_MASQUE,
-            aetherObfuscation = AppConfig.AETHER_OBFUSCATION_AUTO,
+            aetherProtocol = "masque",
+            aetherObfuscation = "auto",
         )
 
         val outbound = CoreOutboundBuilder.convert(item)
