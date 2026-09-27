@@ -100,6 +100,8 @@ data class XrayConfig(
             var mtu: Int? = null,
             var domainStrategy: String? = null,
             var noKernelTun: Boolean? = null,
+            /*MASQUE*/
+            var remoteDNS: List<String>? = null,
         ) {
             data class WireGuardBean(
                 var publicKey: String = "",
@@ -133,6 +135,8 @@ data class XrayConfig(
             var grpcSettings: GrpcSettingsBean? = null,
             var hysteriaSettings: HysteriaSettingsBean? = null,
             var anytlsSettings: AnytlsSettingsBean? = null,
+            var masqueSettings: MasqueSettingsBean? = null,
+            var xdriveSettings: XdriveSettingsBean? = null,
             var finalmask: Any? = null,
             val dsSettings: Any? = null,
             var sockopt: SockoptBean? = null
@@ -266,6 +270,33 @@ data class XrayConfig(
 
             data class AnytlsSettingsBean(
                 var password: String? = null
+            )
+
+            /** MASQUE transport. `path` supports the {target} and {ipproto} variables. */
+            data class MasqueSettingsBean(
+                var host: String? = null,
+                var path: String? = null,
+                var headers: Map<String, String>? = null
+            )
+
+            /**
+             * XDRIVE transport — tunnels through remote storage (e.g. Google Drive) and
+             * deliberately ignores IP allowlists. All fields optional; the core picks
+             * its own defaults for anything left null.
+             */
+            data class XdriveSettingsBean(
+                var remoteFolder: String? = null,
+                var service: String? = null,
+                var secrets: List<String>? = null,
+                var segmentBytes: Int? = null,
+                var flushIntervalMs: Int? = null,
+                var pollIntervalMs: Int? = null,
+                var maxPollIntervalMs: Int? = null,
+                var sessionTtlSeconds: Int? = null,
+                var concurrency: Int? = null,
+                var eagerWindowMs: Int? = null,
+                var holeTimeoutMs: Int? = null,
+                var template: Any? = null
             )
 
             //https://xtls.github.io/config/transport.html#finalmaskobject

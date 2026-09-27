@@ -588,6 +588,12 @@ class MainActivity : HelperBaseComponentActivity() {
             toastError(R.string.protected_config_hidden)
             return
         }
+        if (!profile.configType.hasEditor) {
+            // Import-only protocols have no editor. Falling through to
+            // ServerHttpActivity would save the profile back as an HTTP proxy.
+            toastError(getString(R.string.no_editor_for_protocol, profile.configType.name))
+            return
+        }
         val activityClass = when (profile.configType) {
             EConfigType.CUSTOM -> ServerCustomConfigActivity::class.java
             EConfigType.POLICYGROUP -> ServerGroupActivity::class.java

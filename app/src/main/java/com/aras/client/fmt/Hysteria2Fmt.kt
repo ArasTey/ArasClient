@@ -36,6 +36,11 @@ object Hysteria2Fmt : FmtBase() {
             config.security = queryParam["security"] ?: AppConfig.TLS
             config.obfsPassword = queryParam["obfs-password"]
             config.portHopping = queryParam["mport"]
+            // Read by the hysteria transport branch of the outbound builder; without
+            // these a shared link silently loses the tunnel's bandwidth limits.
+            config.portHoppingInterval = queryParam["hop-interval"]
+            config.bandwidthUp = queryParam["upmbps"]
+            config.bandwidthDown = queryParam["downmbps"]
             config.pinnedCA256 = queryParam["pinSHA256"]
 
         }
@@ -64,6 +69,9 @@ object Hysteria2Fmt : FmtBase() {
         if (config.portHopping.isNotNullEmpty()) {
             dicQuery["mport"] = config.portHopping.orEmpty()
         }
+        config.portHoppingInterval?.nullIfBlank()?.let { dicQuery["hop-interval"] = it }
+        config.bandwidthUp?.nullIfBlank()?.let { dicQuery["upmbps"] = it }
+        config.bandwidthDown?.nullIfBlank()?.let { dicQuery["downmbps"] = it }
         if (config.pinnedCA256.isNotNullEmpty()) {
             dicQuery["pinSHA256"] = config.pinnedCA256.orEmpty()
         }

@@ -237,6 +237,9 @@ object AppConfig {
     const val HY2 = "hy2://"
     const val ANYTLS = "anytls://"
     const val AMNEZIAWG = "awg://"
+    // Available in the bundled core (patterniha 26.9.27+). These are import-only:
+    // there is no "Add manually" editor for them, they arrive via link or .arasc.
+    const val MASQUE = "masque://"
     const val ARASFMTS = "xrayn://"
 
     /** Give a good name to this, IDK*/

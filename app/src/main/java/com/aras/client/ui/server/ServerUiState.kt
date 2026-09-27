@@ -53,6 +53,10 @@ class ServerUiState(
     host: String = "",
     path: String = "",
     xhttpExtra: String = "",
+    xdriveService: String = "",
+    xdriveRemoteFolder: String = "",
+    xdriveSecrets: String = "",
+    xdriveExtra: String = "",
     finalMask: String = "",
     seed: String = "",
     kcpMtu: String = "",
@@ -111,6 +115,10 @@ class ServerUiState(
     var host by mutableStateOf(host)
     var path by mutableStateOf(path)
     var xhttpExtra by mutableStateOf(xhttpExtra)
+    var xdriveService by mutableStateOf(xdriveService)
+    var xdriveRemoteFolder by mutableStateOf(xdriveRemoteFolder)
+    var xdriveSecrets by mutableStateOf(xdriveSecrets)
+    var xdriveExtra by mutableStateOf(xdriveExtra)
     var finalMask by mutableStateOf(finalMask)
     var seed by mutableStateOf(seed)
     var kcpMtu by mutableStateOf(kcpMtu)
@@ -186,6 +194,10 @@ class ServerUiState(
             host = host,
             path = path,
             xhttpExtra = xhttpExtra.nullIfBlank(),
+            xdriveService = xdriveService.nullIfBlank(),
+            xdriveRemoteFolder = xdriveRemoteFolder.nullIfBlank(),
+            xdriveSecrets = xdriveSecrets.nullIfBlank(),
+            xdriveExtra = xdriveExtra.nullIfBlank(),
             finalMask = finalMask.nullIfBlank(),
             seed = seed.nullIfBlank(),
             kcpMtu = kcpMtu.toIntOrNull(),
@@ -253,6 +265,10 @@ class ServerUiState(
                 host = initialConfig.host ?: "",
                 path = initialConfig.path ?: "",
                 xhttpExtra = initialConfig.xhttpExtra ?: "",
+                xdriveService = initialConfig.xdriveService ?: "",
+                xdriveRemoteFolder = initialConfig.xdriveRemoteFolder ?: "",
+                xdriveSecrets = initialConfig.xdriveSecrets ?: "",
+                xdriveExtra = initialConfig.xdriveExtra ?: "",
                 finalMask = initialConfig.finalMask ?: "",
                 seed = initialConfig.seed ?: "",
                 kcpMtu = initialConfig.kcpMtu?.toString() ?: "",

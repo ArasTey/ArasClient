@@ -72,6 +72,16 @@ data class ProfileItem(
     var obfsPassword: String? = null,
     var portHopping: String? = null,
     var portHoppingInterval: String? = null,
+
+    // MASQUE: the server-side resolver list the proxy should use, comma separated.
+    var remoteDNS: String? = null,
+
+    // XDRIVE transport.
+    var xdriveService: String? = null,
+    var xdriveRemoteFolder: String? = null,
+    var xdriveSecrets: String? = null,
+    /** Raw JSON for any further xdriveSettings keys not modelled individually. */
+    var xdriveExtra: String? = null,
     @Deprecated("Use pinnedCA256")
     var pinSHA256: String? = null,
     var bandwidthDown: String? = null,

@@ -53,7 +53,9 @@ PattNG itself documents additions such as `cipherSuites`, unsafe fingerprint con
 
 ArasClient supports the following configuration types exposed by the client:
 
-`VLESS` · `VMess` · `Trojan` · `Shadowsocks` · `Hysteria2` · `WireGuard` · `SOCKS` · `HTTP`
+`VLESS` · `VMess` · `Trojan` · `Shadowsocks` · `Hysteria2` · `Hysteria` · `WireGuard` · `SOCKS` · `HTTP` · `AnyTLS` · `AmneziaWG` · `MASQUE`
+
+`MASQUE` is import-only: it arrives through a `masque://` link, a pasted config, a QR code, or a `.arasc` file, and deliberately has no "Add manually" entry — there is no editor screen for it, so the server menu hides Edit for it rather than opening an editor that would save the profile back as a different protocol. The `masque` and `xdrive` transports appear in the transport picker of any protocol that supports them.
 
 It also supports proxy chains and policy groups where supported by the underlying configuration/core.
 

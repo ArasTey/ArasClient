@@ -29,6 +29,8 @@
         <item>xhttp</item>
         <item>h2</item>
         <item>grpc</item>
+        <item>masque</item>
+        <item>xdrive</item>
     </string-array>
 
     <string-array name="header_type_tcp" translatable="false">

@@ -16,7 +16,11 @@ object CertificateFingerprintManager {
 
     fun fetchForManualFill(profile: ProfileItem): String? {
         val request = buildRequest(profile) ?: return null
-        val result = if (profile.configType == EConfigType.HYSTERIA2) {
+        // MASQUE, like Hysteria2, presents its certificate over HTTP/3, so the
+        // QUIC fetcher is the one that can actually complete the handshake.
+        val overQuic = profile.configType == EConfigType.HYSTERIA2 ||
+            profile.configType == EConfigType.MASQUE
+        val result = if (overQuic) {
             fetch("quic", request) { ArasCore.fetchQuicCertSha256(it) }
         } else {
             fetch("tls", request) { ArasCore.fetchTlsCertSha256(it) }

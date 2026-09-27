@@ -210,6 +210,28 @@ abstract class BaseServerActivity : BaseComponentActivity() {
                     { state.xhttpExtra = it }
                 )
             }
+            if (state.network == NetworkType.XDRIVE.type) {
+                FormTextField(
+                    stringResource(R.string.server_lab_xdrive_service),
+                    state.xdriveService,
+                    { state.xdriveService = it }
+                )
+                FormTextField(
+                    stringResource(R.string.server_lab_xdrive_folder),
+                    state.xdriveRemoteFolder,
+                    { state.xdriveRemoteFolder = it }
+                )
+                FormTextField(
+                    stringResource(R.string.server_lab_xdrive_secrets),
+                    state.xdriveSecrets,
+                    { state.xdriveSecrets = it }
+                )
+                FormTextField(
+                    stringResource(R.string.server_lab_xdrive_extra),
+                    state.xdriveExtra,
+                    { state.xdriveExtra = it }
+                )
+            }
             if (state.network == NetworkType.KCP.type) {
                 FormTextField(
                     stringResource(R.string.server_lab_path_kcp),

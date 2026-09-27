@@ -200,6 +200,83 @@ class CoreOutboundBuilderTest {
     }
 
     @Test
+    fun `masque outbound uses the masque transport over tls`() {
+        val item = profile(EConfigType.MASQUE).apply {
+            host = "example.org"
+            path = "/connect/{target}"
+        }
+
+        val outbound = CoreOutboundBuilder.convert(item)
+
+        assertNotNull(outbound)
+        assertEquals("masque", outbound!!.protocol)
+        assertEquals(NetworkType.MASQUE.type, outbound.streamSettings?.network)
+        // MASQUE is CONNECT-IP inside an HTTP/3 request — there is no plaintext mode.
+        assertEquals(AppConfig.TLS, outbound.streamSettings?.security)
+        assertNotNull(outbound.streamSettings?.tlsSettings)
+        assertEquals("example.org", outbound.streamSettings?.masqueSettings?.host)
+        assertEquals("/connect/{target}", outbound.streamSettings?.masqueSettings?.path)
+    }
+
+    @Test
+    fun `masque forces multiplex off`() {
+        val outbound = CoreOutboundBuilder.convert(profile(EConfigType.MASQUE))
+
+        assertEquals(false, outbound?.mux?.enabled)
+    }
+
+    @Test
+    fun `masque carries the resolver list from the profile`() {
+        val item = profile(EConfigType.MASQUE).apply { remoteDNS = "1.1.1.1, 8.8.8.8" }
+
+        val remoteDNS = CoreOutboundBuilder.convert(item)?.settings?.remoteDNS
+
+        assertEquals(listOf("1.1.1.1", "8.8.8.8"), remoteDNS)
+    }
+
+    @Test
+    fun `xdrive transport carries its service and folder onto any protocol`() {
+        val item = profile(EConfigType.VLESS).apply {
+            network = NetworkType.XDRIVE.type
+            security = AppConfig.TLS
+            xdriveService = "Google Drive"
+            xdriveRemoteFolder = "tunnels"
+            xdriveSecrets = "secret-a,secret-b"
+        }
+
+        val xdrive = CoreOutboundBuilder.convert(item)?.streamSettings?.xdriveSettings
+
+        assertNotNull(xdrive)
+        assertEquals("Google Drive", xdrive!!.service)
+        assertEquals("tunnels", xdrive.remoteFolder)
+        assertEquals(listOf("secret-a", "secret-b"), xdrive.secrets)
+    }
+
+    @Test
+    fun `a profile with a non-numeric port is skipped instead of throwing`() {
+        // convertProfile2Outbound only guards a null return, so a thrown
+        // NumberFormatException here would abort the whole config build.
+        val item = profile(EConfigType.VLESS).apply {
+            serverPort = "not-a-port"
+            security = AppConfig.TLS
+            network = NetworkType.TCP.type
+        }
+
+        assertNull(CoreOutboundBuilder.convert(item))
+    }
+
+    @Test
+    fun `a profile with an out of range port is skipped`() {
+        val item = profile(EConfigType.TROJAN).apply {
+            serverPort = "70000"
+            password = "pw"
+            security = AppConfig.TLS
+        }
+
+        assertNull(CoreOutboundBuilder.convert(item))
+    }
+
+    @Test
     fun `a protocol with no builder yields no outbound instead of a broken one`() {
         // Policies and proxy chains are resolved elsewhere; the builder must decline
         // them rather than emit a half-populated outbound the core would reject.

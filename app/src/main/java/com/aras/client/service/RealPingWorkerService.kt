@@ -113,6 +113,7 @@ class RealPingWorkerService(
             && config.configType != EConfigType.WIREGUARD
             && config.configType != EConfigType.AMNEZIAWG
             && config.configType != EConfigType.ANYTLS
+            && config.configType != EConfigType.MASQUE
             && config.alpn?.startsWith("h3") != true
             && config.server.isNotNullEmpty()
             && config.serverPort?.toIntOrNull() != null
@@ -143,6 +144,7 @@ class RealPingWorkerService(
             && config.configType != EConfigType.WIREGUARD
             && config.configType != EConfigType.AMNEZIAWG
             && config.configType != EConfigType.ANYTLS
+            && config.configType != EConfigType.MASQUE
             && config.alpn?.split(',')?.all { it.trim().startsWith("h3") } != true
             && config.server.isNotNullEmpty()
             && config.serverPort?.toIntOrNull() != null

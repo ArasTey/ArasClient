@@ -80,10 +80,14 @@ internal fun serverMenuActions(
     isComplexProfile: Boolean,
     includeManagementActions: Boolean,
     isProtected: Boolean = false,
+    editable: Boolean = true,
 ): List<ServerMenuAction> = ServerMenuAction.entries.filter { action ->
     // Protected configs: only test/delete are allowed — no share, no edit,
     // no full-content view. Enforced here so every entry point is covered.
     if (isProtected && (action.isShareAction || action == ServerMenuAction.Edit)) return@filter false
+    // Import-only protocols have no editor; offering one would open a screen that
+    // saves the profile back as a different protocol.
+    if (!editable && action == ServerMenuAction.Edit) return@filter false
     (includeManagementActions || action.isShareAction) && (!isComplexProfile || action.supportsComplexProfiles)
 }
 
@@ -151,6 +155,7 @@ fun ShareMethodDialog(
         isComplexProfile = profile.configType.isComplexType(),
         includeManagementActions = more,
         isProtected = com.aras.client.handler.ArasExportImportManager.isProtected(guid),
+        editable = profile.configType.hasEditor,
     )
     SelectListDialog(
         options = menuActions,
