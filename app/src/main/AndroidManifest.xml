@@ -128,6 +128,10 @@
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged|adjustResize" />
         <activity
+            android:name=".ui.server.ServerAetherActivity"
+            android:exported="false"
+            android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity
             android:name=".ui.server.ServerAnytlsActivity"
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged|adjustResize" />

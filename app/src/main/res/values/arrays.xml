@@ -21,6 +21,21 @@
         <item>2022-blake3-chacha20-poly1305</item>
     </string-array>
 
+    <string-array name="aether_protocols" translatable="false">
+        <item>wireguard</item>
+        <item>masque</item>
+    </string-array>
+
+    <string-array name="aether_ip_versions" translatable="false">
+        <item>ipv4</item>
+        <item>ipv6</item>
+    </string-array>
+
+    <string-array name="aether_obfuscations" translatable="false">
+        <item>off</item>
+        <item>auto</item>
+    </string-array>
+
     <string-array name="networks" translatable="false">
         <item>tcp</item>
         <item>kcp</item>

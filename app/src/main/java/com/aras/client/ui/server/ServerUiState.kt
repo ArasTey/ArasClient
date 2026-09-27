@@ -57,6 +57,9 @@ class ServerUiState(
     xdriveRemoteFolder: String = "",
     xdriveSecrets: String = "",
     xdriveExtra: String = "",
+    aetherProtocol: String = "wireguard",
+    aetherIpVersion: String = "ipv4",
+    aetherObfuscation: String = "auto",
     finalMask: String = "",
     seed: String = "",
     kcpMtu: String = "",
@@ -119,6 +122,9 @@ class ServerUiState(
     var xdriveRemoteFolder by mutableStateOf(xdriveRemoteFolder)
     var xdriveSecrets by mutableStateOf(xdriveSecrets)
     var xdriveExtra by mutableStateOf(xdriveExtra)
+    var aetherProtocol by mutableStateOf(aetherProtocol)
+    var aetherIpVersion by mutableStateOf(aetherIpVersion)
+    var aetherObfuscation by mutableStateOf(aetherObfuscation)
     var finalMask by mutableStateOf(finalMask)
     var seed by mutableStateOf(seed)
     var kcpMtu by mutableStateOf(kcpMtu)
@@ -198,6 +204,9 @@ class ServerUiState(
             xdriveRemoteFolder = xdriveRemoteFolder.nullIfBlank(),
             xdriveSecrets = xdriveSecrets.nullIfBlank(),
             xdriveExtra = xdriveExtra.nullIfBlank(),
+            aetherProtocol = aetherProtocol,
+            aetherIpVersion = aetherIpVersion,
+            aetherObfuscation = aetherObfuscation,
             finalMask = finalMask.nullIfBlank(),
             seed = seed.nullIfBlank(),
             kcpMtu = kcpMtu.toIntOrNull(),
@@ -269,6 +278,9 @@ class ServerUiState(
                 xdriveRemoteFolder = initialConfig.xdriveRemoteFolder ?: "",
                 xdriveSecrets = initialConfig.xdriveSecrets ?: "",
                 xdriveExtra = initialConfig.xdriveExtra ?: "",
+                aetherProtocol = initialConfig.aetherProtocol ?: "wireguard",
+                aetherIpVersion = initialConfig.aetherIpVersion ?: "ipv4",
+                aetherObfuscation = initialConfig.aetherObfuscation ?: "auto",
                 finalMask = initialConfig.finalMask ?: "",
                 seed = initialConfig.seed ?: "",
                 kcpMtu = initialConfig.kcpMtu?.toString() ?: "",

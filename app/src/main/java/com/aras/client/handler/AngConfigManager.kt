@@ -22,6 +22,7 @@ import com.aras.client.fmt.TrojanFmt
 import com.aras.client.fmt.ArasFmt
 import com.aras.client.fmt.AmneziawgFmt
 import com.aras.client.fmt.AnytlsFmt
+import com.aras.client.fmt.AetherFmt
 import com.aras.client.fmt.MasqueFmt
 import com.aras.client.fmt.VlessFmt
 import com.aras.client.fmt.VmessFmt
@@ -70,6 +71,7 @@ object AngConfigManager {
             AppConfig.HY2 to Hysteria2Fmt::parse,
             EConfigType.ANYTLS.protocolScheme to AnytlsFmt::parse,
             EConfigType.MASQUE.protocolScheme to MasqueFmt::parse,
+            EConfigType.AETHER.protocolScheme to AetherFmt::parse,
             EConfigType.AMNEZIAWG.protocolScheme to AmneziawgFmt::parse,
             AppConfig.ARASFMTS to ArasFmt::parse
         )
@@ -221,6 +223,7 @@ object AngConfigManager {
                 EConfigType.HYSTERIA2 -> Hysteria2Fmt.toUri(config)
                 EConfigType.ANYTLS -> AnytlsFmt.toUri(config)
                 EConfigType.MASQUE -> MasqueFmt.toUri(config)
+                EConfigType.AETHER -> AetherFmt.toUri(config)
                 EConfigType.AMNEZIAWG -> AmneziawgFmt.toUri(config)
                 else -> {}
             }

@@ -253,6 +253,72 @@ class CoreOutboundBuilderTest {
     }
 
     @Test
+    fun `an aether profile lowers onto a wireguard outbound with junk packets`() {
+        val item = ProfileItem(
+            configType = EConfigType.AETHER,
+            remarks = "warp",
+            server = "engage.cloudflareclient.com",
+            serverPort = "2408",
+            publicKey = "pub",
+            secretKey = "sec",
+            localAddress = "172.16.0.2/32",
+            aetherProtocol = AppConfig.AETHER_PROTOCOL_WIREGUARD,
+            aetherIpVersion = AppConfig.AETHER_IPV4,
+            aetherObfuscation = AppConfig.AETHER_OBFUSCATION_AUTO,
+        )
+
+        val outbound = CoreOutboundBuilder.convert(item)
+
+        assertNotNull(outbound)
+        assertEquals("wireguard", outbound!!.protocol)
+        // WireGuard keeps the local addresses on the outbound and the dial target on
+        // the peer, so the endpoint is what proves the gateway was carried through.
+        assertEquals(listOf("172.16.0.2/32"), outbound.settings?.address)
+        assertEquals("engage.cloudflareclient.com:2408", outbound.settings?.peers?.firstOrNull()?.endpoint)
+        // IPv4 preference, and the userspace device because junk packets need it.
+        assertEquals("forceIPv4", outbound.settings?.domainStrategy)
+        assertEquals(true, outbound.settings?.noKernelTun)
+        assertEquals(4, outbound.settings?.peers?.firstOrNull()?.junkPacketCount)
+        assertEquals(listOf(3), outbound.settings?.peers?.firstOrNull()?.cookiePacketJunkHeader)
+    }
+
+    @Test
+    fun `an aether profile with obfuscation off sends no junk packets`() {
+        val item = ProfileItem(
+            configType = EConfigType.AETHER,
+            server = "1.2.3.4",
+            serverPort = "2408",
+            publicKey = "pub",
+            secretKey = "sec",
+            aetherProtocol = AppConfig.AETHER_PROTOCOL_WIREGUARD,
+            aetherObfuscation = AppConfig.AETHER_OBFUSCATION_OFF,
+        )
+
+        val peer = CoreOutboundBuilder.convert(item)?.settings?.peers?.firstOrNull()
+
+        assertNotNull(peer)
+        assertNull(peer!!.junkPacketCount)
+    }
+
+    @Test
+    fun `an aether masque profile lowers onto the masque transport`() {
+        val item = ProfileItem(
+            configType = EConfigType.AETHER,
+            server = "1.2.3.4",
+            serverPort = "443",
+            aetherProtocol = AppConfig.AETHER_PROTOCOL_MASQUE,
+            aetherObfuscation = AppConfig.AETHER_OBFUSCATION_AUTO,
+        )
+
+        val outbound = CoreOutboundBuilder.convert(item)
+
+        assertEquals("masque", outbound?.protocol)
+        assertEquals(NetworkType.MASQUE.type, outbound?.streamSettings?.network)
+        // Junk packets are peer-level WireGuard knobs; a MASQUE tunnel has none.
+        assertNull(outbound?.settings?.peers)
+    }
+
+    @Test
     fun `a socks profile can target a local aether gateway`() {
         // Aether (patterniha/Aether) is a standalone app that exposes a local SOCKS5
         // listener. Pointing a SOCKS profile at it — optionally as the first hop of a

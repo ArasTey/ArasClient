@@ -82,6 +82,12 @@ data class ProfileItem(
     var xdriveSecrets: String? = null,
     /** Raw JSON for any further xdriveSettings keys not modelled individually. */
     var xdriveExtra: String? = null,
+
+    // Aether / gateway profile. `aetherProtocol` picks the transport we dial
+    // (wireguard or masque); the rest shape the generated outbound.
+    var aetherProtocol: String? = null,
+    var aetherIpVersion: String? = null,
+    var aetherObfuscation: String? = null,
     @Deprecated("Use pinnedCA256")
     var pinSHA256: String? = null,
     var bandwidthDown: String? = null,

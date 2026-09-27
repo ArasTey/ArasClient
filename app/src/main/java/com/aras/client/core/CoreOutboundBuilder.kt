@@ -35,6 +35,7 @@ object CoreOutboundBuilder {
             EConfigType.HTTP -> toOutboundHttp(profileItem)
             EConfigType.ANYTLS -> toOutboundAnytls(profileItem)
             EConfigType.MASQUE -> toOutboundMasque(profileItem)
+            EConfigType.AETHER -> toOutboundAether(profileItem)
             else -> null
         }
 
@@ -434,6 +435,52 @@ object CoreOutboundBuilder {
         }
 
         return outboundBean
+    }
+
+    /**
+     * Aether / gateway profile.
+     *
+     * An Aether config is a gateway profile — a WARP-style key plus the transport to
+     * dial it with — so it lowers onto an ordinary outbound: WireGuard (the default,
+     * and what the Aether app itself uses) or MASQUE.
+     *
+     * What this deliberately does NOT reproduce is the Aether daemon's own runtime:
+     * endpoint scanning, Psiphon and Tor nesting, and nested modes. Those need the
+     * aether process, not a core config. The parts that do map are honoured:
+     * `aetherObfuscation = auto` applies AmneziaWG junk packets, and an IPv4
+     * preference forces v4 like the AmneziaWG path does.
+     */
+    private fun toOutboundAether(profileItem: ProfileItem): OutboundBean? {
+        val outbound = when (profileItem.aetherProtocol) {
+            AppConfig.AETHER_PROTOCOL_MASQUE -> toOutboundMasque(profileItem)
+            else -> toOutboundWireguard(profileItem)
+        } ?: return null
+
+        if (profileItem.aetherObfuscation == AppConfig.AETHER_OBFUSCATION_AUTO &&
+            outbound.protocol.equals(EConfigType.WIREGUARD.name, true)
+        ) {
+            // Junk packets are peer-level and only meaningful on a WireGuard-family
+            // outbound; a MASQUE tunnel has no equivalent knob.
+            outbound.settings?.peers?.firstOrNull()?.let { peer ->
+                peer.junkPacketCount = 4
+                peer.junkPacketMinSize = 40
+                peer.junkPacketMaxSize = 70
+                peer.initPacketJunkSize = 15
+                peer.responsePacketJunkSize = 20
+                peer.initPacketJunkHeader = listOf(1)
+                peer.responsePacketJunkHeader = listOf(2)
+                peer.cookiePacketJunkHeader = listOf(3)
+                peer.transportPacketJunkHeader = listOf(4)
+            }
+            // Kernel TUN cannot apply junk packets, so force the userspace device.
+            outbound.settings?.noKernelTun = true
+        }
+
+        if (profileItem.aetherIpVersion == AppConfig.AETHER_IPV4) {
+            outbound.settings?.domainStrategy = "forceIPv4"
+        }
+
+        return outbound
     }
 
     private fun toOutboundHysteria2(profileItem: ProfileItem): OutboundBean? {

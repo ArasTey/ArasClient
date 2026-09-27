@@ -240,7 +240,20 @@ object AppConfig {
     // Available in the bundled core (patterniha 26.9.27+). These are import-only:
     // there is no "Add manually" editor for them, they arrive via link or .arasc.
     const val MASQUE = "masque://"
+    const val AETHER = "aether://"
     const val ARASFMTS = "xrayn://"
+
+    /** Aether profile transports: the gateway protocol we dial. */
+    const val AETHER_PROTOCOL_WIREGUARD = "wireguard"
+    const val AETHER_PROTOCOL_MASQUE = "masque"
+
+    /** Aether IP version preference. */
+    const val AETHER_IPV4 = "ipv4"
+    const val AETHER_IPV6 = "ipv6"
+
+    /** Aether obfuscation: whether to apply AmneziaWG junk packets. */
+    const val AETHER_OBFUSCATION_OFF = "off"
+    const val AETHER_OBFUSCATION_AUTO = "auto"
 
     /** Give a good name to this, IDK*/
     const val VPN = "VPN"

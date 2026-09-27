@@ -22,6 +22,9 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
     AMNEZIAWG(12, AppConfig.AMNEZIAWG),
     // MASQUE (IETF CONNECT-IP, RFC 9484). Import-only: no manual-add editor.
     MASQUE(13, AppConfig.MASQUE),
+    // Aether/gateway profile. Added from the import menu, directly below the .arasc
+    // entry, rather than from the "Add manually" protocol submenu.
+    AETHER(14, AppConfig.AETHER),
     POLICYGROUP(101, AppConfig.CUSTOM),
     PROXYCHAIN(102, AppConfig.CUSTOM);
 
