@@ -53,6 +53,22 @@ object AetherCoreManager {
     /** Set on the session core and on no other, so a scan or a test core can be told apart. */
     const val SESSION_ENV = "ARASCLIENT_AETHER_SESSION"
 
+    const val AETHER_CONFIG_ENV = "AETHER_CONFIG"
+    const val AETHER_MASQUE_CONFIG_ENV = "AETHER_MASQUE_CONFIG"
+    const val AETHER_WG_CONFIG_ENV = "AETHER_WG_CONFIG"
+
+    /** The work directory, shared with [AetherIdentityManager]. */
+    const val WORK_DIR = "aether"
+
+    /** How long a scan or a key renewal may take before it is given up on. */
+    const val ONE_SHOT_TIMEOUT_MS = 2 * 60_000L
+
+    /** A free loopback port for a one-shot core, away from the session's own. */
+    fun scanPort(profile: ProfileItem): Int {
+        val sessionPort = listenPort(profile)
+        return if (sessionPort + 1 in 1..65535) sessionPort + 1 else sessionPort - 1
+    }
+
     private val session = AtomicReference<AetherCore?>(null)
     private var process: Process? = null
 
@@ -177,7 +193,81 @@ object AetherCoreManager {
     fun isAvailable(context: Context): Boolean = binary(context).canExecute()
 
     private fun workDir(context: Context): File =
-        File(context.filesDir, "aether").apply { mkdirs() }
+        File(context.filesDir, WORK_DIR).apply { mkdirs() }
+
+    /**
+     * Runs a core to completion, stopping as soon as [ready] sees what it is waiting for.
+     *
+     * Used for the one-shot jobs — an endpoint scan, a WARP key renewal — where the
+     * core does its work and exits rather than serving a session.
+     *
+     * @return the line [ready] accepted, or null when the core exited without it
+     */
+    fun runUntil(
+        context: Context,
+        arguments: List<String>,
+        timeoutMs: Long,
+        source: String,
+        onOutput: (String) -> Unit,
+        ready: (String) -> Boolean,
+    ): String? {
+        val exe = binary(context)
+        if (!exe.canExecute()) {
+            LogUtil.e(AppConfig.TAG, "AetherCore: ${exe.name} is not present or not executable")
+            return null
+        }
+        val process = try {
+            ProcessBuilder(listOf(exe.absolutePath) + arguments)
+                .directory(workDir(context))
+                .redirectErrorStream(true)
+                .apply { environment().putAll(coreEnvironment(context, markSession = false)) }
+                .start()
+        } catch (e: IOException) {
+            LogUtil.e(AppConfig.TAG, "AetherCore: failed to launch $source", e)
+            return null
+        }
+        return try {
+            val deadline = System.currentTimeMillis() + timeoutMs
+            var matched: String? = null
+            val reader = process.inputStream.bufferedReader()
+            while (System.currentTimeMillis() < deadline) {
+                if (!reader.ready() && !process.isAlive) break
+                val line = reader.readLine() ?: break
+                LogUtil.i(AppConfig.TAG, "AetherCore: $line")
+                onOutput(line)
+                if (matched == null && ready(line)) {
+                    matched = line
+                    break
+                }
+            }
+            matched
+        } catch (e: IOException) {
+            LogUtil.e(AppConfig.TAG, "AetherCore: $source ended early", e)
+            null
+        } finally {
+            runCatching { process.destroy() }
+        }
+    }
+
+    /**
+     * The environment every core is started with.
+     *
+     * The config paths matter: without them the core keeps its WARP identity beside
+     * whatever it considers its config path, which on Android is a place an app
+     * cannot write, so it would re-register a device on every start.
+     */
+    internal fun coreEnvironment(context: Context, markSession: Boolean): Map<String, String> {
+        val work = workDir(context)
+        return buildMap {
+            put(OWNER_ENV, android.os.Process.myPid().toString())
+            if (markSession) put(SESSION_ENV, "1")
+            put("HOME", work.absolutePath)
+            put("TMPDIR", context.cacheDir.absolutePath)
+            put(AETHER_CONFIG_ENV, File(work, AetherIdentityManager.BASE_FILE).absolutePath)
+            put(AETHER_MASQUE_CONFIG_ENV, File(work, AetherIdentityManager.MASQUE_FILE).absolutePath)
+            put(AETHER_WG_CONFIG_ENV, File(work, AetherIdentityManager.WIREGUARD_FILE).absolutePath)
+        }
+    }
 
     /**
      * Starts the core and waits for its listener to answer.
@@ -196,18 +286,10 @@ object AetherCoreManager {
             LogUtil.e(AppConfig.TAG, "AetherCore: ${exe.name} is not present or not executable")
             return false
         }
-        val work = workDir(context)
         val builder = ProcessBuilder(listOf(exe.absolutePath) + core.arguments)
-            .directory(work)
+            .directory(workDir(context))
             .redirectErrorStream(true)
-        builder.environment().apply {
-            put(OWNER_ENV, android.os.Process.myPid().toString())
-            put(SESSION_ENV, "1")
-            // The core keeps its WARP identity here; without HOME it looks in a place
-            // an app cannot write and re-registers on every start.
-            put("HOME", work.absolutePath)
-            put("TMPDIR", context.cacheDir.absolutePath)
-        }
+        builder.environment().putAll(coreEnvironment(context, markSession = true))
         val started = try {
             builder.start()
         } catch (e: IOException) {
