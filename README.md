@@ -59,14 +59,24 @@ ArasClient supports the following configuration types exposed by the client:
 
 It also supports proxy chains and policy groups where supported by the underlying configuration/core.
 
-### Using Aether with ArasClient
+### Aether / WARP gateway profiles
 
-[Aether](https://github.com/patterniha/Aether) (by patterniha) is **not a server config type** — it is a separate
-Rust application that discovers a reachable gateway and exposes a **local SOCKS5 proxy**. It ships no
-Android library, no share-link format, and no JSON profile, so there is nothing for ArasClient to import.
+Use **Add Aether config manually**, found in the import menu directly below *Import .arasc File*.
 
-To send ArasClient's traffic out through it, run Aether alongside ArasClient and point a SOCKS profile at
-its listener:
+An Aether config is a gateway profile — a WARP-style key plus the transport to dial it with — so ArasClient
+models it directly and lowers it onto a real outbound:
+
+- **Protocol** — `wireguard` (the default, and what the Aether app itself uses) or `masque`
+- **Obfuscation** — `auto` applies AmneziaWG junk packets, `off` sends none
+- **IP version** — `ipv4` additionally forces IPv4 on the tunnel
+- **address / port** — the gateway, plus the WireGuard key fields or the MASQUE SNI/path
+
+What ArasClient deliberately does **not** reproduce is the Aether daemon's own runtime: scan mode, *Scan
+for an endpoint*, *Get a new WARP key*, Psiphon, Tor and nested modes. Those belong to the `aether`
+process, not to a core config, so they are not offered here rather than being present and inert.
+
+To drive the real daemon instead, run Aether alongside ArasClient and point a SOCKS profile at its
+listener:
 
 1. Start Aether bound to loopback, e.g. `aether --bind 127.0.0.1:1819`. It has no authentication — never
    bind it to a LAN or WAN address.
@@ -74,8 +84,7 @@ its listener:
 3. To keep your usual server as the outer hop, put both in a proxy chain; ArasClient links the hops with
    `sockopt.dialerProxy`.
 
-For a WARP exit without a second app, use a `masque://` profile instead — MASQUE over HTTP/3 to a WARP
-endpoint is the same data path Aether itself uses, and it is supported natively by the bundled core.
+Aether profiles round-trip through `aether://` share links and `.arasc` files.
 
 ---
 
