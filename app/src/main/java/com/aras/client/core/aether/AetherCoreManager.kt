@@ -43,6 +43,38 @@ object AetherCoreManager {
     private val EOF = String(charArrayOf('\u0000'))
 
     /**
+     * Drains a core's output on a thread of its own and puts each line on [lines].
+     *
+     * Reading here would block for as long as the core runs: a session core runs until
+     * it is stopped, so the caller would never get as far as waiting for the listener.
+     *
+     * Nothing may escape this thread — an uncaught exception on it is fatal to the app
+     * whatever the caller's cleanup did. The core going away, the stream closing and an
+     * interrupt on teardown are all ordinary here, not faults.
+     */
+    private fun pumpOutput(
+        process: Process,
+        lines: LinkedBlockingQueue<String>,
+        onOutput: (String) -> Unit,
+    ): Thread = Thread {
+        try {
+            process.inputStream.bufferedReader().forEachLine { line ->
+                LogUtil.i(AppConfig.TAG, "AetherCore: $line")
+                lines.put(line)
+                onOutput(line)
+            }
+        } catch (_: Throwable) {
+            // The core ended or the stream closed; the marker below still goes in.
+        } finally {
+            runCatching { lines.offer(EOF) }
+        }
+    }.apply {
+        isDaemon = true
+        name = "aether-core-output"
+        start()
+    }
+
+    /**
      * The core ships in the APK as a shared library, because a file in the app's data
      * directory is not executable on Android 10 and later. Shipping it under jniLibs
      * puts it in nativeLibraryDir, where it is both packaged and runnable.
@@ -354,16 +386,7 @@ object AetherCoreManager {
         // between lines - so a core that says nothing would sit here long past it, with
         // the screen showing nothing at all.
         val lines = LinkedBlockingQueue<String>()
-        val reader = Thread {
-            runCatching {
-                process.inputStream.bufferedReader().forEachLine { lines.put(it) }
-            }
-            lines.put(EOF)
-        }.apply {
-            isDaemon = true
-            name = "aether-core-output"
-            start()
-        }
+        val reader = pumpOutput(process, lines) {}
 
         return try {
             val deadline = System.currentTimeMillis() + timeoutMs
@@ -379,7 +402,6 @@ object AetherCoreManager {
                     break
                 }
                 if (line === EOF) break
-                LogUtil.i(AppConfig.TAG, "AetherCore: $line")
                 onOutput(line)
                 if (matched == null && ready(line)) {
                     matched = line
@@ -391,8 +413,10 @@ object AetherCoreManager {
             Thread.currentThread().interrupt()
             null
         } finally {
+            // Destroying the core closes its output, which ends the reader on its own.
+            // Interrupting it instead races the stream and used to leave an
+            // InterruptedException to escape the reader thread and take the app down.
             runCatching { process.destroy() }
-            runCatching { reader.interrupt() }
         }
     }
 
@@ -528,10 +552,9 @@ object AetherCoreManager {
         process = started
         session.set(core)
 
-        started.inputStream.bufferedReader().forEachLine { line ->
-            LogUtil.i(AppConfig.TAG, "AetherCore: $line")
-            onOutput(line)
-        }
+        // The session core runs until it is stopped, so its output is drained in the
+        // background; reading it here would block the start forever.
+        pumpOutput(started, LinkedBlockingQueue(), onOutput)
 
         val ready = awaitListener(core.port)
         if (!ready) {

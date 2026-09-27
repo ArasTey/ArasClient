@@ -92,6 +92,9 @@
     <string name="server_lab_aether_hint_key_first">1. Turn the VPN ON, then get a WARP key.\n2. Turn the VPN OFF, then scan for an endpoint.\n3. Connect.</string>
     <string name="server_lab_aether_hint_ready">Ready. The key is saved, so it will not be asked for again.\nTurn the VPN OFF before scanning for an endpoint, so the scan sees the network you will actually use.</string>
     <string name="server_lab_aether_hint">Order</string>
+    <string name="server_lab_aether_vpn_on">Turn the VPN ON first — registering with Cloudflare has to reach their API.</string>
+    <string name="server_lab_aether_vpn_off">Turn the VPN OFF first, so the sweep sees the network you will actually use.</string>
+    <string name="server_lab_aether_key_ready">Key ready</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
     <string name="sub_setting_announcement">Announcement</string>
     <string name="sub_setting_creator_message">Creator message</string>

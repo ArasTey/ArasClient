@@ -1,6 +1,20 @@
 package com.aras.client.ui.server
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -11,7 +25,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.aras.client.core.aether.AetherCore
@@ -362,22 +378,25 @@ class ServerAetherActivity : BaseServerActivity() {
     private fun AetherIdentitySection(state: ServerUiState, scope: kotlinx.coroutines.CoroutineScope) {
         val context = LocalContext.current
         val protocol = AetherProtocol.fromString(state.aetherProtocol)
-        var identity by remember(protocol) { mutableStateOf(AetherIdentityManager.status(context, protocol)) }
+        var identity by remember(protocol) {
+            mutableStateOf(AetherIdentityManager.status(context, protocol))
+        }
         var busy by remember { mutableStateOf<String?>(null) }
         val log = remember { mutableStateListOf<String>() }
+
+        val keyLabel = stringResource(R.string.server_lab_aether_new_key)
+        val scanLabel = stringResource(R.string.server_lab_aether_scan)
+        val workingLabel = stringResource(R.string.server_lab_aether_working)
+        val scanNeedsKeyLabel = stringResource(R.string.server_lab_aether_scan_needs_key)
+        val onKeyLabel = stringResource(R.string.server_lab_aether_vpn_on)
+        val offKeyLabel = stringResource(R.string.server_lab_aether_vpn_off)
 
         // The two steps are in order on purpose: the core cannot sweep for a gateway
         // without an identity to sweep with, so the scan stays unavailable until a key
         // is on disk, and a key that is already there is never asked for twice.
-        val hasKey = identity?.primary != null
-        val orderHint = if (hasKey) {
-            stringResource(R.string.server_lab_aether_hint_ready)
-        } else {
-            stringResource(R.string.server_lab_aether_hint_key_first)
-        }
+        val key = identity?.primary
+        val hasKey = key != null
 
-        // [block] is handed a sink so the core's own output reaches the screen while it
-        // runs, rather than only appearing in the log once the run has finished.
         fun runOneShot(label: String, block: ((String) -> Unit) -> Unit) {
             if (busy != null) return
             busy = label
@@ -394,99 +413,175 @@ class ServerAetherActivity : BaseServerActivity() {
             }
         }
 
-        // Read on the screen, not only in the log, so a run that takes a minute shows
-        // what it is doing instead of looking like nothing happened.
-        if (log.isNotEmpty()) {
-            FormTextField(
-                stringResource(R.string.server_lab_aether_log),
-                log.takeLast(12).joinToString("\n"),
-                onValueChange = {},
-                enabled = false,
-                maxLines = 12,
-            )
-        }
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    stringResource(R.string.server_lab_aether_identity),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(8.dp))
 
-        val keyLabel = stringResource(R.string.server_lab_aether_new_key)
-        val scanLabel = stringResource(R.string.server_lab_aether_scan)
-        val workingLabel = stringResource(R.string.server_lab_aether_working)
-        val scanNeedsKeyLabel = stringResource(R.string.server_lab_aether_scan_needs_key)
-
-        Button(
-            enabled = busy == null,
-            onClick = {
-                runOneShot(keyLabel) { onLine ->
-                    AetherIdentityManager.renew(
-                        context,
-                        state.toProfileItem(initialConfig),
-                    ) { line ->
-                        LogUtil.d(AppConfig.TAG, "aether key | $line")
-                        onLine(line)
+                if (key != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "\u2713",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.server_lab_aether_key_ready),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(key.deviceId, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                    if (key.ipv4.isNotBlank()) {
+                        Text(key.ipv4, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                    }
+                    if (key.ipv6.isNotBlank()) {
+                        Text(key.ipv6, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "\u2022",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.server_lab_aether_no_identity),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
-            },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        ) {
-            Text(if (busy == keyLabel) workingLabel else keyLabel)
-        }
 
-        Button(
-            enabled = busy == null && hasKey,
-            onClick = {
-                runOneShot(scanLabel) { onLine ->
-                    // The scan is only worth running because it changes the profile: the
-                    // core names the gateway it kept, and that is written back.
-                    val profile = state.toProfileItem(initialConfig)
-                    AetherScanner.scan(context, profile) { line ->
-                        LogUtil.d(AppConfig.TAG, "aether scan | $line")
-                        onLine(line)
-                    }?.let { found ->
-                        AetherScanner.apply(profile, found)
-                        runOnUiThread {
-                            state.address = profile.server.orEmpty()
-                            state.port = profile.serverPort.orEmpty()
-                            state.aetherWiwOuter = profile.aetherWiwOuter.orEmpty()
-                            state.aetherWiwInner = profile.aetherWiwInner.orEmpty()
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(16.dp))
+
+                // Step 1 — the key. Registered with the tunnel up, because the
+                // registration has to reach Cloudflare's API.
+                StepHeader(1, keyLabel, busy == keyLabel)
+                Text(
+                    onKeyLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    enabled = busy == null,
+                    onClick = {
+                        runOneShot(keyLabel) { onLine ->
+                            AetherIdentityManager.renew(
+                                context,
+                                state.toProfileItem(initialConfig),
+                            ) { line ->
+                                LogUtil.d(AppConfig.TAG, "aether key | $line")
+                                onLine(line)
+                            }
                         }
+                    },
+                ) {
+                    if (busy == keyLabel) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(if (busy == keyLabel) workingLabel else keyLabel)
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Step 2 — the endpoint. Swept with the tunnel off, so the scan sees
+                // the network the tunnel will actually be used from.
+                StepHeader(2, scanLabel, busy == scanLabel)
+                Text(
+                    offKeyLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    enabled = busy == null && hasKey,
+                    onClick = {
+                        runOneShot(scanLabel) { onLine ->
+                            // The scan is only worth running because it changes the
+                            // profile: the core names the gateway it kept.
+                            val profile = state.toProfileItem(initialConfig)
+                            AetherScanner.scan(context, profile) { line ->
+                                LogUtil.d(AppConfig.TAG, "aether scan | $line")
+                                onLine(line)
+                            }?.let { found ->
+                                AetherScanner.apply(profile, found)
+                                runOnUiThread {
+                                    state.address = profile.server.orEmpty()
+                                    state.port = profile.serverPort.orEmpty()
+                                    state.aetherWiwOuter = profile.aetherWiwOuter.orEmpty()
+                                    state.aetherWiwInner = profile.aetherWiwInner.orEmpty()
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    if (busy == scanLabel) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        when {
+                            busy == scanLabel -> workingLabel
+                            !hasKey -> scanNeedsKeyLabel
+                            else -> scanLabel
+                        }
+                    )
+                }
+
+                if (log.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Text(
+                            log.takeLast(10).joinToString("\n"),
+                            modifier = Modifier.padding(10.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
                     }
                 }
-            },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        ) {
-            Text(
-                when {
-                    busy == scanLabel -> workingLabel
-                    !hasKey -> scanNeedsKeyLabel
-                    else -> scanLabel
-                }
-            )
+            }
         }
+    }
 
-        FormTextField(
-            stringResource(R.string.server_lab_aether_hint),
-            orderHint,
-            onValueChange = {},
-            enabled = false,
-        )
-
-        val current = identity?.primary
-        if (current != null) {
-            FormTextField(
-                stringResource(R.string.server_lab_aether_identity),
-                buildString {
-                    append(current.deviceId)
-                    if (current.ipv4.isNotBlank()) append("\n").append(current.ipv4)
-                    if (current.ipv6.isNotBlank()) append("\n").append(current.ipv6)
-                },
-                onValueChange = {},
-                enabled = false,
-            )
-        } else {
-            FormTextField(
-                stringResource(R.string.server_lab_aether_identity),
-                stringResource(R.string.server_lab_aether_no_identity),
-                onValueChange = {},
-                enabled = false,
-            )
+    @Composable
+    private fun StepHeader(number: Int, label: String, working: Boolean) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = MaterialTheme.shapes.extraSmall,
+                color = if (working) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Text(
+                    number.toString(),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.titleSmall)
         }
     }
 }
