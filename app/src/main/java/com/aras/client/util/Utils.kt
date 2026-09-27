@@ -228,10 +228,14 @@ object Utils {
      * @return True if the string is a CoreDNS address, false otherwise.
      */
     fun isCoreDNSAddress(s: String): Boolean {
-        return s.startsWith("https") ||
-                s.startsWith("tcp") ||
-                s.startsWith("quic") ||
-                s == "localhost"
+        if (s == "localhost") return true
+        // A core DNS address is a plain IP or one of the named forms, which are written
+        // as a scheme and a colon. Matching on the scheme rather than a fixed list keeps
+        // a newer core's forms (fakedns, dhcp, rcode, https+local) from being dropped
+        // as if the user had typed nothing.
+        val scheme = s.substringBefore(':', missingDelimiterValue = "")
+        if (scheme.isEmpty() || !s.contains(':')) return false
+        return scheme.first().isLetter() && scheme.all { it.isLetterOrDigit() || it == '+' || it == '-' }
     }
 
     /**

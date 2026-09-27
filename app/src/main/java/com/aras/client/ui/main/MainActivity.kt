@@ -45,6 +45,7 @@ import com.aras.client.ui.logcat.LogcatActivity
 import com.aras.client.ui.perappproxy.PerAppProxyActivity
 import com.aras.client.ui.routing.RoutingSettingActivity
 import com.aras.client.ui.server.ProfileEditorResult
+import com.aras.client.ui.server.ServerAetherActivity
 import com.aras.client.ui.server.ServerAmneziawgActivity
 import com.aras.client.ui.server.ServerAnytlsActivity
 import com.aras.client.ui.server.ServerCustomConfigActivity
@@ -442,6 +443,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.HYSTERIA2.value -> Intent(this, ServerHysteria2Activity::class.java)
             EConfigType.ANYTLS.value -> Intent(this, ServerAnytlsActivity::class.java)
             EConfigType.AMNEZIAWG.value -> Intent(this, ServerAmneziawgActivity::class.java)
+            EConfigType.AETHER.value -> Intent(this, ServerAetherActivity::class.java)
             else -> Intent(this, ServerHttpActivity::class.java).apply {
                 putExtra("createConfigType", createConfigType)
             }
@@ -588,6 +590,12 @@ class MainActivity : HelperBaseComponentActivity() {
             toastError(R.string.protected_config_hidden)
             return
         }
+        if (!profile.configType.hasEditor) {
+            // Import-only protocols have no editor. Falling through to
+            // ServerHttpActivity would save the profile back as an HTTP proxy.
+            toastError(getString(R.string.no_editor_for_protocol, profile.configType.name))
+            return
+        }
         val activityClass = when (profile.configType) {
             EConfigType.CUSTOM -> ServerCustomConfigActivity::class.java
             EConfigType.POLICYGROUP -> ServerGroupActivity::class.java
@@ -602,6 +610,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.HYSTERIA2 -> ServerHysteria2Activity::class.java
             EConfigType.ANYTLS -> ServerAnytlsActivity::class.java
             EConfigType.AMNEZIAWG -> ServerAmneziawgActivity::class.java
+            EConfigType.AETHER -> ServerAetherActivity::class.java
             else -> ServerHttpActivity::class.java
         }
         val intent = Intent(this, activityClass).apply {

@@ -8,6 +8,7 @@ import androidx.work.WorkManager
 import com.aras.client.AppConfig.ANG_PACKAGE
 import com.aras.client.handler.AppLocaleManager
 import com.aras.client.handler.MmkvManager
+import com.aras.client.util.LogUtil
 import com.aras.client.handler.SettingsManager
 import com.aras.client.ui.compose.ThemeManager
 
@@ -44,6 +45,10 @@ class AngApplication : Application() {
 
         // Ensure critical preference defaults are present in MMKV early
         SettingsManager.initApp(this)
+
+        // The log level is read once and cached; without this a change to it during a
+        // session would only take effect on the next launch.
+        LogUtil.refreshLogLevel()
 
         // Initialize theme state from MMKV
         ThemeManager.refresh()

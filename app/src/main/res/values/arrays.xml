@@ -21,6 +21,86 @@
         <item>2022-blake3-chacha20-poly1305</item>
     </string-array>
 
+    <string-array name="aether_protocols" translatable="false">
+        <item>wg</item>
+        <item>masque</item>
+        <item>gool</item>
+        <item>mim</item>
+    </string-array>
+
+    <string-array name="aether_ip_versions" translatable="false">
+        <item>v4</item>
+        <item>v6</item>
+        <item>both</item>
+    </string-array>
+
+    <string-array name="aether_obfuscations" translatable="false">
+        <item>auto</item>
+        <item>off</item>
+        <item>light</item>
+        <item>firewall</item>
+        <item>balanced</item>
+        <item>gfw</item>
+        <item>aggressive</item>
+    </string-array>
+
+    <string-array name="aether_scan_modes" translatable="false">
+        <item>balanced</item>
+        <item>turbo</item>
+        <item>thorough</item>
+        <item>verified</item>
+        <item>ironclad</item>
+    </string-array>
+
+    <string-array name="aether_transports" translatable="false">
+        <item>h3</item>
+        <item>h2</item>
+    </string-array>
+
+    <string-array name="aether_psiphons" translatable="false">
+        <item>off</item>
+        <item>chain</item>
+        <item>reverse</item>
+        <item>only</item>
+    </string-array>
+
+    <string-array name="aether_psiphon_modes" translatable="false">
+        <item>auto</item>
+        <item>cdn</item>
+        <item>direct</item>
+    </string-array>
+
+    <string-array name="aether_tors" translatable="false">
+        <item>off</item>
+        <item>chain</item>
+        <item>reverse</item>
+        <item>only</item>
+    </string-array>
+
+    <string-array name="aether_tor_bridges" translatable="false">
+        <item>auto</item>
+        <item>first</item>
+        <item>never</item>
+        <item>own</item>
+    </string-array>
+
+    <string-array name="aether_tor_relays" translatable="false">
+        <item>auto</item>
+        <item>only</item>
+        <item>off</item>
+    </string-array>
+
+    <string-array name="aether_psiphon_cdn_sets" translatable="false">
+        <item>cloudflare</item>
+        <item>fastly</item>
+        <item>cloudfront</item>
+        <item>psiphon-akamai</item>
+        <item>psiphon-bunny</item>
+        <item>vercel</item>
+        <item>github</item>
+        <item>curated-fronting</item>
+        <item>legacy-android-overrides</item>
+    </string-array>
     <string-array name="networks" translatable="false">
         <item>tcp</item>
         <item>kcp</item>
@@ -29,6 +109,8 @@
         <item>xhttp</item>
         <item>h2</item>
         <item>grpc</item>
+        <item>masque</item>
+        <item>xdrive</item>
     </string-array>
 
     <string-array name="header_type_tcp" translatable="false">
@@ -42,7 +124,7 @@
         <item>utp</item>
         <item>wechat-video</item>
         <item>dtls</item>
-        <item>wireguard</item>
+        <item>wg</item>
         <item>dns</item>
     </string-array>
 

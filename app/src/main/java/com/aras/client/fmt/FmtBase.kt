@@ -69,6 +69,11 @@ open class FmtBase {
         config.xhttpExtra = queryParam["extra"]
         config.finalMask = queryParam["fm"]
 
+        config.xdriveService = queryParam["xdriveService"]
+        config.xdriveRemoteFolder = queryParam["xdriveFolder"]
+        config.xdriveSecrets = queryParam["xdriveSecrets"]
+        config.xdriveExtra = queryParam["xdriveExtra"]
+
         config.security = queryParam["security"]
         if (config.security != AppConfig.TLS && config.security != AppConfig.REALITY) {
             config.security = null
@@ -167,6 +172,18 @@ open class FmtBase {
                 config.mode?.nullIfBlank()?.let { dicQuery["mode"] = it }
                 config.authority?.nullIfBlank()?.let { dicQuery["authority"] = it }
                 config.serviceName?.nullIfBlank()?.let { dicQuery["serviceName"] = it }
+            }
+
+            NetworkType.MASQUE -> {
+                config.host?.nullIfBlank()?.let { dicQuery["host"] = it }
+                config.path?.nullIfBlank()?.let { dicQuery["path"] = it }
+            }
+
+            NetworkType.XDRIVE -> {
+                config.xdriveService?.nullIfBlank()?.let { dicQuery["xdriveService"] = it }
+                config.xdriveRemoteFolder?.nullIfBlank()?.let { dicQuery["xdriveFolder"] = it }
+                config.xdriveSecrets?.nullIfBlank()?.let { dicQuery["xdriveSecrets"] = it }
+                config.xdriveExtra?.nullIfBlank()?.let { dicQuery["xdriveExtra"] = it }
             }
 
             else -> {}

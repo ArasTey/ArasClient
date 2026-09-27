@@ -53,6 +53,36 @@ class ServerUiState(
     host: String = "",
     path: String = "",
     xhttpExtra: String = "",
+    xdriveService: String = "",
+    xdriveRemoteFolder: String = "",
+    xdriveSecrets: String = "",
+    xdriveExtra: String = "",
+    aetherProtocol: String = "wg",
+    aetherTransport: String = "h3",
+    aetherScanMode: String = "balanced",
+    aetherObfuscation: String = "auto",
+    aetherIpVersion: String = "v4",
+    aetherWiwOuter: String = "",
+    aetherWiwInner: String = "",
+    aetherFragment: Boolean = false,
+    aetherFragmentSize: String = "",
+    aetherFragmentDelay: String = "",
+    aetherEch: Boolean = false,
+    aetherDns: String = "",
+    aetherExitLoc: String = "",
+    aetherListenPort: String = "",
+    aetherCommand: String = "",
+    aetherPsiphon: String = "off",
+    aetherPsiphonMode: String = "auto",
+    aetherPsiphonCdnIps: String = "",
+    aetherPsiphonCdnSni: String = "",
+    aetherPsiphonCdnSets: String = "",
+    aetherPsiphonRegion: String = "",
+    aetherPsiphonBundledList: Boolean = true,
+    aetherTor: String = "off",
+    aetherTorBridges: String = "auto",
+    aetherTorBridgeLines: String = "",
+    aetherTorRelays: String = "auto",
     finalMask: String = "",
     seed: String = "",
     kcpMtu: String = "",
@@ -111,6 +141,36 @@ class ServerUiState(
     var host by mutableStateOf(host)
     var path by mutableStateOf(path)
     var xhttpExtra by mutableStateOf(xhttpExtra)
+    var xdriveService by mutableStateOf(xdriveService)
+    var xdriveRemoteFolder by mutableStateOf(xdriveRemoteFolder)
+    var xdriveSecrets by mutableStateOf(xdriveSecrets)
+    var xdriveExtra by mutableStateOf(xdriveExtra)
+    var aetherProtocol by mutableStateOf(aetherProtocol)
+    var aetherTransport by mutableStateOf(aetherTransport)
+    var aetherScanMode by mutableStateOf(aetherScanMode)
+    var aetherObfuscation by mutableStateOf(aetherObfuscation)
+    var aetherIpVersion by mutableStateOf(aetherIpVersion)
+    var aetherWiwOuter by mutableStateOf(aetherWiwOuter)
+    var aetherWiwInner by mutableStateOf(aetherWiwInner)
+    var aetherFragment by mutableStateOf(aetherFragment)
+    var aetherFragmentSize by mutableStateOf(aetherFragmentSize)
+    var aetherFragmentDelay by mutableStateOf(aetherFragmentDelay)
+    var aetherEch by mutableStateOf(aetherEch)
+    var aetherDns by mutableStateOf(aetherDns)
+    var aetherExitLoc by mutableStateOf(aetherExitLoc)
+    var aetherListenPort by mutableStateOf(aetherListenPort)
+    var aetherCommand by mutableStateOf(aetherCommand)
+    var aetherPsiphon by mutableStateOf(aetherPsiphon)
+    var aetherPsiphonMode by mutableStateOf(aetherPsiphonMode)
+    var aetherPsiphonCdnIps by mutableStateOf(aetherPsiphonCdnIps)
+    var aetherPsiphonCdnSni by mutableStateOf(aetherPsiphonCdnSni)
+    var aetherPsiphonCdnSets by mutableStateOf(aetherPsiphonCdnSets)
+    var aetherPsiphonRegion by mutableStateOf(aetherPsiphonRegion)
+    var aetherPsiphonBundledList by mutableStateOf(aetherPsiphonBundledList)
+    var aetherTor by mutableStateOf(aetherTor)
+    var aetherTorBridges by mutableStateOf(aetherTorBridges)
+    var aetherTorBridgeLines by mutableStateOf(aetherTorBridgeLines)
+    var aetherTorRelays by mutableStateOf(aetherTorRelays)
     var finalMask by mutableStateOf(finalMask)
     var seed by mutableStateOf(seed)
     var kcpMtu by mutableStateOf(kcpMtu)
@@ -186,6 +246,37 @@ class ServerUiState(
             host = host,
             path = path,
             xhttpExtra = xhttpExtra.nullIfBlank(),
+            xdriveService = xdriveService.nullIfBlank(),
+            xdriveRemoteFolder = xdriveRemoteFolder.nullIfBlank(),
+            xdriveSecrets = xdriveSecrets.nullIfBlank(),
+            xdriveExtra = xdriveExtra.nullIfBlank(),
+            aetherProtocol = aetherProtocol,
+            aetherTransport = aetherTransport,
+            aetherScanMode = aetherScanMode,
+            aetherObfuscation = aetherObfuscation,
+            aetherIpVersion = aetherIpVersion,
+            aetherWiwOuter = aetherWiwOuter.nullIfBlank(),
+            aetherWiwInner = aetherWiwInner.nullIfBlank(),
+            aetherFragment = aetherFragment,
+            aetherFragmentSize = aetherFragmentSize.nullIfBlank(),
+            aetherFragmentDelay = aetherFragmentDelay.nullIfBlank(),
+            aetherEch = aetherEch,
+            aetherDns = aetherDns.nullIfBlank(),
+            aetherExitLoc = aetherExitLoc.nullIfBlank(),
+            aetherListenPort = aetherListenPort.nullIfBlank(),
+            aetherCommand = aetherCommand.nullIfBlank(),
+            aetherPsiphon = aetherPsiphon.takeUnless { it == "off" },
+            aetherPsiphonMode = aetherPsiphonMode.takeUnless { aetherPsiphon == "off" },
+            aetherPsiphonCdnIps = aetherPsiphonCdnIps.nullIfBlank(),
+            aetherPsiphonCdnSni = aetherPsiphonCdnSni.nullIfBlank(),
+            aetherPsiphonCdnSets = aetherPsiphonCdnSets.nullIfBlank(),
+            aetherPsiphonRegion = aetherPsiphonRegion.nullIfBlank(),
+            // Stored only when it says no; yes is the default and needs no word.
+            aetherPsiphonBundledList = aetherPsiphonBundledList.takeUnless { it },
+            aetherTor = aetherTor.takeUnless { it == "off" },
+            aetherTorBridges = aetherTorBridges.takeUnless { aetherTor == "off" },
+            aetherTorBridgeLines = aetherTorBridgeLines.nullIfBlank(),
+            aetherTorRelays = aetherTorRelays.takeUnless { it == "auto" || aetherTor == "off" },
             finalMask = finalMask.nullIfBlank(),
             seed = seed.nullIfBlank(),
             kcpMtu = kcpMtu.toIntOrNull(),
@@ -253,6 +344,36 @@ class ServerUiState(
                 host = initialConfig.host ?: "",
                 path = initialConfig.path ?: "",
                 xhttpExtra = initialConfig.xhttpExtra ?: "",
+                xdriveService = initialConfig.xdriveService ?: "",
+                xdriveRemoteFolder = initialConfig.xdriveRemoteFolder ?: "",
+                xdriveSecrets = initialConfig.xdriveSecrets ?: "",
+                xdriveExtra = initialConfig.xdriveExtra ?: "",
+                aetherProtocol = initialConfig.aetherProtocol ?: "wg",
+                aetherTransport = initialConfig.aetherTransport ?: "h3",
+                aetherScanMode = initialConfig.aetherScanMode ?: "balanced",
+                aetherObfuscation = initialConfig.aetherObfuscation ?: "auto",
+                aetherIpVersion = initialConfig.aetherIpVersion ?: "v4",
+                aetherWiwOuter = initialConfig.aetherWiwOuter ?: "",
+                aetherWiwInner = initialConfig.aetherWiwInner ?: "",
+                aetherFragment = initialConfig.aetherFragment == true,
+                aetherFragmentSize = initialConfig.aetherFragmentSize ?: "",
+                aetherFragmentDelay = initialConfig.aetherFragmentDelay ?: "",
+                aetherEch = initialConfig.aetherEch == true,
+                aetherDns = initialConfig.aetherDns ?: "",
+                aetherExitLoc = initialConfig.aetherExitLoc ?: "",
+                aetherListenPort = initialConfig.aetherListenPort ?: "",
+                aetherCommand = initialConfig.aetherCommand ?: "",
+                aetherPsiphon = initialConfig.aetherPsiphon ?: "off",
+                aetherPsiphonMode = initialConfig.aetherPsiphonMode ?: "auto",
+                aetherPsiphonCdnIps = initialConfig.aetherPsiphonCdnIps ?: "",
+                aetherPsiphonCdnSni = initialConfig.aetherPsiphonCdnSni ?: "",
+                aetherPsiphonCdnSets = initialConfig.aetherPsiphonCdnSets ?: "",
+                aetherPsiphonRegion = initialConfig.aetherPsiphonRegion ?: "",
+                aetherPsiphonBundledList = initialConfig.aetherPsiphonBundledList != false,
+                aetherTor = initialConfig.aetherTor ?: "off",
+                aetherTorBridges = initialConfig.aetherTorBridges ?: "auto",
+                aetherTorBridgeLines = initialConfig.aetherTorBridgeLines ?: "",
+                aetherTorRelays = initialConfig.aetherTorRelays ?: "auto",
                 finalMask = initialConfig.finalMask ?: "",
                 seed = initialConfig.seed ?: "",
                 kcpMtu = initialConfig.kcpMtu?.toString() ?: "",

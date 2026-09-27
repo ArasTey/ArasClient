@@ -53,9 +53,53 @@ PattNG itself documents additions such as `cipherSuites`, unsafe fingerprint con
 
 ArasClient supports the following configuration types exposed by the client:
 
-`VLESS` · `VMess` · `Trojan` · `Shadowsocks` · `Hysteria2` · `WireGuard` · `SOCKS` · `HTTP`
+`VLESS` · `VMess` · `Trojan` · `Shadowsocks` · `Hysteria2` · `Hysteria` · `WireGuard` · `SOCKS` · `HTTP` · `AnyTLS` · `AmneziaWG` · `MASQUE`
+
+`MASQUE` is import-only: it arrives through a `masque://` link, a pasted config, a QR code, or a `.arasc` file, and deliberately has no "Add manually" entry — there is no editor screen for it, so the server menu hides Edit for it rather than opening an editor that would save the profile back as a different protocol. The `masque` and `xdrive` transports appear in the transport picker of any protocol that supports them.
 
 It also supports proxy chains and policy groups where supported by the underlying configuration/core.
+
+### Aether / WARP gateway profiles
+
+Use **Add Aether config manually**, found in the import menu directly below *Import .arasc File*.
+
+Aether's data path is not something ArasClient can dial with its own outbound: the tunnel needs a
+scanned WARP endpoint and a WARP identity, and both live in the aether core. So the core runs as a
+child process and the profile's outbound is a SOCKS hop to its loopback listener — which is what the
+Aether app and PattNG both do.
+
+The core ships in the APK as `libaether.so`, with Psiphon's client and Tor's pluggable transport
+beside it, for `arm64-v8a`, `armeabi-v7a` and `x86_64`. It is packaged rather than downloaded at
+runtime because a file in the app's data directory is not executable on Android 10 and later, and only
+`nativeLibraryDir` is. This costs about 54 MB of native library per ABI.
+
+**What the editor offers**, all of it carried in `aether://` links and `.arasc` files:
+
+- **Protocol** — `wg`, `masque`, `gool` and `mim`, the last two being the two-hop tunnels
+- **Scan mode**, **obfuscation**, **IP version** and the MASQUE **transport**
+- ClientHello **fragmentation** and **ECH** on the h2 carrier
+- **Scan for an endpoint** and **Get a new WARP key**, both running a short-lived core; a renewal that
+  fails leaves the working identity in place
+- **Psiphon** and **Tor**, each inside the tunnel, around it, or alone with no WARP
+
+A note on Psiphon in this build: the server list is handed over through the core's own
+psiphon config, and the profile's CDN edge-list field is kept for link round-trip but has
+no effect — aether 2.1 decides the edge lists from the Psiphon mode and its built-in list.
+
+Two pairings the core refuses are caught in the editor rather than at connect time, because each is a
+configuration that builds and then does not work: either carrier in *reverse* needs `masque`, and the
+two of them go together only nested, one inside the tunnel and the other around it.
+
+Aether profiles are import-only in the sense that there is no fixed single endpoint to type in — leave
+the address empty and the core sweeps for a reachable gateway and keeps the fastest it finds.
+
+**A WARP gateway usually does not answer a plain ping, and its exit address reads as Iranian.** Both
+are expected: the address Cloudflare hands out is not a host that answers ICMP, and the exit it routes
+to is geolocated that way. Judge these profiles by whether they connect, not by the ping column.
+
+If Cloudflare ever stops accepting a saved device, the core says so on startup and the tunnel
+handshakes while carrying nothing. **Reset WARP key** forgets the identity and the remembered
+endpoint so the next start registers a new one.
 
 ---
 

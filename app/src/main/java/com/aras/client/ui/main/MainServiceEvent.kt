@@ -7,7 +7,9 @@ sealed class MainServiceEvent {
     data object StateRunning : MainServiceEvent()
     data object StateNotRunning : MainServiceEvent()
     data object StateStartSuccess : MainServiceEvent()
-    data object StateStartFailure : MainServiceEvent()
+    // Carries the core's own startup error, which is far more actionable than a
+    // generic "failed to start" string. Null when the sender had nothing to report.
+    data class StateStartFailure(val message: String?) : MainServiceEvent()
     data object StateStopSuccess : MainServiceEvent()
     data class MeasureDelayResult(val result: ConnectionTestResult) : MainServiceEvent()
     data object MeasureConfigSuccess : MainServiceEvent()

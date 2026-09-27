@@ -22,13 +22,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ArasTey/xray-core
-          ref: main
+          # Pinned by tag, not to a branch: the core is built from source here, so
+          # what it is has to be the same on every run of a given release.
+          ref: aras-core-26.9.27
           path: xray-core-src
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          # Must be >= the `go` directive in the core's go.mod. The core declares 1.27;
+          # pinning lower only works because Go silently auto-downloads a newer toolchain.
+          go-version: '1.27'
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -69,6 +73,31 @@ jobs:
             -ldflags='-s -w -buildid= -checklinkname=0' \
             -o $GITHUB_WORKSPACE/aras-core.aar ./
 
+      - name: Verify core contents
+        # The ArasClient patches are compiled into the native library. A patch that
+        # silently fails to apply still produces a working .so — it just drops the
+        # feature — so assert on the symbols before trusting the AAR.
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/aarcheck && mkdir -p /tmp/aarcheck && cd /tmp/aarcheck
+          unzip -o -q "$GITHUB_WORKSPACE/aras-core.aar" "jni/arm64-v8a/libgojni.so"
+          SO=jni/arm64-v8a/libgojni.so
+
+          count() { strings "$SO" | grep -ci "$1" || true; }
+
+          anytls=$(count anytls)
+          amnezia=$(count amneziawg)
+          stockwg=$(count 'golang.zx2c4.com/wireguard')
+          echo "anytls=$anytls amneziawg=$amnezia stock-wireguard=$stockwg"
+
+          fail=0
+          [ "$anytls" -gt 0 ] || { echo "::error::AnyTLS support missing from core"; fail=1; }
+          [ "$amnezia" -gt 0 ] || { echo "::error::AmneziaWG support missing from core"; fail=1; }
+          # proxy/wireguard must compile against amneziawg-go, otherwise the AmneziaWG
+          # junk params parse into the proto and are then silently ignored.
+          [ "$stockwg" -eq 0 ] || { echo "::error::Stock wireguard-go linked; AmneziaWG obfuscation is inert"; fail=1; }
+          exit $fail
+
       - name: Upload core AAR artifact
         uses: actions/upload-artifact@v4
         with:
@@ -99,10 +128,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build release APKs
+      - name: Test, lint, and build release APKs
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon
+          ./gradlew :app:testDebugUnitTest :app:lintVitalRelease :app:assembleRelease --no-daemon
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4

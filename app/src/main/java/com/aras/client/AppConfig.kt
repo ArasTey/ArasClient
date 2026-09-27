@@ -237,7 +237,17 @@ object AppConfig {
     const val HY2 = "hy2://"
     const val ANYTLS = "anytls://"
     const val AMNEZIAWG = "awg://"
+    // Available in the bundled core (patterniha 26.9.27+). These are import-only:
+    // there is no "Add manually" editor for them, they arrive via link or .arasc.
+    const val MASQUE = "masque://"
+    const val AETHER = "aether://"
     const val ARASFMTS = "xrayn://"
+
+    /** Where the aether core is published; the app fetches its own Android build from here. */
+    const val AETHER_URL = "https://github.com/CluvexStudio/aether"
+
+    /** The loopback port an aether core listens on unless the profile says otherwise. */
+    const val PORT_AETHER_SOCKS = "10819"
 
     /** Give a good name to this, IDK*/
     const val VPN = "VPN"

@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.aras.client.AppConfig
 import com.aras.client.dto.XrayConfig.OutboundBean
 import com.aras.client.dto.entities.ProfileItem
+import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.enums.EConfigType
 import com.aras.client.enums.NetworkType
 import com.aras.client.extension.isNotNullEmpty
@@ -34,6 +35,8 @@ object CoreOutboundBuilder {
             EConfigType.HYSTERIA2 -> toOutboundHysteria2(profileItem)
             EConfigType.HTTP -> toOutboundHttp(profileItem)
             EConfigType.ANYTLS -> toOutboundAnytls(profileItem)
+            EConfigType.MASQUE -> toOutboundMasque(profileItem)
+            EConfigType.AETHER -> toOutboundAether(profileItem)
             else -> null
         }
 
@@ -57,6 +60,7 @@ object CoreOutboundBuilder {
                 || protocol.equals(EConfigType.ANYTLS.name, true)
                 || protocol.equals(EConfigType.HYSTERIA2.name, true)
                 || protocol.equals(EConfigType.HYSTERIA.name, true)
+                || protocol.equals(EConfigType.MASQUE.name, true)
             ) {
                 muxEnabled = false
             } else if (outbound.streamSettings?.network == NetworkType.XHTTP.type) {
@@ -113,11 +117,18 @@ object CoreOutboundBuilder {
                 )
             )
 
-            EConfigType.ANYTLS -> OutboundBean(
-                protocol = configType.name.lowercase(),
-                settings = OutboundBean.OutSettingsBean(),
-                streamSettings = OutboundBean.StreamSettingsBean()
-            )
+        EConfigType.ANYTLS -> OutboundBean(
+            protocol = configType.name.lowercase(),
+            settings = OutboundBean.OutSettingsBean(),
+            streamSettings = OutboundBean.StreamSettingsBean()
+        )
+
+        EConfigType.MASQUE -> OutboundBean(
+            protocol = configType.name.lowercase(),
+            settings = OutboundBean.OutSettingsBean(),
+            streamSettings = OutboundBean.StreamSettingsBean()
+        )
+
 
             EConfigType.HYSTERIA,
             EConfigType.HYSTERIA2 -> OutboundBean(
@@ -137,7 +148,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = serverPortOrNull(profileItem) ?: return null
             settings.id = profileItem.password.orEmpty()
             settings.security = profileItem.method
             settings.level = AppConfig.DEFAULT_LEVEL
@@ -159,7 +170,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = serverPortOrNull(profileItem) ?: return null
             settings.id = profileItem.password.orEmpty()
             settings.encryption = profileItem.method
             settings.flow = profileItem.flow
@@ -182,7 +193,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = serverPortOrNull(profileItem) ?: return null
             settings.password = profileItem.password
             settings.method = profileItem.method
             settings.level = AppConfig.DEFAULT_LEVEL
@@ -204,7 +215,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = serverPortOrNull(profileItem) ?: return null
             settings.password = profileItem.password
             settings.flow = profileItem.flow
             settings.level = AppConfig.DEFAULT_LEVEL
@@ -226,7 +237,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = serverPortOrNull(profileItem) ?: return null
             settings.level = AppConfig.DEFAULT_LEVEL
             if (profileItem.username.isNotNullEmpty()) {
                 settings.user = profileItem.username.orEmpty()
@@ -242,7 +253,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = serverPortOrNull(profileItem) ?: return null
             settings.level = AppConfig.DEFAULT_LEVEL
             if (profileItem.username.isNotNullEmpty()) {
                 settings.user = profileItem.username.orEmpty()
@@ -310,23 +321,14 @@ object CoreOutboundBuilder {
             return list?.takeIf { it.isNotEmpty() }
         }
 
-        outboundBean.settings?.peers?.firstOrNull()?.let { peer ->
-            peer.junkPacketCount = parseJunkInt(profileItem.junkPacketCount)
-            peer.junkPacketMinSize = parseJunkInt(profileItem.junkPacketMinSize)
-            peer.junkPacketMaxSize = parseJunkInt(profileItem.junkPacketMaxSize)
-            peer.initPacketJunkSize = parseJunkInt(profileItem.initPacketJunkSize)
-            peer.responsePacketJunkSize = parseJunkInt(profileItem.responsePacketJunkSize)
-            peer.initPacketJunkHeader = parseJunkHeader(profileItem.initPacketJunkHeader)
-            peer.responsePacketJunkHeader = parseJunkHeader(profileItem.responsePacketJunkHeader)
-            peer.cookiePacketJunkHeader = parseJunkHeader(profileItem.cookiePacketJunkHeader)
-            peer.transportPacketJunkHeader = parseJunkHeader(profileItem.transportPacketJunkHeader)
-        }
         // Cloudflare WARP endpoints filter IPv6 handshakes; the v6 fallback
         // dial fails with "network is unreachable". Prefer IPv4 here and
         // drop v6 local addresses so the tunnel binds v4 only.
         // Profiles imported before the junk params existed (or with defaults)
         // carry none — apply AmneziaWG's standard obfuscation defaults at
         // connection time so old saved profiles work without re-import.
+        // This must run before the values are copied onto the peer, otherwise
+        // the defaults only take effect on a later rebuild.
         fun blank(v: String?) = v.isNullOrBlank()
         if (blank(profileItem.junkPacketCount) && blank(profileItem.junkPacketMinSize) &&
             blank(profileItem.junkPacketMaxSize) && blank(profileItem.initPacketJunkSize) &&
@@ -343,6 +345,18 @@ object CoreOutboundBuilder {
             profileItem.responsePacketJunkHeader = "2"
             profileItem.cookiePacketJunkHeader = "3"
             profileItem.transportPacketJunkHeader = "4"
+        }
+
+        outboundBean.settings?.peers?.firstOrNull()?.let { peer ->
+            peer.junkPacketCount = parseJunkInt(profileItem.junkPacketCount)
+            peer.junkPacketMinSize = parseJunkInt(profileItem.junkPacketMinSize)
+            peer.junkPacketMaxSize = parseJunkInt(profileItem.junkPacketMaxSize)
+            peer.initPacketJunkSize = parseJunkInt(profileItem.initPacketJunkSize)
+            peer.responsePacketJunkSize = parseJunkInt(profileItem.responsePacketJunkSize)
+            peer.initPacketJunkHeader = parseJunkHeader(profileItem.initPacketJunkHeader)
+            peer.responsePacketJunkHeader = parseJunkHeader(profileItem.responsePacketJunkHeader)
+            peer.cookiePacketJunkHeader = parseJunkHeader(profileItem.cookiePacketJunkHeader)
+            peer.transportPacketJunkHeader = parseJunkHeader(profileItem.transportPacketJunkHeader)
         }
         // Kernel TUN cannot apply AmneziaWG junk packets — always use the
         // userspace (gVisor) TUN for AWG profiles.
@@ -363,7 +377,7 @@ object CoreOutboundBuilder {
 
         outboundBean.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = serverPortOrNull(profileItem) ?: return null
             settings.password = profileItem.password
         }
 
@@ -372,8 +386,12 @@ object CoreOutboundBuilder {
             profileItem.security = AppConfig.TLS
         }
 
+        // populateTransportSettings derives the transport from profileItem.network, so
+        // it has to be set on the profile — assigning it to the stream settings first
+        // was silently overwritten and left the anytls branch unreachable.
+        profileItem.network = NetworkType.ANYTLS.type
+
         val sni = outboundBean.streamSettings?.let {
-            it.network = NetworkType.ANYTLS.type
             populateTransportSettings(it, profileItem)
         }
 
@@ -384,6 +402,66 @@ object CoreOutboundBuilder {
         return outboundBean
     }
 
+    /**
+     * MASQUE outbound (IETF CONNECT-IP, RFC 9484) over the masque transport.
+     *
+     * Always TLS: MASQUE carries a CONNECT-IP capsule over an HTTP/3 request, so
+     * there is no plaintext mode. The transport's `path` supports the {target}
+     * and {ipproto} variables and must start with "/".
+     */
+    private fun toOutboundMasque(profileItem: ProfileItem): OutboundBean? {
+        val outboundBean = createInitOutbound(EConfigType.MASQUE) ?: return null
+
+        outboundBean.settings?.let { settings ->
+            settings.address = getServerAddress(profileItem)
+            settings.port = serverPortOrNull(profileItem) ?: return null
+            settings.remoteDNS = profileItem.remoteDNS?.nullIfBlank()
+                ?.split(",")
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() }
+        }
+
+        if (profileItem.security.isNullOrBlank()) {
+            profileItem.security = AppConfig.TLS
+        }
+        profileItem.network = NetworkType.MASQUE.type
+
+        val sni = outboundBean.streamSettings?.let {
+            populateTransportSettings(it, profileItem)
+        }
+
+        outboundBean.streamSettings?.let {
+            populateTlsSettings(it, profileItem, sni)
+        }
+
+        return outboundBean
+    }
+
+    /**
+     * Aether / gateway profile.
+     *
+     * The tunnel is dialled by the aether core — a separate process that holds the WARP
+     * identity and the scanned endpoint — so the outbound here is a SOCKS hop to that
+     * process's loopback listener. Building a WireGuard or MASQUE outbound instead would
+     * be wrong: the credentials live in the core, not in the profile.
+     *
+     * The hop can therefore only be the entry hop of a chain, since it reaches loopback
+     * and nothing beyond it.
+     */
+    private fun toOutboundAether(profileItem: ProfileItem): OutboundBean? {
+        // listenPort() applies the default when the profile names none; listenPortOf()
+        // only reads what is there, so using it here would drop an unset profile.
+        val port = AetherCoreManager.listenPort(profileItem)
+        val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
+        outbound.settings?.let { settings ->
+            settings.address = AppConfig.LOOPBACK
+            settings.port = port
+            settings.level = AppConfig.DEFAULT_LEVEL
+        }
+        return outbound
+    }
+
     private fun toOutboundHysteria2(profileItem: ProfileItem): OutboundBean? {
         val outboundBean = createInitOutbound(EConfigType.HYSTERIA2) ?: return null
         profileItem.network = NetworkType.HYSTERIA.type
@@ -391,7 +469,7 @@ object CoreOutboundBuilder {
 
         outboundBean.settings?.let { server ->
             server.address = getServerAddress(profileItem)
-            server.port = profileItem.serverPort.orEmpty().toInt()
+            server.port = serverPortOrNull(profileItem) ?: return null
             server.version = 2
         }
 
@@ -635,6 +713,34 @@ object CoreOutboundBuilder {
                 )
                 sni = profileItem.sni ?: host
             }
+
+            NetworkType.MASQUE.type -> {
+                // path defaults server-side; host is the CONNECT authority and is
+                // optional. The core rejects a path that does not start with "/"
+                // or still contains braces after variable substitution.
+                val masquePath = path?.takeIf { it.isNotBlank() }
+                    ?.let { if (it.startsWith("/")) it else "/$it" }
+                streamSettings.masqueSettings = OutboundBean.StreamSettingsBean.MasqueSettingsBean(
+                    host = host?.takeIf { it.isNotBlank() },
+                    path = masquePath,
+                    headers = emptyMap()
+                )
+                sni = profileItem.sni ?: host
+            }
+
+            NetworkType.XDRIVE.type -> {
+                // Every key is optional; the core supplies its own defaults, and any
+                // key we do not model can be supplied verbatim through xdriveExtra.
+                val extra = profileItem.xdriveExtra?.nullIfBlank()?.let { JsonUtil.parseString(it) }
+                val secrets = profileItem.xdriveSecrets?.nullIfBlank()
+                    ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+                streamSettings.xdriveSettings = OutboundBean.StreamSettingsBean.XdriveSettingsBean(
+                    remoteFolder = profileItem.xdriveRemoteFolder?.nullIfBlank(),
+                    service = profileItem.xdriveService?.nullIfBlank(),
+                    secrets = secrets,
+                    template = extra
+                )
+            }
         }
         finalMask?.let {
             val parsedFinalMask = JsonUtil.parseString(finalMask)
@@ -779,6 +885,18 @@ object CoreOutboundBuilder {
             return false
         }
         return true
+    }
+
+    /**
+     * Parses the profile's port, or null when it is absent or not a valid port.
+     *
+     * A bad port must skip only this profile — the convertProfile2Outbound callers
+     * guard against a null return but not against a thrown NumberFormatException,
+     * so letting one escape would abort the whole config build and take every other
+     * server down with it.
+     */
+    private fun serverPortOrNull(profileItem: ProfileItem): Int? {
+        return profileItem.serverPort?.trim()?.toIntOrNull()?.takeIf { it in 1..65535 }
     }
 
     private fun getServerAddress(profileItem: ProfileItem): String {

@@ -29,6 +29,9 @@ private enum class ImportMenuAction(@StringRes val labelRes: Int, val action: Ma
     Clipboard(R.string.menu_item_import_config_clipboard, MainAction.ImportClipboard),
     LocalFile(R.string.menu_item_import_config_local, MainAction.ImportConfigLocal),
     ArascFile(R.string.menu_item_import_config_arasc, MainAction.ImportArascFile),
+    // Deliberately below the .arasc entry rather than inside the "Add manually"
+    // protocol submenu.
+    Aether(R.string.menu_item_import_config_manually_aether, MainAction.ImportManually(EConfigType.AETHER.value)),
     Manual(R.string.menu_item_import_config_manually, MainAction.ImportManualMenu),
     PolicyGroup(R.string.menu_item_import_config_policy_group, MainAction.ImportManually(EConfigType.POLICYGROUP.value)),
     ProxyChain(R.string.menu_item_import_config_proxy_chain, MainAction.ImportManually(EConfigType.PROXYCHAIN.value))
@@ -80,10 +83,14 @@ internal fun serverMenuActions(
     isComplexProfile: Boolean,
     includeManagementActions: Boolean,
     isProtected: Boolean = false,
+    editable: Boolean = true,
 ): List<ServerMenuAction> = ServerMenuAction.entries.filter { action ->
     // Protected configs: only test/delete are allowed — no share, no edit,
     // no full-content view. Enforced here so every entry point is covered.
     if (isProtected && (action.isShareAction || action == ServerMenuAction.Edit)) return@filter false
+    // Import-only protocols have no editor; offering one would open a screen that
+    // saves the profile back as a different protocol.
+    if (!editable && action == ServerMenuAction.Edit) return@filter false
     (includeManagementActions || action.isShareAction) && (!isComplexProfile || action.supportsComplexProfiles)
 }
 
@@ -151,6 +158,7 @@ fun ShareMethodDialog(
         isComplexProfile = profile.configType.isComplexType(),
         includeManagementActions = more,
         isProtected = com.aras.client.handler.ArasExportImportManager.isProtected(guid),
+        editable = profile.configType.hasEditor,
     )
     SelectListDialog(
         options = menuActions,

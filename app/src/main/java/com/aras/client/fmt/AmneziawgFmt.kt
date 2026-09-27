@@ -47,6 +47,9 @@ object AmneziawgFmt : FmtBase() {
         config.initPacketJunkHeader = queryParam["initPacketJunkHeader"]?.nullIfBlank()
         config.responsePacketJunkHeader = queryParam["responsePacketJunkHeader"]?.nullIfBlank()
         config.transportPacketJunkHeader = queryParam["transportPacketJunkHeader"]?.nullIfBlank()
+        // H3 was previously only read from a .conf peer block (as "h3") and never
+        // carried in a share link, so it was silently dropped on export/import.
+        config.cookiePacketJunkHeader = queryParam["cookiePacketJunkHeader"]?.nullIfBlank()
 
         applyDefaultJunkParams(config)
         return config
@@ -181,6 +184,7 @@ object AmneziawgFmt : FmtBase() {
         config.initPacketJunkHeader?.nullIfBlank()?.let { dicQuery["initPacketJunkHeader"] = it }
         config.responsePacketJunkHeader?.nullIfBlank()?.let { dicQuery["responsePacketJunkHeader"] = it }
         config.transportPacketJunkHeader?.nullIfBlank()?.let { dicQuery["transportPacketJunkHeader"] = it }
+        config.cookiePacketJunkHeader?.nullIfBlank()?.let { dicQuery["cookiePacketJunkHeader"] = it }
 
         return toUri(config, config.secretKey, dicQuery)
     }

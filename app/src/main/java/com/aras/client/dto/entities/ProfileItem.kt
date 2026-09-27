@@ -72,6 +72,49 @@ data class ProfileItem(
     var obfsPassword: String? = null,
     var portHopping: String? = null,
     var portHoppingInterval: String? = null,
+
+    // MASQUE: the server-side resolver list the proxy should use, comma separated.
+    var remoteDNS: String? = null,
+
+    // XDRIVE transport.
+    var xdriveService: String? = null,
+    var xdriveRemoteFolder: String? = null,
+    var xdriveSecrets: String? = null,
+    /** Raw JSON for any further xdriveSettings keys not modelled individually. */
+    var xdriveExtra: String? = null,
+
+    // Aether / gateway profile. Field names match PattNG's so a .arasc file moves
+    // between the two clients unchanged; values are the ones aether itself uses
+    // (protocol "wg" not "wireguard", ip "v6" not "ipv6", obfuscation under "noize").
+    var aetherProtocol: String? = null,
+    var aetherTransport: String? = null,
+    var aetherScanMode: String? = null,
+    var aetherObfuscation: String? = null,
+    var aetherIpVersion: String? = null,
+    /** Two-hop tunnels (gool, mim) name their outer and inner gateway instead of one endpoint. */
+    var aetherWiwOuter: String? = null,
+    var aetherWiwInner: String? = null,
+    var aetherFragment: Boolean? = null,
+    var aetherFragmentSize: String? = null,
+    var aetherFragmentDelay: String? = null,
+    var aetherEch: Boolean? = null,
+    var aetherDns: String? = null,
+    var aetherExitLoc: String? = null,
+    var aetherListenPort: String? = null,
+    var aetherPsiphon: String? = null,
+    var aetherPsiphonMode: String? = null,
+    var aetherPsiphonCdnIps: String? = null,
+    var aetherPsiphonCdnSni: String? = null,
+    var aetherPsiphonCdnSets: String? = null,
+    var aetherPsiphonRegion: String? = null,
+    var aetherPsiphonBundledList: Boolean? = null,
+    var aetherTor: String? = null,
+    var aetherTorBridges: String? = null,
+    /** The profile's own bridge lines, one per line as torrc writes them. */
+    var aetherTorBridgeLines: String? = null,
+    var aetherTorRelays: String? = null,
+    /** A command line used in place of the settings. */
+    var aetherCommand: String? = null,
     @Deprecated("Use pinnedCA256")
     var pinSHA256: String? = null,
     var bandwidthDown: String? = null,

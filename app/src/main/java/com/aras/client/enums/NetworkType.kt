@@ -12,7 +12,11 @@ enum class NetworkType(val type: String) {
     //QUIC("quic"),
     GRPC("grpc"),
     HYSTERIA("hysteria"),
-    ANYTLS("anytls");
+    ANYTLS("anytls"),
+    /** MASQUE transport (IETF CONNECT-IP). See also EConfigType.MASQUE, the protocol. */
+    MASQUE("masque"),
+    /** XDRIVE transport: tunnels through remote storage, ignoring IP allowlists. */
+    XDRIVE("xdrive");
 
     companion object {
         fun fromString(type: String?) = entries.find { it.type == type } ?: TCP

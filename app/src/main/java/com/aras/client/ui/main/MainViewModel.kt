@@ -160,8 +160,16 @@ class MainViewModel(
                 updateRunningState(true)
             }
 
-            MainServiceEvent.StateStartFailure -> {
-                toastError(R.string.toast_services_failure)
+            is MainServiceEvent.StateStartFailure -> {
+                // The core rejects an invalid config with a specific reason; showing it
+                // beats a generic "failed to start". Kept short for a toast — the full
+                // text and the generated config are written to the log on failure.
+                val detail = event.message?.trim()?.takeIf { it.isNotEmpty() }
+                if (detail != null) {
+                    toastError(getString(R.string.toast_services_failure) + ": " + detail.take(160))
+                } else {
+                    toastError(R.string.toast_services_failure)
+                }
                 updateRunningState(false)
             }
 
