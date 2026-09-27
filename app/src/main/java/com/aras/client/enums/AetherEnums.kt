@@ -80,3 +80,113 @@ enum class AetherIpVersion(val type: String) {
         fun fromString(type: String?) = entries.find { it.type == type } ?: V4
     }
 }
+
+/** Where Psiphon stands in the tunnel of a profile, named the way the core names it. */
+enum class AetherPsiphon(val type: String) {
+    OFF("off"),
+
+    /** The tunnel carries Psiphon: the app dials Psiphon, which leaves through WARP. */
+    CHAIN("chain"),
+
+    /** Psiphon carries the tunnel: WARP is reached through Psiphon, and the app dials WARP. */
+    REVERSE("reverse"),
+
+    /** No WARP at all: the app dials Psiphon itself. */
+    ONLY("only");
+
+    companion object {
+        fun fromString(type: String?) = entries.find { it.type == type } ?: OFF
+    }
+}
+
+/**
+ * The lists of CDN edges built into Psiphon's client, named the way its config names
+ * them and in the order the app hands them over, which is the order the scan tries them.
+ */
+enum class AetherPsiphonCdnSet(val type: String) {
+    CLOUDFLARE("cloudflare"),
+    FASTLY("fastly"),
+    CLOUDFRONT("cloudfront"),
+    AKAMAI("psiphon-akamai"),
+    BUNNY("psiphon-bunny"),
+    VERCEL("vercel"),
+    GITHUB("github"),
+    CURATED("curated-fronting"),
+    LEGACY("legacy-android-overrides");
+
+    companion object {
+        /** The sets named in [text], comma or space separated: in the order above, once each. */
+        fun parse(text: String?): List<AetherPsiphonCdnSet> {
+            val named = text.orEmpty().split(Regex("[,\\s]+")).filter { it.isNotEmpty() }.toSet()
+            return entries.filter { it.type in named }
+        }
+
+        /** [sets] as the core and the profile take them, comma separated; null for none. */
+        fun join(sets: Collection<AetherPsiphonCdnSet>): String? =
+            entries.filter { it in sets }.joinToString(",") { it.type }.ifEmpty { null }
+    }
+}
+
+/** How Psiphon reaches its servers. */
+enum class AetherPsiphonMode(val type: String) {
+    AUTO("auto"),
+    CDN("cdn"),
+    DIRECT("direct");
+
+    companion object {
+        fun fromString(type: String?) = entries.find { it.type == type } ?: AUTO
+    }
+}
+
+/** Where Tor stands in the tunnel of a profile: the same three places as [AetherPsiphon]. */
+enum class AetherTor(val type: String) {
+    OFF("off"),
+
+    /** The tunnel carries Tor: the app dials Tor, which leaves through WARP. */
+    CHAIN("chain"),
+
+    /** Tor carries the tunnel: WARP is reached from a Tor exit, and the app dials WARP. */
+    REVERSE("reverse"),
+
+    /** No WARP at all: the app dials Tor itself. */
+    ONLY("only");
+
+    companion object {
+        fun fromString(type: String?) = entries.find { it.type == type } ?: OFF
+    }
+}
+
+/** When Tor turns to bridges. */
+enum class AetherTorBridges(val type: String) {
+    /** Tor is tried plainly first, and bridges are fetched when that gets nowhere. */
+    AUTO("auto"),
+
+    /** Bridges from the start, without trying Tor plainly. */
+    FIRST("first"),
+
+    /** Never, however blocked the network looks. */
+    NEVER("never"),
+
+    /** The bridge lines of the profile, and no other. */
+    OWN("own");
+
+    companion object {
+        fun fromString(type: String?) = entries.find { it.type == type } ?: AUTO
+    }
+}
+
+/** Where Tor's fetched bridges come from. */
+enum class AetherTorRelays(val type: String) {
+    /** bridgedb and the relays together, the core's own choice. */
+    AUTO("auto"),
+
+    /** The relays alone; bridgedb hands out few bridges, and they are blocked early. */
+    ONLY("only"),
+
+    /** bridgedb alone. */
+    OFF("off");
+
+    companion object {
+        fun fromString(type: String?) = entries.find { it.type == type } ?: AUTO
+    }
+}

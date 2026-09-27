@@ -101,6 +101,18 @@ data class ProfileItem(
     var aetherDns: String? = null,
     var aetherExitLoc: String? = null,
     var aetherListenPort: String? = null,
+    var aetherPsiphon: String? = null,
+    var aetherPsiphonMode: String? = null,
+    var aetherPsiphonCdnIps: String? = null,
+    var aetherPsiphonCdnSni: String? = null,
+    var aetherPsiphonCdnSets: String? = null,
+    var aetherPsiphonRegion: String? = null,
+    var aetherPsiphonBundledList: Boolean? = null,
+    var aetherTor: String? = null,
+    var aetherTorBridges: String? = null,
+    /** The profile's own bridge lines, one per line as torrc writes them. */
+    var aetherTorBridgeLines: String? = null,
+    var aetherTorRelays: String? = null,
     /** A command line used in place of the settings. */
     var aetherCommand: String? = null,
     @Deprecated("Use pinnedCA256")

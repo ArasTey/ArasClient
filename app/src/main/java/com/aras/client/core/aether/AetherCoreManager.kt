@@ -7,10 +7,17 @@ import com.aras.client.dto.AetherRange
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.AetherIpVersion
 import com.aras.client.enums.AetherObfuscation
+import com.aras.client.enums.AetherPsiphon
+import com.aras.client.enums.AetherPsiphonCdnSet
+import com.aras.client.enums.AetherPsiphonMode
+import com.aras.client.enums.AetherTor
+import com.aras.client.enums.AetherTorBridges
+import com.aras.client.enums.AetherTorRelays
 import com.aras.client.enums.AetherProtocol
 import com.aras.client.enums.AetherScanMode
 import com.aras.client.enums.AetherTransport
 import com.aras.client.fmt.AetherFmt
+import com.aras.client.handler.SettingsManager
 import com.aras.client.util.LogUtil
 import java.io.File
 import java.io.IOException
@@ -57,6 +64,29 @@ object AetherCoreManager {
     const val AETHER_MASQUE_CONFIG_ENV = "AETHER_MASQUE_CONFIG"
     const val AETHER_WG_CONFIG_ENV = "AETHER_WG_CONFIG"
 
+    /** The option that names Psiphon's own listener. */
+    const val PSIPHON_BIND = "--psiphon-bind"
+
+    /** The option that names Tor's own listener. */
+    const val TOR_BIND = "--tor-bind"
+
+    /** The Psiphon client, run beside the core. */
+    const val PSIPHON_BINARY_NAME = "libpsiphon-tunnel-core.so"
+
+    /** The pluggable transport Tor's bridges run through; it speaks every one the core asks for. */
+    const val TRANSPORT_BINARY_NAME = "liblyrebird.so"
+
+    const val PSIPHON_BIN_ENV = "AETHER_PSIPHON_BIN"
+    const val TOR_PT_ENV = "AETHER_TOR_PT"
+    const val CERT_DIR_ENV = "SSL_CERT_DIR"
+    const val PSIPHON_CONFIG_ENV = "AETHER_PSIPHON_CONFIG"
+    const val PSIPHON_DIR_ENV = "AETHER_PSIPHON_DIR"
+    const val PSIPHON_SERVER_ENTRIES = "--psiphon-server-entries"
+    const val SHIPPED_LIST = "shipped-list"
+
+    private val psiphonReady = Regex("psiphon ready|proxy started: psiphon", RegexOption.IGNORE_CASE)
+    private val torReady = Regex("tor ready|proxy started: tor", RegexOption.IGNORE_CASE)
+
     /** The work directory, shared with [AetherIdentityManager]. */
     const val WORK_DIR = "aether"
 
@@ -95,8 +125,36 @@ object AetherCoreManager {
         logLevel: String = DEFAULT_LOG_LEVEL,
     ): List<String> {
         val protocol = AetherProtocol.fromString(profile.aetherProtocol)
+        // A scan looks for WARP endpoints from where the session will look: a carrier
+        // around the tunnel stays, one inside it has no part in a scan.
+        val tor = AetherTor.fromString(profile.aetherTor).takeUnless { scan && it != AetherTor.REVERSE }
+            ?: AetherTor.OFF
+        val psiphon = AetherPsiphon.fromString(profile.aetherPsiphon)
+            .takeUnless { scan && it != AetherPsiphon.REVERSE } ?: AetherPsiphon.OFF
+        // The listener the app dials takes [port]: Psiphon's or Tor's when one of them
+        // runs inside the tunnel and is what the app reaches, the tunnel's own
+        // otherwise. Every other listener takes a port after it, in the order the
+        // tunnel's own, then Tor's, then Psiphon's.
+        val dialsPsiphon = psiphon == AetherPsiphon.CHAIN
+        val dialsTor = tor == AetherTor.CHAIN && !dialsPsiphon
+        var next = port + 1
+        val own = if (dialsPsiphon || dialsTor) next++ else port
+        val torBind = when (tor) {
+            AetherTor.CHAIN -> if (dialsTor) port else next++
+            AetherTor.REVERSE -> next++
+            AetherTor.OFF, AetherTor.ONLY -> null
+        }
+        // Psiphon around the tunnel is the exception: nothing of the app dials its
+        // listener and the core takes the port Psiphon reports, so an ephemeral port
+        // keeps a test core from colliding with the session's.
+        val psiphonBind = when (psiphon) {
+            AetherPsiphon.CHAIN -> if (dialsPsiphon) port else next++
+            AetherPsiphon.REVERSE -> 0
+            AetherPsiphon.OFF, AetherPsiphon.ONLY -> null
+        }
         return buildList {
-            addAll(listOf("--bind", "${AppConfig.LOOPBACK}:$port"))
+            addAll(listOf("--bind", "${AppConfig.LOOPBACK}:$own"))
+            if (psiphon != AetherPsiphon.ONLY && tor != AetherTor.ONLY) {
             addAll(listOf("--protocol", protocol.type))
             addAll(listOf("--scan", AetherScanMode.fromString(profile.aetherScanMode).type))
             // Automatic obfuscation is the core's own choice per protocol, so say nothing.
@@ -137,6 +195,62 @@ object AetherCoreManager {
             }
 
             add(if (scan) "--no-quick-reconnect" else "--quick-reconnect")
+            }
+
+            when (tor) {
+                AetherTor.OFF -> Unit
+                AetherTor.CHAIN -> add("--tor")
+                AetherTor.REVERSE -> add("--tor-reverse")
+                AetherTor.ONLY -> add("--tor-only")
+            }
+            torBind?.let { addAll(listOf(TOR_BIND, "${AppConfig.LOOPBACK}:$it")) }
+            if (tor != AetherTor.OFF) {
+                // Told nothing, the core tries Tor plainly and turns to fetched bridges
+                // where Tor is blocked.
+                when (AetherTorBridges.fromString(profile.aetherTorBridges)) {
+                    AetherTorBridges.AUTO -> Unit
+                    AetherTorBridges.FIRST -> add("--tor-bridges")
+                    AetherTorBridges.NEVER -> add("--no-tor-bridges")
+                    AetherTorBridges.OWN -> AetherFmt.bridgeLines(profile.aetherTorBridgeLines)
+                        .forEach { addAll(listOf("--tor-bridge", it)) }
+                }
+                if (AetherTorBridges.fromString(profile.aetherTorBridges) in
+                    setOf(AetherTorBridges.AUTO, AetherTorBridges.FIRST)
+                ) {
+                    AetherTorRelays.fromString(profile.aetherTorRelays)
+                        .takeUnless { it == AetherTorRelays.AUTO }
+                        ?.let { addAll(listOf("--tor-relays", it.type)) }
+                }
+            }
+
+            when (psiphon) {
+                AetherPsiphon.OFF -> Unit
+                AetherPsiphon.CHAIN -> add("--psiphon")
+                AetherPsiphon.REVERSE -> add("--psiphon-reverse")
+                AetherPsiphon.ONLY -> add("--psiphon-only")
+            }
+            psiphonBind?.let { addAll(listOf(PSIPHON_BIND, "${AppConfig.LOOPBACK}:$it")) }
+            if (psiphon != AetherPsiphon.OFF) {
+                val shape = AetherPsiphonMode.fromString(profile.aetherPsiphonMode)
+                addAll(listOf("--psiphon-mode", shape.type))
+                // The CDN lists feed the fronted transports alone, which direct never uses.
+                val cdnIps = profile.aetherPsiphonCdnIps
+                    ?.takeIf { it.isNotBlank() && shape != AetherPsiphonMode.DIRECT }
+                cdnIps?.let { addAll(listOf("--psiphon-cdn-ips", it)) }
+                if (cdnIps != null) {
+                    profile.aetherPsiphonCdnSni?.takeIf { it.isNotBlank() }
+                        ?.let { addAll(listOf("--psiphon-cdn-sni", it)) }
+                }
+                if (shape != AetherPsiphonMode.DIRECT) {
+                    AetherPsiphonCdnSet.join(AetherPsiphonCdnSet.parse(profile.aetherPsiphonCdnSets))
+                        ?.let { addAll(listOf("--psiphon-cdn-sets", it)) }
+                }
+                profile.aetherPsiphonRegion?.takeIf { it.isNotBlank() }
+                    ?.let { addAll(listOf("--psiphon-region", it)) }
+                if (profile.aetherPsiphonBundledList != false) {
+                    addAll(listOf(PSIPHON_SERVER_ENTRIES, SHIPPED_LIST))
+                }
+            }
             addAll(listOf("--log-level", logLevel))
         }
     }
@@ -266,8 +380,68 @@ object AetherCoreManager {
             put(AETHER_CONFIG_ENV, File(work, AetherIdentityManager.BASE_FILE).absolutePath)
             put(AETHER_MASQUE_CONFIG_ENV, File(work, AetherIdentityManager.MASQUE_FILE).absolutePath)
             put(AETHER_WG_CONFIG_ENV, File(work, AetherIdentityManager.WIREGUARD_FILE).absolutePath)
+            psiphonBinary(context).takeIf { it.canExecute() }
+                ?.let { put(PSIPHON_BIN_ENV, it.absolutePath) }
+            transportBinary(context).takeIf { it.canExecute() }?.let { transport ->
+                put(TOR_PT_ENV, torTransports.joinToString(";") { "$it=${transport.absolutePath}" })
+            }
+            // The Psiphon client and lyrebird are programs built for Linux that read
+            // Linux certificate paths; Android keeps its roots in the Conscrypt module
+            // since Android 14 and on the system image before that. Without this neither
+            // can verify a certificate, the Psiphon server list first of all.
+            certificateDirectories { File(it).isDirectory }?.let { put(CERT_DIR_ENV, it) }
+            psiphonOverlay(context)?.let { put(PSIPHON_CONFIG_ENV, it.absolutePath) }
+            put(
+                PSIPHON_DIR_ENV,
+                File(if (markSession) context.filesDir else context.cacheDir, "aether-psiphon")
+                    .apply { mkdirs() }.absolutePath,
+            )
         }
     }
+
+    /** The transports Tor's pluggable transport is asked for, in the core's own names. */
+    internal val torTransports = listOf("obfs4", "obfs4proxy", "snowflake", "conjure", "meek")
+
+    /** The certificate directories of this device that exist, joined the way Go reads them. */
+    internal fun certificateDirectories(exists: (String) -> Boolean): String? =
+        ANDROID_CERTIFICATE_DIRECTORIES.filter { exists(it) }
+            .takeIf { it.isNotEmpty() }?.joinToString(":")
+
+    private val ANDROID_CERTIFICATE_DIRECTORIES =
+        listOf("/apex/com.android.conscrypt/cacerts", "/system/etc/security/cacerts")
+
+    fun psiphonBinary(context: Context): File =
+        File(context.applicationInfo.nativeLibraryDir, PSIPHON_BINARY_NAME)
+
+    fun transportBinary(context: Context): File =
+        File(context.applicationInfo.nativeLibraryDir, TRANSPORT_BINARY_NAME)
+
+    /**
+     * The settings file laid over Psiphon's built-in configuration.
+     *
+     * Android has no resolver configuration a Linux-built program could read, so
+     * Psiphon is given resolvers of its own for the names it looks up itself.
+     */
+    private fun psiphonOverlay(context: Context): File? {
+        val dir = File(context.filesDir, "aether-psiphon").apply { mkdirs() }
+        val file = File(dir, "config.json")
+        val resolvers = SettingsManager.getRemoteDnsServers()
+            .filter { com.aras.client.util.Utils.isPureIpAddress(it) }
+            .joinToString(",")
+            .ifBlank { DEFAULT_RESOLVERS }
+        return runCatching {
+            file.writeText("""{"PropagationChannels":[],"RemoteDnsAddresses":[""" +
+                resolvers.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    .joinToString(",") { """"$it"""" } + "]}")
+            file
+        }.getOrNull()
+    }
+
+    private const val DEFAULT_RESOLVERS = "1.1.1.1,8.8.8.8"
+
+    /** Whether this build carries the helper processes a Psiphon or Tor profile needs. */
+    fun carriersAvailable(context: Context): Boolean =
+        psiphonBinary(context).canExecute() && transportBinary(context).canExecute()
 
     /**
      * Starts the core and waits for its listener to answer.
@@ -335,6 +509,34 @@ object AetherCoreManager {
         }
     } catch (e: IOException) {
         false
+    }
+
+    /**
+     * Runs [block] with the aether core up, starting it if it is not already running.
+     *
+     * A latency test measures through the core's loopback SOCKS listener, so the core
+     * has to be listening for the measurement to mean anything. A core this started is
+     * stopped again afterwards; one that was already up is left alone, so a test during
+     * a live session does not tear the session down.
+     */
+    fun <T> withSession(
+        context: Context,
+        profile: ProfileItem,
+        block: () -> T,
+    ): T {
+        val startedHere = running() == null
+        if (startedHere) {
+            val core = AetherCore.of(profile)
+            if (!start(context, core) { }) {
+                stop()
+                error("The aether core did not start; the test cannot reach the tunnel")
+            }
+        }
+        return try {
+            block()
+        } finally {
+            if (startedHere) stop()
+        }
     }
 
     /** The core currently running, or null. */

@@ -57,6 +57,50 @@
         <item>h2</item>
     </string-array>
 
+    <string-array name="aether_psiphons" translatable="false">
+        <item>off</item>
+        <item>chain</item>
+        <item>reverse</item>
+        <item>only</item>
+    </string-array>
+
+    <string-array name="aether_psiphon_modes" translatable="false">
+        <item>auto</item>
+        <item>cdn</item>
+        <item>direct</item>
+    </string-array>
+
+    <string-array name="aether_tors" translatable="false">
+        <item>off</item>
+        <item>chain</item>
+        <item>reverse</item>
+        <item>only</item>
+    </string-array>
+
+    <string-array name="aether_tor_bridges" translatable="false">
+        <item>auto</item>
+        <item>first</item>
+        <item>never</item>
+        <item>own</item>
+    </string-array>
+
+    <string-array name="aether_tor_relays" translatable="false">
+        <item>auto</item>
+        <item>only</item>
+        <item>off</item>
+    </string-array>
+
+    <string-array name="aether_psiphon_cdn_sets" translatable="false">
+        <item>cloudflare</item>
+        <item>fastly</item>
+        <item>cloudfront</item>
+        <item>psiphon-akamai</item>
+        <item>psiphon-bunny</item>
+        <item>vercel</item>
+        <item>github</item>
+        <item>curated-fronting</item>
+        <item>legacy-android-overrides</item>
+    </string-array>
     <string-array name="networks" translatable="false">
         <item>tcp</item>
         <item>kcp</item>

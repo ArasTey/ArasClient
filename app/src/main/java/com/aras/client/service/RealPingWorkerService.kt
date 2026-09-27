@@ -3,6 +3,7 @@ package com.aras.client.service
 import android.content.Context
 import com.aras.client.core.CoreConfigManager
 import com.aras.client.core.CoreNativeManager
+import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.dto.RealPingEvent
 import com.aras.client.enums.EConfigType
 import com.aras.client.extension.isComplexType
@@ -132,7 +133,18 @@ class RealPingWorkerService(
             return retFailure
         }
         return RealPingExecutionLimiter.run(config.configType) {
-            CoreNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl())
+            // An Aether profile is measured through the core's loopback SOCKS, so the
+            // core has to be listening or the number means nothing.
+            if (config.configType == EConfigType.AETHER) {
+                AetherCoreManager.withSession(context, config) {
+                    CoreNativeManager.measureOutboundDelay(
+                        configResult.content,
+                        SettingsManager.getDelayTestUrl(),
+                    )
+                }
+            } else {
+                CoreNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl())
+            }
         }
     }
 

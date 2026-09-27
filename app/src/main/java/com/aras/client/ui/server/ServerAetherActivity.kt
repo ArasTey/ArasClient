@@ -17,6 +17,8 @@ import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.core.aether.AetherIdentityManager
 import com.aras.client.core.aether.AetherIdentityStatus
 import com.aras.client.enums.AetherProtocol
+import com.aras.client.enums.AetherPsiphon
+import com.aras.client.enums.AetherTor
 import com.aras.client.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,6 +31,7 @@ import com.aras.client.R
 import com.aras.client.enums.EConfigType
 import com.aras.client.ui.compose.FormDropdownField
 import com.aras.client.ui.compose.FormTextField
+import com.aras.client.ui.compose.FormToggleField
 
 /**
  * Editor for an Aether profile.
@@ -172,7 +175,108 @@ class ServerAetherActivity : BaseServerActivity() {
                 keyboardType = KeyboardType.Number
             )
 
+            AetherCarriersSection(uiState)
+
             AetherIdentitySection(uiState, scope)
+        }
+    }
+
+    /**
+     * Psiphon and Tor, the two programs that can carry the tunnel or sit inside it.
+     *
+     * The pairings the core refuses are stated on the fields rather than left to be
+     * discovered at connect time: either one in *reverse* needs MASQUE, and the two of
+     * them go together only nested.
+     */
+    @Composable
+    private fun AetherCarriersSection(state: ServerUiState) {
+        val psiphon = AetherPsiphon.fromString(state.aetherPsiphon)
+        val tor = AetherTor.fromString(state.aetherTor)
+        val overMasque = AetherProtocol.fromString(state.aetherProtocol).overMasque
+
+        FormDropdownField(
+            label = stringResource(R.string.server_lab_aether_psiphon),
+            value = state.aetherPsiphon,
+            options = stringArrayResource(R.array.aether_psiphons).toList(),
+            onValueChange = { state.aetherPsiphon = it },
+            supportingText = if (psiphon == AetherPsiphon.REVERSE && !overMasque) {
+                stringResource(R.string.server_lab_aether_needs_masque)
+            } else {
+                null
+            },
+        )
+        if (psiphon != AetherPsiphon.OFF) {
+            FormDropdownField(
+                label = stringResource(R.string.server_lab_aether_psiphon_mode),
+                value = state.aetherPsiphonMode,
+                options = stringArrayResource(R.array.aether_psiphon_modes).toList(),
+                onValueChange = { state.aetherPsiphonMode = it },
+            )
+            FormTextField(
+                stringResource(R.string.server_lab_aether_psiphon_cdn_ips),
+                state.aetherPsiphonCdnIps,
+                { state.aetherPsiphonCdnIps = it },
+            )
+            FormTextField(
+                stringResource(R.string.server_lab_aether_psiphon_cdn_sni),
+                state.aetherPsiphonCdnSni,
+                { state.aetherPsiphonCdnSni = it },
+            )
+            FormTextField(
+                stringResource(R.string.server_lab_aether_psiphon_cdn_sets),
+                state.aetherPsiphonCdnSets,
+                { state.aetherPsiphonCdnSets = it },
+            )
+            FormTextField(
+                stringResource(R.string.server_lab_aether_psiphon_region),
+                state.aetherPsiphonRegion,
+                { state.aetherPsiphonRegion = it },
+            )
+            FormToggleField(
+                label = stringResource(R.string.server_lab_aether_psiphon_bundled),
+                checked = state.aetherPsiphonBundledList,
+                onCheckedChange = { state.aetherPsiphonBundledList = it },
+            )
+        }
+
+        FormDropdownField(
+            label = stringResource(R.string.server_lab_aether_tor),
+            value = state.aetherTor,
+            options = stringArrayResource(R.array.aether_tors).toList(),
+            onValueChange = { state.aetherTor = it },
+            supportingText = when {
+                tor == AetherTor.REVERSE && !overMasque ->
+                    stringResource(R.string.server_lab_aether_needs_masque)
+
+                tor != AetherTor.OFF && psiphon != AetherPsiphon.OFF &&
+                    !(tor == AetherTor.CHAIN && psiphon == AetherPsiphon.REVERSE) &&
+                    !(tor == AetherTor.REVERSE && psiphon == AetherPsiphon.CHAIN) ->
+                    stringResource(R.string.server_lab_aether_tor_psiphon_conflict)
+
+                else -> null
+            },
+        )
+        if (tor != AetherTor.OFF) {
+            FormDropdownField(
+                label = stringResource(R.string.server_lab_aether_tor_bridges),
+                value = state.aetherTorBridges,
+                options = stringArrayResource(R.array.aether_tor_bridges).toList(),
+                onValueChange = { state.aetherTorBridges = it },
+            )
+            if (state.aetherTorBridges == "own") {
+                FormTextField(
+                    stringResource(R.string.server_lab_aether_tor_bridge_lines),
+                    state.aetherTorBridgeLines,
+                    { state.aetherTorBridgeLines = it },
+                )
+            } else {
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_tor_relays),
+                    value = state.aetherTorRelays,
+                    options = stringArrayResource(R.array.aether_tor_relays).toList(),
+                    onValueChange = { state.aetherTorRelays = it },
+                )
+            }
         }
     }
 

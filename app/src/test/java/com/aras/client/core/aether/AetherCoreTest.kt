@@ -212,6 +212,178 @@ class AetherCoreTest {
         assertEquals("info", AetherCoreManager.coreLogLevel("nonsense"))
     }
 
+    @Test
+    fun `psiphon inside the tunnel takes over the port the app dials`() {
+        val args = AetherCoreManager.buildArguments(
+            profile {
+                server = "198.51.100.9"
+                serverPort = "2408"
+                aetherProtocol = "wg"
+                aetherPsiphon = "chain"
+            },
+            port = 10819,
+        )
+
+        // The app reaches Psiphon, so Psiphon takes the dialed port and the tunnel's
+        // own listener moves up to the next one.
+        assertEquals("127.0.0.1:10820", args.valueOf("--bind"))
+        assertEquals("127.0.0.1:10819", args.valueOf("--psiphon-bind"))
+        assertTrue("--psiphon" in args)
+    }
+
+    @Test
+    fun `psiphon around the tunnel takes an ephemeral port of its own`() {
+        val args = AetherCoreManager.buildArguments(
+            profile {
+                server = "198.51.100.9"
+                serverPort = "2408"
+                aetherProtocol = "wg"
+                aetherPsiphon = "reverse"
+            },
+            port = 10819,
+        )
+
+        assertEquals("127.0.0.1:10819", args.valueOf("--bind"))
+        assertEquals("127.0.0.1:0", args.valueOf("--psiphon-bind"))
+        assertTrue("--psiphon-reverse" in args)
+    }
+
+    @Test
+    fun `tor inside the tunnel takes the dialed port and the tunnel the next`() {
+        val args = AetherCoreManager.buildArguments(
+            profile {
+                server = "198.51.100.9"
+                serverPort = "2408"
+                aetherProtocol = "wg"
+                aetherTor = "chain"
+            },
+            port = 10819,
+        )
+
+        assertEquals("127.0.0.1:10820", args.valueOf("--bind"))
+        assertEquals("127.0.0.1:10819", args.valueOf("--tor-bind"))
+        assertTrue("--tor" in args)
+    }
+
+    @Test
+    fun `tor bridges are passed only as their mode asks`() {
+        fun bridgesFor(value: String) = AetherCoreManager.buildArguments(
+            profile {
+                aetherProtocol = "wg"
+                aetherTor = "chain"
+                aetherTorBridges = value
+                aetherTorRelays = "only"
+            },
+            port = 10819,
+        )
+
+        // Told nothing, the core tries Tor plainly and turns to bridges later.
+        assertTrue("--tor-bridges" !in bridgesFor("auto"))
+        assertTrue("--no-tor-bridges" !in bridgesFor("auto"))
+        assertTrue("--tor-relays" in bridgesFor("auto"))
+
+        assertTrue("--tor-bridges" in bridgesFor("first"))
+        assertTrue("--no-tor-bridges" in bridgesFor("never"))
+
+        // With the profile's own lines, nothing is fetched at all.
+        val own = AetherCoreManager.buildArguments(
+            profile {
+                aetherProtocol = "wg"
+                aetherTor = "chain"
+                aetherTorBridges = "own"
+                aetherTorBridgeLines = "obfs4 1.2.3.4:443\n# a comment\nBridge snowflake 5.6.7.8:443"
+            },
+            port = 10819,
+        )
+        assertTrue("--tor-bridge" in own)
+        assertTrue("--tor-relays" !in own)
+    }
+
+    @Test
+    fun `psiphon-only and tor-only dial no tunnel at all`() {
+        val psiphonOnly = AetherCoreManager.buildArguments(
+            profile { aetherPsiphon = "only" }, port = 10819
+        )
+        assertTrue("--psiphon-only" in psiphonOnly)
+        assertTrue("--protocol" !in psiphonOnly)
+        assertTrue("--scan" !in psiphonOnly)
+
+        val torOnly = AetherCoreManager.buildArguments(profile { aetherTor = "only" }, port = 10819)
+        assertTrue("--tor-only" in torOnly)
+        assertTrue("--protocol" !in torOnly)
+    }
+
+    @Test
+    fun `the psiphon mode drops the fronting lists the direct shape never uses`() {
+        val direct = AetherCoreManager.buildArguments(
+            profile {
+                aetherProtocol = "masque"
+                aetherPsiphon = "chain"
+                aetherPsiphonMode = "direct"
+                aetherPsiphonCdnIps = "1.2.3.4"
+                aetherPsiphonCdnSets = "cloudflare,github"
+            },
+            port = 10819,
+        )
+        assertEquals("direct", direct.valueOf("--psiphon-mode"))
+        assertNull(direct.valueOf("--psiphon-cdn-ips"))
+        assertNull(direct.valueOf("--psiphon-cdn-sets"))
+
+        val cdn = AetherCoreManager.buildArguments(
+            profile {
+                aetherProtocol = "masque"
+                aetherPsiphon = "chain"
+                aetherPsiphonMode = "cdn"
+                aetherPsiphonCdnIps = "1.2.3.4"
+                aetherPsiphonCdnSets = "cloudflare,github"
+            },
+            port = 10819,
+        )
+        assertEquals("1.2.3.4", cdn.valueOf("--psiphon-cdn-ips"))
+        assertEquals("cloudflare,github", cdn.valueOf("--psiphon-cdn-sets"))
+    }
+
+    @Test
+    fun `the bundled psiphon server list is offered unless the profile asks for a fresh one`() {
+        fun listFlag(keepBundled: Boolean?) = AetherCoreManager.buildArguments(
+            profile {
+                aetherProtocol = "wg"
+                aetherPsiphon = "chain"
+                aetherPsiphonBundledList = keepBundled
+            },
+            port = 10819,
+        ).valueOf("--psiphon-server-entries")
+
+        assertEquals("shipped-list", listFlag(null))
+        assertEquals("shipped-list", listFlag(true))
+        assertNull(listFlag(false))
+    }
+
+    @Test
+    fun `a scan keeps a reverse carrier and drops one inside the tunnel`() {
+        // A scan looks for WARP endpoints from where the session will, so a carrier
+        // around the tunnel stays and one inside it has no part in it.
+        val around = AetherCoreManager.buildArguments(
+            profile {
+                aetherProtocol = "wg"
+                aetherPsiphon = "reverse"
+                aetherTor = "reverse"
+            },
+            port = 10819, scan = true,
+        )
+        assertTrue("--psiphon-reverse" in around)
+        assertTrue("--tor-reverse" in around)
+
+        val inside = AetherCoreManager.buildArguments(
+            profile {
+                aetherProtocol = "wg"
+                aetherPsiphon = "chain"
+            },
+            port = 10819, scan = true,
+        )
+        assertTrue("--psiphon" !in inside)
+    }
+
     private fun List<String>.valueOf(flag: String): String? {
         val index = indexOf(flag)
         return if (index < 0 || index + 1 >= size) null else this[index + 1]

@@ -4,6 +4,7 @@ import android.util.Log
 import com.aras.client.dto.AetherEndpoint
 import com.aras.client.dto.AetherRange
 import com.aras.client.enums.AetherIpVersion
+import com.aras.client.enums.AetherPsiphonCdnSet
 import com.aras.client.enums.AetherProtocol
 import com.aras.client.enums.AetherScanMode
 import org.junit.After
@@ -156,5 +157,123 @@ class AetherFmtTest {
         assertNull(AetherRange.parse("9000", AetherRange.FRAGMENT_SIZE))
         assertNull(AetherRange.parse("0", AetherRange.FRAGMENT_SIZE))
         assertTrue(AetherRange.FRAGMENT_DELAY.contains(1000))
+    }
+
+    @Test
+    fun `round-trips a psiphon and tor profile`() {
+        // A comma in a query value is percent-encoded on the way out, so the link is
+        // compared field by field rather than byte for byte.
+        val link = "aether://198.51.100.9:2408?protocol=wg&scan=balanced&ip=v4" +
+            "&listen=10825&psiphon=chain&psiphon_mode=cdn&cdn_ips=1.2.3.4" +
+            "&cdn_sets=cloudflare,github&tor=reverse&tor_bridges=first" +
+            "&tor_relays=only&bridges=obfs4 1.2.3.4:443#carried"
+
+        val config = AetherFmt.parse(link)
+        assertNotNull(config)
+        assertEquals("chain", config!!.aetherPsiphon)
+        assertEquals("cdn", config.aetherPsiphonMode)
+        assertEquals("1.2.3.4", config.aetherPsiphonCdnIps)
+        assertEquals("reverse", config.aetherTor)
+        assertEquals("first", config.aetherTorBridges)
+        assertEquals("only", config.aetherTorRelays)
+        assertEquals("10825", config.aetherListenPort)
+        assertEquals("obfs4 1.2.3.4:443", config.aetherTorBridgeLines)
+        assertEquals("cloudflare,github", config.aetherPsiphonCdnSets)
+
+        val again = AetherFmt.parse(AetherFmt.toUri(config))!!
+        assertEquals(config.aetherPsiphon, again.aetherPsiphon)
+        assertEquals(config.aetherPsiphonCdnSets, again.aetherPsiphonCdnSets)
+        assertEquals(config.aetherTor, again.aetherTor)
+        assertEquals(config.aetherTorBridgeLines, again.aetherTorBridgeLines)
+    }
+
+    @Test
+    fun `psiphon and tor off are stored as absent, not as the word off`() {
+        val config = AetherFmt.parse("aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4")!!
+
+        assertNull(config.aetherPsiphon)
+        assertNull(config.aetherTor)
+    }
+
+    @Test
+    fun `normalizing refuses a reverse carrier on a wireguard profile`() {
+        val config = AetherFmt.parse("aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4&psiphon=reverse")!!
+        // Psiphon and Tor carry TCP alone; WARP WireGuard endpoints answer on UDP.
+        assertEquals(AetherFmt.Problem.PSIPHON_NEEDS_MASQUE, AetherFmt.normalize(config))
+    }
+
+    @Test
+    fun `normalizing allows a reverse carrier once the protocol is masque`() {
+        // The MASQUE check is what lifts; reverse+chain is then the one pairing that nests.
+        val config = AetherFmt.parse(
+            "aether://1.2.3.4:443?protocol=masque&scan=balanced&ip=v4&psiphon=reverse&tor=chain"
+        )!!
+        assertNull(AetherFmt.normalize(config))
+    }
+
+    @Test
+    fun `normalizing refuses two carriers on the same side of the tunnel`() {
+        // Both inside the tunnel would leave the app nothing to dial them through.
+        val both = AetherFmt.parse("aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4&psiphon=chain&tor=chain")!!
+        assertEquals(AetherFmt.Problem.TOR_PSIPHON_CONFLICT, AetherFmt.normalize(both))
+
+        // Two around it the core refuses outright.
+        val bothOutside = AetherFmt.parse(
+            "aether://1.2.3.4:443?protocol=masque&scan=balanced&ip=v4&psiphon=reverse&tor=reverse"
+        )!!
+        assertEquals(AetherFmt.Problem.TOR_PSIPHON_CONFLICT, AetherFmt.normalize(bothOutside))
+    }
+
+    @Test
+    fun `normalizing accepts the one pairing that nests`() {
+        val config = AetherFmt.parse(
+            "aether://1.2.3.4:443?protocol=masque&scan=balanced&ip=v4&psiphon=reverse&tor=chain"
+        )!!
+
+        assertNull(AetherFmt.normalize(config))
+    }
+
+    @Test
+    fun `normalizing insists on bridge lines when the profile says own`() {
+        val config = AetherFmt.parse(
+            "aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4&tor=chain&tor_bridges=own"
+        )!!
+        assertEquals(AetherFmt.Problem.TOR_BRIDGES_MISSING, AetherFmt.normalize(config))
+    }
+
+    @Test
+    fun `normalizing reads bridge lines as a bridge file does`() {
+        val config = AetherFmt.parse(
+            "aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4&tor=chain&tor_bridges=own" +
+                "&bridges=obfs4%201.2.3.4%3A443%3BBridge%20snowflake%205.6.7.8%3A443"
+        )!!
+
+        assertNull(AetherFmt.normalize(config))
+        assertEquals(listOf("obfs4 1.2.3.4:443", "snowflake 5.6.7.8:443"),
+            AetherFmt.bridgeLines(config.aetherTorBridgeLines))
+    }
+
+    @Test
+    fun `normalizing rejects an exit rule that is not country codes`() {
+        val bad = AetherFmt.parse("aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4&exit_loc=nowhere")!!
+        assertEquals(AetherFmt.Problem.INVALID_EXIT_LOC, AetherFmt.normalize(bad))
+
+        val good = AetherFmt.parse("aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4&exit_loc=de,nl")!!
+        assertNull(AetherFmt.normalize(good))
+        assertEquals("DE,NL", good.aetherExitLoc)
+    }
+
+    @Test
+    fun `normalizing rejects a resolver that is neither an address nor an endpoint`() {
+        val bad = AetherFmt.parse("aether://1.2.3.4:2408?protocol=wg&scan=balanced&ip=v4&dns=notadns")!!
+        assertEquals(AetherFmt.Problem.INVALID_DNS, AetherFmt.normalize(bad))
+    }
+
+    @Test
+    fun `the cdn sets are kept in their own order whatever order they arrive in`() {
+        val parsed = AetherPsiphonCdnSet.parse("github, cloudflare ,stranger")
+        assertEquals(listOf("cloudflare", "github"), parsed.map { it.type })
+        assertEquals("cloudflare,github", AetherPsiphonCdnSet.join(parsed))
+        assertNull(AetherPsiphonCdnSet.join(emptyList()))
     }
 }
