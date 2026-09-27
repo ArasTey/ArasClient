@@ -5,8 +5,6 @@ import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.EConfigType
 import com.aras.client.enums.NetworkType
-import com.aras.client.handler.MmkvManager
-import com.tencent.mmkv.MMKV
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -15,7 +13,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.MockedStatic
-import org.mockito.Mockito.mock
 import org.mockito.Mockito.mockStatic
 
 /**
@@ -34,31 +31,12 @@ class CoreOutboundBuilderTest {
     @Before
     fun setUp() {
         mockLog = mockStatic(Log::class.java)
-        injectSettingsStorage()
+        TestSettings.install()
     }
 
     @After
     fun tearDown() {
         mockLog.close()
-    }
-
-    /**
-     * MMKV is a native library with no JVM implementation, so [MmkvManager] reads null
-     * in unit tests and every settings lookup NPEs. MmkvManager is a Kotlin `object`,
-     * so `mockStatic` cannot intercept it either — instead, force the `by lazy`
-     * delegate to hand out a mocked MMKV. Unstubbed reads return the type default,
-     * which is what the production code already assumes for "unset".
-     */
-    private fun injectSettingsStorage() {
-        val delegateField = MmkvManager::class.java.getDeclaredField("settingsStorage\$delegate")
-        delegateField.isAccessible = true
-        val lazy = delegateField.get(MmkvManager)
-
-        // SynchronizedLazyImpl reads _value on every getValue() and only calls the
-        // initializer while it holds the uninitialized sentinel, so assigning here
-        // is enough — no separate initialized flag to set.
-        lazy.javaClass.getDeclaredField("_value").apply { isAccessible = true }
-            .set(lazy, mock(MMKV::class.java))
     }
 
     // An IP address keeps getServerAddress() off HttpUtil's resolver, so these stay

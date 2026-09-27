@@ -25,6 +25,8 @@ import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.Locale
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -36,6 +38,9 @@ import java.util.concurrent.atomic.AtomicReference
  * carried by dialing this process's loopback SOCKS listener.
  */
 object AetherCoreManager {
+
+    /** Sentinel the output thread puts when the core's stream ends. */
+    private val EOF = String(charArrayOf('\u0000'))
 
     /**
      * The core ships in the APK as a shared library, because a file in the app's data
@@ -343,13 +348,37 @@ object AetherCoreManager {
             LogUtil.e(AppConfig.TAG, "AetherCore: failed to launch $source", e)
             return null
         }
+
+        // The core's output is read on its own thread. Reading it here would block for
+        // as long as the core is quiet, and the deadline below is only ever checked
+        // between lines - so a core that says nothing would sit here long past it, with
+        // the screen showing nothing at all.
+        val lines = LinkedBlockingQueue<String>()
+        val reader = Thread {
+            runCatching {
+                process.inputStream.bufferedReader().forEachLine { lines.put(it) }
+            }
+            lines.put(EOF)
+        }.apply {
+            isDaemon = true
+            name = "aether-core-output"
+            start()
+        }
+
         return try {
             val deadline = System.currentTimeMillis() + timeoutMs
             var matched: String? = null
-            val reader = process.inputStream.bufferedReader()
-            while (System.currentTimeMillis() < deadline) {
-                if (!reader.ready() && !process.isAlive) break
-                val line = reader.readLine() ?: break
+            while (true) {
+                val left = deadline - System.currentTimeMillis()
+                if (left <= 0) {
+                    LogUtil.w(AppConfig.TAG, "AetherCore: $source gave up after ${timeoutMs / 1000}s")
+                    break
+                }
+                val line = lines.poll(left, TimeUnit.MILLISECONDS) ?: run {
+                    LogUtil.w(AppConfig.TAG, "AetherCore: $source timed out after ${timeoutMs / 1000}s")
+                    break
+                }
+                if (line === EOF) break
                 LogUtil.i(AppConfig.TAG, "AetherCore: $line")
                 onOutput(line)
                 if (matched == null && ready(line)) {
@@ -358,11 +387,12 @@ object AetherCoreManager {
                 }
             }
             matched
-        } catch (e: IOException) {
-            LogUtil.e(AppConfig.TAG, "AetherCore: $source ended early", e)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
             null
         } finally {
             runCatching { process.destroy() }
+            runCatching { reader.interrupt() }
         }
     }
 

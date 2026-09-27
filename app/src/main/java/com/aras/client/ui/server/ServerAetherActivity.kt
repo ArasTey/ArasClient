@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -15,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.aras.client.core.aether.AetherCore
 import com.aras.client.core.aether.AetherCoreManager
+import com.aras.client.core.aether.AetherScanner
 import com.aras.client.core.aether.AetherIdentityManager
 import com.aras.client.core.aether.AetherIdentityStatus
 import com.aras.client.enums.AetherProtocol
@@ -24,7 +26,6 @@ import com.aras.client.fmt.AetherFmt
 import com.aras.client.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -361,87 +362,128 @@ class ServerAetherActivity : BaseServerActivity() {
     private fun AetherIdentitySection(state: ServerUiState, scope: kotlinx.coroutines.CoroutineScope) {
         val context = LocalContext.current
         val protocol = AetherProtocol.fromString(state.aetherProtocol)
-        var identity by remember(protocol) { mutableStateOf<AetherIdentityStatus?>(null) }
-        var busy by remember { mutableStateOf(false) }
-        var log by remember { mutableStateOf("") }
+        var identity by remember(protocol) { mutableStateOf(AetherIdentityManager.status(context, protocol)) }
+        var busy by remember { mutableStateOf<String?>(null) }
+        val log = remember { mutableStateListOf<String>() }
 
-        // A scan and a renewal both run a core of their own, which is why the buttons
-        // sit on a port clear of the session's.
-        fun runOneShot(source: String, block: () -> String?) {
-            if (busy) return
-            busy = true
-            log = ""
+        // The two steps are in order on purpose: the core cannot sweep for a gateway
+        // without an identity to sweep with, so the scan stays unavailable until a key
+        // is on disk, and a key that is already there is never asked for twice.
+        val hasKey = identity?.primary != null
+        val orderHint = if (hasKey) {
+            stringResource(R.string.server_lab_aether_hint_ready)
+        } else {
+            stringResource(R.string.server_lab_aether_hint_key_first)
+        }
+
+        // [block] is handed a sink so the core's own output reaches the screen while it
+        // runs, rather than only appearing in the log once the run has finished.
+        fun runOneShot(label: String, block: ((String) -> Unit) -> Unit) {
+            if (busy != null) return
+            busy = label
+            log.clear()
             scope.launch(Dispatchers.IO) {
-                val lines = StringBuilder()
-                val ok = try {
-                    block() != null
+                try {
+                    block { line -> runOnUiThread { log.add(line) } }
                 } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "AetherCore: $source failed", e)
-                    lines.append(e.message ?: e.javaClass.simpleName)
-                    false
+                    LogUtil.e(AppConfig.TAG, "AetherCore: $label failed", e)
+                    runOnUiThread { log.add(e.message ?: e.javaClass.simpleName) }
                 }
-                identity = withContext(Dispatchers.IO) {
-                    AetherIdentityManager.status(context, protocol)
-                }
-                log = if (ok) "" else lines.toString()
-                busy = false
+                identity = AetherIdentityManager.status(context, protocol)
+                busy = null
             }
         }
 
-        Button(
-            enabled = !busy,
-            onClick = {
-                runOneShot("scan") {
-                    AetherCoreManager.runUntil(
-                        context = context,
-                        arguments = AetherCoreManager.buildArguments(
-                            state.toProfileItem(initialConfig),
-                            AetherCoreManager.scanPort(state.toProfileItem(initialConfig)),
-                            scan = true,
-                        ),
-                        timeoutMs = AetherCoreManager.ONE_SHOT_TIMEOUT_MS,
-                        source = "aether-scan",
-                        onOutput = { line -> LogUtil.d(AppConfig.TAG, "aether scan | $line") },
-                    ) { true }
-                }
-            },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        ) {
-            Text(stringResource(R.string.server_lab_aether_scan))
+        // Read on the screen, not only in the log, so a run that takes a minute shows
+        // what it is doing instead of looking like nothing happened.
+        if (log.isNotEmpty()) {
+            FormTextField(
+                stringResource(R.string.server_lab_aether_log),
+                log.takeLast(12).joinToString("\n"),
+                onValueChange = {},
+                enabled = false,
+                maxLines = 12,
+            )
         }
 
+        val keyLabel = stringResource(R.string.server_lab_aether_new_key)
+        val scanLabel = stringResource(R.string.server_lab_aether_scan)
+        val workingLabel = stringResource(R.string.server_lab_aether_working)
+        val scanNeedsKeyLabel = stringResource(R.string.server_lab_aether_scan_needs_key)
+
         Button(
-            enabled = !busy,
+            enabled = busy == null,
             onClick = {
-                runOneShot("renew") {
+                runOneShot(keyLabel) { onLine ->
                     AetherIdentityManager.renew(
                         context,
                         state.toProfileItem(initialConfig),
-                    ) { line -> LogUtil.d(AppConfig.TAG, "aether key | $line") }?.primary?.deviceId
+                    ) { line ->
+                        LogUtil.d(AppConfig.TAG, "aether key | $line")
+                        onLine(line)
+                    }
                 }
             },
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         ) {
-            Text(stringResource(R.string.server_lab_aether_new_key))
+            Text(if (busy == keyLabel) workingLabel else keyLabel)
         }
 
-        val current = identity
+        Button(
+            enabled = busy == null && hasKey,
+            onClick = {
+                runOneShot(scanLabel) { onLine ->
+                    // The scan is only worth running because it changes the profile: the
+                    // core names the gateway it kept, and that is written back.
+                    val profile = state.toProfileItem(initialConfig)
+                    AetherScanner.scan(context, profile) { line ->
+                        LogUtil.d(AppConfig.TAG, "aether scan | $line")
+                        onLine(line)
+                    }?.let { found ->
+                        AetherScanner.apply(profile, found)
+                        runOnUiThread {
+                            state.address = profile.server.orEmpty()
+                            state.port = profile.serverPort.orEmpty()
+                            state.aetherWiwOuter = profile.aetherWiwOuter.orEmpty()
+                            state.aetherWiwInner = profile.aetherWiwInner.orEmpty()
+                        }
+                    }
+                }
+            },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            Text(
+                when {
+                    busy == scanLabel -> workingLabel
+                    !hasKey -> scanNeedsKeyLabel
+                    else -> scanLabel
+                }
+            )
+        }
+
+        FormTextField(
+            stringResource(R.string.server_lab_aether_hint),
+            orderHint,
+            onValueChange = {},
+            enabled = false,
+        )
+
+        val current = identity?.primary
         if (current != null) {
             FormTextField(
                 stringResource(R.string.server_lab_aether_identity),
                 buildString {
-                    append(current.primary?.deviceId.orEmpty())
-                    if (!current.primary?.ipv4.isNullOrBlank()) append("\n").append(current.primary?.ipv4)
-                    if (!current.primary?.ipv6.isNullOrBlank()) append("\n").append(current.primary?.ipv6)
+                    append(current.deviceId)
+                    if (current.ipv4.isNotBlank()) append("\n").append(current.ipv4)
+                    if (current.ipv6.isNotBlank()) append("\n").append(current.ipv6)
                 },
                 onValueChange = {},
                 enabled = false,
             )
-        }
-        if (log.isNotBlank()) {
+        } else {
             FormTextField(
-                stringResource(R.string.server_lab_aether_log),
-                log,
+                stringResource(R.string.server_lab_aether_identity),
+                stringResource(R.string.server_lab_aether_no_identity),
                 onValueChange = {},
                 enabled = false,
             )

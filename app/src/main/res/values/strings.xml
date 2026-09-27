@@ -86,6 +86,12 @@
     <string name="server_lab_aether_peer_bad">The gateway must be an IP address with a port.</string>
     <string name="server_lab_aether_hop_bad">A two hop tunnel needs two different gateways, each an IP with a port.</string>
     <string name="server_lab_aether_listen_port_bad">That listen port cannot be used.</string>
+    <string name="server_lab_aether_working">Working…</string>
+    <string name="server_lab_aether_scan_needs_key">Scan for an endpoint (needs a key first)</string>
+    <string name="server_lab_aether_no_identity">No WARP key yet</string>
+    <string name="server_lab_aether_hint_key_first">1. Turn the VPN ON, then get a WARP key.\n2. Turn the VPN OFF, then scan for an endpoint.\n3. Connect.</string>
+    <string name="server_lab_aether_hint_ready">Ready. The key is saved, so it will not be asked for again.\nTurn the VPN OFF before scanning for an endpoint, so the scan sees the network you will actually use.</string>
+    <string name="server_lab_aether_hint">Order</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
     <string name="sub_setting_announcement">Announcement</string>
     <string name="sub_setting_creator_message">Creator message</string>
