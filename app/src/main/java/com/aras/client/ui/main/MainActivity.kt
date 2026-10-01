@@ -46,6 +46,7 @@ import com.aras.client.ui.perappproxy.PerAppProxyActivity
 import com.aras.client.ui.routing.RoutingSettingActivity
 import com.aras.client.ui.server.ProfileEditorResult
 import com.aras.client.ui.server.ServerAetherActivity
+import com.aras.client.ui.server.ServerMieruActivity
 import com.aras.client.ui.server.ServerAmneziawgActivity
 import com.aras.client.ui.server.ServerAnytlsActivity
 import com.aras.client.ui.server.ServerCustomConfigActivity
@@ -444,6 +445,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.ANYTLS.value -> Intent(this, ServerAnytlsActivity::class.java)
             EConfigType.AMNEZIAWG.value -> Intent(this, ServerAmneziawgActivity::class.java)
             EConfigType.AETHER.value -> Intent(this, ServerAetherActivity::class.java)
+            EConfigType.MIERU.value -> Intent(this, ServerMieruActivity::class.java)
             else -> Intent(this, ServerHttpActivity::class.java).apply {
                 putExtra("createConfigType", createConfigType)
             }
@@ -611,6 +613,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.ANYTLS -> ServerAnytlsActivity::class.java
             EConfigType.AMNEZIAWG -> ServerAmneziawgActivity::class.java
             EConfigType.AETHER -> ServerAetherActivity::class.java
+            EConfigType.MIERU -> ServerMieruActivity::class.java
             else -> ServerHttpActivity::class.java
         }
         val intent = Intent(this, activityClass).apply {

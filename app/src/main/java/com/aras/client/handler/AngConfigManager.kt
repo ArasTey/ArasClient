@@ -23,6 +23,7 @@ import com.aras.client.fmt.ArasFmt
 import com.aras.client.fmt.AmneziawgFmt
 import com.aras.client.fmt.AnytlsFmt
 import com.aras.client.fmt.AetherFmt
+import com.aras.client.fmt.MieruFmt
 import com.aras.client.fmt.MasqueFmt
 import com.aras.client.fmt.VlessFmt
 import com.aras.client.fmt.VmessFmt
@@ -72,6 +73,7 @@ object AngConfigManager {
             EConfigType.ANYTLS.protocolScheme to AnytlsFmt::parse,
             EConfigType.MASQUE.protocolScheme to MasqueFmt::parse,
             EConfigType.AETHER.protocolScheme to AetherFmt::parse,
+            EConfigType.MIERU.protocolScheme to MieruFmt::parse,
             EConfigType.AMNEZIAWG.protocolScheme to AmneziawgFmt::parse,
             AppConfig.ARASFMTS to ArasFmt::parse
         )
@@ -224,6 +226,7 @@ object AngConfigManager {
                 EConfigType.ANYTLS -> AnytlsFmt.toUri(config)
                 EConfigType.MASQUE -> MasqueFmt.toUri(config)
                 EConfigType.AETHER -> AetherFmt.toUri(config)
+                EConfigType.MIERU -> MieruFmt.toUri(config)
                 EConfigType.AMNEZIAWG -> AmneziawgFmt.toUri(config)
                 else -> {}
             }

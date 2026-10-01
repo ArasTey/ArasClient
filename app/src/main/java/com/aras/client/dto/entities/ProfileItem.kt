@@ -113,6 +113,9 @@ data class ProfileItem(
     /** The profile's own bridge lines, one per line as torrc writes them. */
     var aetherTorBridgeLines: String? = null,
     var aetherTorRelays: String? = null,
+
+    // Mieru: the loopback port its client listens on, when not the default.
+    var mieruListenPort: String? = null,
     /** A command line used in place of the settings. */
     var aetherCommand: String? = null,
     @Deprecated("Use pinnedCA256")

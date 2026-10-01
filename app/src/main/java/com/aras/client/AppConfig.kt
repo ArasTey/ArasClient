@@ -241,6 +241,7 @@ object AppConfig {
     // there is no "Add manually" editor for them, they arrive via link or .arasc.
     const val MASQUE = "masque://"
     const val AETHER = "aether://"
+    const val MIERU = "mieru://"
     const val ARASFMTS = "xrayn://"
 
     /** Where the aether core is published; the app fetches its own Android build from here. */
@@ -248,6 +249,12 @@ object AppConfig {
 
     /** The loopback port an aether core listens on unless the profile says otherwise. */
     const val PORT_AETHER_SOCKS = "10819"
+
+    /** The loopback port a mieru client listens on unless the profile says otherwise. */
+    const val PORT_MIERU_SOCKS = "10820"
+
+    /** Where the mieru client is published; the app takes its own Android build. */
+    const val MIERU_URL = "https://github.com/enfein/mieru"
 
     /** Give a good name to this, IDK*/
     const val VPN = "VPN"

@@ -97,6 +97,13 @@
     <string name="server_lab_aether_key_ready">Key ready</string>
     <string name="server_lab_aether_reset_key">Reset WARP key</string>
     <string name="server_lab_aether_note">A WARP gateway often does not answer a plain ping, and its exit address reads as Iranian — both are normal. Check the connection, not the ping.</string>
+    <string name="menu_item_import_config_manually_mieru">Add Mieru config manually</string>
+    <string name="server_lab_mieru_username">Mieru user</string>
+    <string name="server_lab_mieru_password">Mieru password</string>
+    <string name="server_lab_mieru_listen_port">Local listen port</string>
+    <string name="server_lab_mieru_no_host">An endpoint is needed: the address or name the mieru server answers on.</string>
+    <string name="server_lab_mieru_bad_host">That is not an address or a name.</string>
+    <string name="server_lab_mieru_bad_port">The mieru port must be between 1 and 65535.</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
     <string name="sub_setting_announcement">Announcement</string>
     <string name="sub_setting_creator_message">Creator message</string>

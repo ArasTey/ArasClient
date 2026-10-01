@@ -38,6 +38,7 @@ import com.aras.client.extension.delay
 import kotlinx.coroutines.launch
 import com.aras.client.core.aether.AetherCore
 import com.aras.client.core.aether.AetherCoreManager
+import com.aras.client.core.mieru.MieruProcessManager
 import com.aras.client.core.CoreCallbackHandler
 import com.aras.client.core.CoreController
 import com.aras.client.core.ProcessFinder
@@ -181,6 +182,21 @@ object CoreServiceManager {
             }
         }
 
+        // A Mieru profile is dialled by the mieru client, a separate process serving a
+        // local SOCKS, so it has to be up before the config that dials it is built.
+        if (config.configType == EConfigType.MIERU) {
+            if (!MieruProcessManager.isAvailable(service)) {
+                error("This build does not carry the mieru client")
+            }
+            val port = com.aras.client.fmt.AetherFmt.listenPortOf(config.mieruListenPort)
+                ?: AppConfig.PORT_MIERU_SOCKS.toInt()
+            LogUtil.i(AppConfig.TAG, "StartCore-Manager: starting the mieru client on $port")
+            if (!MieruProcessManager.start(service, config, port)) {
+                MieruProcessManager.stop()
+                error("The mieru client did not start; see the log for its own error")
+            }
+        }
+
         val result = CoreConfigManager.getXrayConfig(service, guid)
         LogUtil.d(AppConfig.TAG, result.content)
         if (!result.status) {
@@ -260,9 +276,10 @@ object CoreServiceManager {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop AWG tunnel", e)
         }
 
-        // The aether core is a child process; stopping it here keeps it from outliving
-        // the session it was started for.
+        // The aether core and the mieru client are child processes; stopping them here
+        // keeps them from outliving the session they were started for.
         AetherCoreManager.stop()
+        MieruProcessManager.stop()
 
         if (isRunning()) {
             CoroutineScope(Dispatchers.IO).launch {

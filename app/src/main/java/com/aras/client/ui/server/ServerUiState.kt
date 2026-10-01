@@ -72,6 +72,7 @@ class ServerUiState(
     aetherExitLoc: String = "",
     aetherListenPort: String = "",
     aetherCommand: String = "",
+    mieruListenPort: String = "",
     aetherPsiphon: String = "off",
     aetherPsiphonMode: String = "auto",
     aetherPsiphonCdnIps: String = "",
@@ -160,6 +161,7 @@ class ServerUiState(
     var aetherExitLoc by mutableStateOf(aetherExitLoc)
     var aetherListenPort by mutableStateOf(aetherListenPort)
     var aetherCommand by mutableStateOf(aetherCommand)
+    var mieruListenPort by mutableStateOf(mieruListenPort)
     var aetherPsiphon by mutableStateOf(aetherPsiphon)
     var aetherPsiphonMode by mutableStateOf(aetherPsiphonMode)
     var aetherPsiphonCdnIps by mutableStateOf(aetherPsiphonCdnIps)
@@ -265,6 +267,7 @@ class ServerUiState(
             aetherExitLoc = aetherExitLoc.nullIfBlank(),
             aetherListenPort = aetherListenPort.nullIfBlank(),
             aetherCommand = aetherCommand.nullIfBlank(),
+            mieruListenPort = mieruListenPort.nullIfBlank(),
             aetherPsiphon = aetherPsiphon.takeUnless { it == "off" },
             aetherPsiphonMode = aetherPsiphonMode.takeUnless { aetherPsiphon == "off" },
             aetherPsiphonCdnIps = aetherPsiphonCdnIps.nullIfBlank(),
@@ -363,6 +366,7 @@ class ServerUiState(
                 aetherExitLoc = initialConfig.aetherExitLoc ?: "",
                 aetherListenPort = initialConfig.aetherListenPort ?: "",
                 aetherCommand = initialConfig.aetherCommand ?: "",
+                mieruListenPort = initialConfig.mieruListenPort ?: "",
                 aetherPsiphon = initialConfig.aetherPsiphon ?: "off",
                 aetherPsiphonMode = initialConfig.aetherPsiphonMode ?: "auto",
                 aetherPsiphonCdnIps = initialConfig.aetherPsiphonCdnIps ?: "",

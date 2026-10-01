@@ -6,6 +6,7 @@ import com.aras.client.AppConfig
 import com.aras.client.dto.XrayConfig.OutboundBean
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.core.aether.AetherCoreManager
+import com.aras.client.fmt.AetherFmt
 import com.aras.client.enums.EConfigType
 import com.aras.client.enums.NetworkType
 import com.aras.client.extension.isNotNullEmpty
@@ -37,6 +38,7 @@ object CoreOutboundBuilder {
             EConfigType.ANYTLS -> toOutboundAnytls(profileItem)
             EConfigType.MASQUE -> toOutboundMasque(profileItem)
             EConfigType.AETHER -> toOutboundAether(profileItem)
+            EConfigType.MIERU -> toOutboundMieru(profileItem)
             else -> null
         }
 
@@ -453,6 +455,22 @@ object CoreOutboundBuilder {
         // listenPort() applies the default when the profile names none; listenPortOf()
         // only reads what is there, so using it here would drop an unset profile.
         val port = AetherCoreManager.listenPort(profileItem)
+        val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
+        outbound.settings?.let { settings ->
+            settings.address = AppConfig.LOOPBACK
+            settings.port = port
+            settings.level = AppConfig.DEFAULT_LEVEL
+        }
+        return outbound
+    }
+
+    /**
+     * Mieru is dialled by its own client process, which serves a local SOCKS5, so the
+     * outbound is a hop to that listener — the same shape as an Aether profile and for
+     * the same reason: the credentials and the tunnel belong to that process.
+     */
+    private fun toOutboundMieru(profileItem: ProfileItem): OutboundBean? {
+        val port = AetherFmt.listenPortOf(profileItem.mieruListenPort) ?: AppConfig.PORT_MIERU_SOCKS.toInt()
         val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
         outbound.settings?.let { settings ->
             settings.address = AppConfig.LOOPBACK

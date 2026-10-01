@@ -25,6 +25,8 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
     // Aether/gateway profile. Added from the import menu, directly below the .arasc
     // entry, rather than from the "Add manually" protocol submenu.
     AETHER(14, AppConfig.AETHER),
+    // Mieru: a separate client process serving a local SOCKS, like Aether.
+    MIERU(15, AppConfig.MIERU),
     POLICYGROUP(101, AppConfig.CUSTOM),
     PROXYCHAIN(102, AppConfig.CUSTOM);
 
