@@ -3,11 +3,14 @@ build/
 .gradle/
 .kotlin/
 local.properties
-!keystore.properties
-!keystore/debug.keystore
 *.apk.idsig
-# Signing
+
+# Signing — the key and its passwords must stay out of the repository.
+# Anyone who can read them can sign an update the phone will accept.
+keystore.properties
+keystore/
 *.jks
+*.keystore
 !keystore-example.properties
 # IDE / OS
 .idea/

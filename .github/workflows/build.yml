@@ -128,6 +128,21 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Restore signing key
+        # The keystore is deliberately not in the repository: whoever can read it can
+        # sign an update the phone will accept. It comes from the repository secrets
+        # instead, so a release is signed exactly as a local build is.
+        run: |
+          set -euo pipefail
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/arasclient-release.jks
+          cat > keystore.properties <<EOF
+          storeFile=keystore/arasclient-release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
       - name: Test, lint, and build release APKs
         run: |
           chmod +x gradlew
