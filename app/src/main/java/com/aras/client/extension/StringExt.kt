@@ -1,6 +1,19 @@
 package com.aras.client.extension
 
 /**
+ * Wraps the text in Unicode directional isolates so it renders left-to-right whatever
+ * direction the paragraph around it runs in.
+ *
+ * The app name is Latin. In a Persian paragraph the bidirectional algorithm may reorder
+ * the neutral parts of it, which is why "ArasClient" came out as "ClientAras". An
+ * isolate pins the run as left-to-right and is invisible on screen.
+ *
+ * Use this for display only: the marks are part of the string, so a file name or URL
+ * built from it would carry them.
+ */
+fun String.ltrIsolated(): String = "⁦" + this + "⁩"
+
+/**
  * Removes all whitespace from the string.
  *
  * @return The string without whitespace.

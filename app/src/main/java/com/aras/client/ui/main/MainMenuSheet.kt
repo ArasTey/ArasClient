@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aras.client.AppConfig
 import com.aras.client.R
+import com.aras.client.extension.ltrIsolated
 import com.aras.client.util.Utils
 
 enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRes: Int) {
@@ -152,7 +153,7 @@ fun MainMenuSheet(
                 Spacer(Modifier.size(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.app_name),
+                        text = stringResource(R.string.app_name).ltrIsolated(),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
