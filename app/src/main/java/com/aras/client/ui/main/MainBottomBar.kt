@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aras.client.R
+import com.aras.client.ui.compose.NeonConnectButton
 import com.aras.client.ui.compose.colorFabActive
 import com.aras.client.ui.compose.colorFabInactiveDark
 import com.aras.client.ui.compose.colorFabInactiveLight
@@ -63,9 +64,6 @@ fun MainBottomBar(
         isRunning -> badColor
         else -> null
     }
-    // Single solid color: the status dot on the left already carries ping health.
-    val buttonColor = MaterialTheme.colorScheme.primary
-    val buttonShape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = Modifier
@@ -147,25 +145,12 @@ fun MainBottomBar(
             }
             Spacer(Modifier.width(8.dp))
 
-            // Main connect button
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(buttonShape)
-                    .background(buttonColor)
-                    .clickable(onClick = { onAction(MainAction.ToggleService) }),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = if (isRunning) painterResource(R.drawable.ic_stop_24dp)
-                    else painterResource(R.drawable.ic_play_24dp),
-                    contentDescription = stringResource(
-                        if (isRunning) R.string.acc_stop else R.string.acc_start
-                    ),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            // Main connect button. The light it gives off stays inside the circle, so
+            // it never hazes what sits behind it.
+            NeonConnectButton(
+                isRunning = isRunning,
+                onClick = { onAction(MainAction.ToggleService) },
+            )
         }
     }
 }
