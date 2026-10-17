@@ -136,7 +136,15 @@ class RealPingWorkerService(
         if (!configResult.status) {
             return retFailure
         }
-        return RealPingExecutionLimiter.run(config.configType) {
+        // An exit-node profile serves its egress on a fixed loopback port that
+        // every concurrent Xray instance would also bind, so only one such test
+        // may run at a time — like custom configs, keyed as one here.
+        val limiterKey = if (config.aetherExitNode.isNotNullEmpty()) {
+            EConfigType.CUSTOM
+        } else {
+            config.configType
+        }
+        return RealPingExecutionLimiter.run(limiterKey) {
             // Any Aether or Mieru hop in the resolved chain lowers to a SOCKS hop on
             // loopback, so its daemon has to be listening or every measurement through
             // it is -1. The refcounts here mean a batch of profiles sharing one entry

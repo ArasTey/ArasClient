@@ -650,6 +650,7 @@
     <string name="server_lab_aether_psiphon_cdn_sets">فهرست لبه‌های CDN سایفون</string>
     <string name="server_lab_aether_psiphon_region">منطقه سایفون</string>
     <string name="server_lab_aether_psiphon_bundled">استفاده از فهرست سرور همراه برنامه</string>
+    <string name="server_lab_aether_exit_node">گره خروج (خالی = خروج مستقیم)</string>
     <string name="server_lab_aether_masque_sni">‏SNI مَسک (پیش‌فرض www.cloudflare.com)</string>
     <string name="server_lab_aether_ech">سلام‌دادن رمزشده مشتری (ECH)</string>
     <string name="server_lab_aether_ech_dns">مبدل کلید ECH (پیش‌فرض udp://1.1.1.1)</string>

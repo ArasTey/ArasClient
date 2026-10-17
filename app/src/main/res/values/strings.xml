@@ -73,6 +73,7 @@
     <string name="server_lab_aether_psiphon_cdn_sets">Psiphon CDN edge lists</string>
     <string name="server_lab_aether_psiphon_region">Psiphon region</string>
     <string name="server_lab_aether_psiphon_bundled">Use the bundled server list</string>
+    <string name="server_lab_aether_exit_node">Exit node (blank = direct exit)</string>
     <string name="server_lab_aether_masque_sni">MASQUE SNI (default www.cloudflare.com)</string>
     <string name="server_lab_aether_ech">Encrypted Client Hello (ECH)</string>
     <string name="server_lab_aether_ech_dns">ECH key resolver (default udp://1.1.1.1)</string>

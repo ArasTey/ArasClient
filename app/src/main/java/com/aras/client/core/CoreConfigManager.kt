@@ -5,6 +5,8 @@ import android.text.TextUtils
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.aras.client.AppConfig
+import com.aras.client.core.aether.AetherCoreManager
+import com.aras.client.core.aether.AetherExitNodeResolver
 import com.aras.client.dto.ConfigResult
 import com.aras.client.dto.CoreConfigContext
 import com.aras.client.dto.XrayConfig
@@ -226,7 +228,71 @@ object CoreConfigManager {
         applySpeedDisabled(xrayConfig)
         resolveOutboundDomainsToHosts(xrayConfig)
 
+        applyAetherExitNode(primaryResolvedOutbound, xrayConfig)
+
         return xrayConfig
+    }
+
+    /**
+     * The Aether exit node: when the profile names one, the aether core's own
+     * dialer points at a dedicated SOCKS inbound of this Xray config and
+     * everything the core sends out leaves through an outbound tagged
+     * exit-node — either Freedom (no node named, obfuscation/mode only) or the
+     * outbound of the ONE profile that has the name, built the way a proxy
+     * chain builds a hop, with the tag changed alone.
+     *
+     * The inbound listens on aetherPort + EXIT_IN_PORT_OFFSET, the same port
+     * AetherCoreManager appends as --upstream. No-op when the name resolves
+     * to nothing the core could dial through, so a stale name degrades to the
+     * direct exit instead of failing the session — the card's tooltip and
+     * the editor validation tell the user when a name no longer matches.
+     */
+    private fun applyAetherExitNode(
+        primaryResolved: CoreConfigContext.ResolvedOutbound,
+        xrayConfig: XrayConfig,
+    ) {
+        val profile = primaryResolved.profile
+        if (profile.configType != EConfigType.AETHER) return
+        val name = profile.aetherExitNode?.trim().orEmpty()
+        val resolved = AetherExitNodeResolver.resolve(name)
+        val exitOutbound = when {
+            name.isEmpty() -> XrayConfig.OutboundBean(
+                tag = AppConfig.TAG_EXIT_NODE,
+                protocol = "freedom",
+                settings = XrayConfig.OutboundBean.OutSettingsBean(),
+                mux = null,
+            )
+
+            resolved.ok -> resolved.single?.let { node ->
+                CoreOutboundBuilder.convert(node)?.apply {
+                    tag = AppConfig.TAG_EXIT_NODE
+                }
+            }
+
+            else -> null
+        } ?: return
+
+        val listenPort = AetherCoreManager.listenPort(profile)
+        xrayConfig.inbounds.add(
+            XrayConfig.InboundBean(
+                tag = AppConfig.TAG_EXIT_NODE_INBOUND,
+                port = listenPort + AppConfig.AETHER_EXIT_IN_PORT_OFFSET,
+                protocol = "socks",
+                listen = AppConfig.LOOPBACK,
+                settings = XrayConfig.InboundBean.InSettingsBean(
+                    auth = "noauth",
+                    udp = true,
+                ),
+            )
+        )
+        xrayConfig.outbounds.add(exitOutbound)
+        xrayConfig.routing.rules.add(
+            0,
+            XrayConfig.RoutingBean.RulesBean(
+                inboundTag = arrayListOf(AppConfig.TAG_EXIT_NODE_INBOUND),
+                outboundTag = AppConfig.TAG_EXIT_NODE,
+            )
+        )
     }
 
     /**

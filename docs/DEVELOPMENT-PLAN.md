@@ -310,3 +310,40 @@ native `libopenvpn.so` (VPNService-based, like our hev path) and driving its
 icc/profile API — GPL-3 compatible with this app, but it is its own sized
 project (native packaging per ABI + profile import bridging .ovpn). Plan it
 as a dedicated round; do not attempt inside a release round.
+
+### 7.6 OpenVPN feasibility, checked against the official docs (2026-10-17)
+
+ics-openvpn (schwabe) answers the packaging question directly: it publishes no
+Maven artifact of `libopenvpn.so`, it is deliberately NOT a library (its README
+refuses that use case), and building a standalone .so from it makes a GPL fork
+supportable at the fork's own cost. The OFFICIAL integration surface for
+another app is the AIDL API / launchable activities
+(`de.blinkt.openvpn.api.profileName`) against an installed ics-openvpn:
+ArasClient would proxy .ovpn import → the external app's connect requests, and
+show its state in our UI — no native packaging, no license fork. That is the
+recommended round for OpenVPN; bundling a native binary is the fallback and a
+significantly larger project.
+
+### 7.7 Exit node — implemented (2026-10-17)
+
+Faithful to PattNG's semantics, scoped to what the app runs:
+- `ProfileItem.aetherExitNode` — the NAME of the one other profile the aether
+  core dials out through; blank keeps the direct exit.
+- `AetherExitNodeResolver` — unique-name lookup across every group; the named
+  profile must not itself be an Aether profile (loop guard).
+- `CoreConfigManager.applyAetherExitNode` builds, on demand: a SOCKS inbound
+  tagged `exit-node-in` on `aetherPort + 5`, the outbound tagged `exit-node`
+  (Freedom when the name is blank, else the named profile's outbound via
+  `CoreOutboundBuilder.convert`), and a first routing rule that joins them.
+- `AetherCoreManager.buildArguments` appends
+  `--upstream socks5://127.0.0.1:<that port>` (aether 2.3's flag), so the
+  core itself dials out through Xray.
+- Exit-node measurements are serialized like custom configs (they own the
+  fixed inbound port while running).
+- Editor: dropdown of every profile's remark + the blank direct-exit entry;
+  en + fa strings. A stale or ambiguous name degrades to the direct exit in
+  the session config (documented in the builder's comment) instead of failing
+  the connect — matching "fail open to freedom" in PattNG's spirit for
+  missing nodes, while the editor still shows what it picked.
+- Tests: `AetherExitNodeResolverTest` pins the identifying rules and the
+  port-offset contract.

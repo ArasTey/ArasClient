@@ -129,6 +129,10 @@ object AppConfig {
     const val TAG_PROXY = "proxy"
     const val TAG_DIRECT = "direct"
     const val TAG_BLOCKED = "block"
+    const val TAG_EXIT_NODE = "exit-node"
+    const val TAG_EXIT_NODE_INBOUND = "exit-node-in"
+    /** The SOCKS inbound the Aether exit node serves on: aetherPort + this. */
+    const val AETHER_EXIT_IN_PORT_OFFSET = 5
     const val TAG_FRAGMENT = "fragment"
     const val TAG_DNS = "dns-module"
     const val TAG_DOMESTIC_DNS = "domestic-dns"

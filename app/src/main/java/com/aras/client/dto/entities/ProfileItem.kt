@@ -101,6 +101,8 @@ data class ProfileItem(
     var aetherFragmentSize: String? = null,
     var aetherFragmentDelay: String? = null,
     var aetherEch: Boolean? = null,
+    /** The name of the one other profile the aether core dials out through; blank = direct exit. */
+    var aetherExitNode: String? = null,
     /** The resolver --ech auto asks for the ECH key (aether 2.3). */
     var aetherEchDns: String? = null,
     /** The domain whose key --ech auto takes (aether 2.3, default cloudflare-ech.com). */

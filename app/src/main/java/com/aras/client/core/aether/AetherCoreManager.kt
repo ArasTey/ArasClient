@@ -204,6 +204,21 @@ object AetherCoreManager {
             profile.aetherExitLoc?.takeIf { it.isNotBlank() }
                 ?.let { addAll(listOf("--exit-loc", it)) }
 
+            // The exit node: the core's own dialer points at the exit-node
+            // SOCKS inbound of the app's Xray config (CoreConfigManager's
+            // applyAetherExitNode serves it on listenPort + offset), so
+            // everything this core sends out leaves through whatever outbound
+            // the session tagged exit-node.
+            profile.aetherExitNode?.takeIf { it.isNotBlank() }
+                ?.let {
+                    addAll(
+                        listOf(
+                            "--upstream",
+                            "socks5://${AppConfig.LOOPBACK}:${listenPort(profile) + AppConfig.AETHER_EXIT_IN_PORT_OFFSET}",
+                        )
+                    )
+                }
+
             if (protocol.overMasque &&
                 AetherTransport.fromString(profile.aetherTransport) == AetherTransport.HTTP2
             ) {

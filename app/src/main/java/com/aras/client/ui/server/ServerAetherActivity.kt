@@ -53,6 +53,7 @@ import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.extension.nullIfBlank
 import com.aras.client.extension.toastError
 import com.aras.client.enums.EConfigType
+import com.aras.client.handler.MmkvManager
 import com.aras.client.ui.compose.FormDropdownField
 import com.aras.client.ui.compose.FormTextField
 import com.aras.client.ui.compose.FormToggleField
@@ -90,6 +91,28 @@ class ServerAetherActivity : BaseServerActivity() {
             val overMasque = protocol.overMasque
             val twoHops = protocol.twoHops
 
+            // Exit node: the one profile the aether core dials out through,
+            // or the direct exit. The list is the remarks of every profile
+            // that has an outbound; a stale or ambiguous name still saves (a
+            // state the list itself can drift into), and session startup
+            // resolves it, refusing to dial through nothing.
+            val exitNodeOptions = androidx.compose.runtime.remember {
+                listOf("") + buildList {
+                    (listOf("") + MmkvManager.decodeSubsList()).forEach { subId ->
+                        MmkvManager.decodeServerList(subId).forEach { guid ->
+                            MmkvManager.decodeServerConfig(guid)
+                                ?.takeIf { it.configType != EConfigType.AETHER }
+                                ?.let { add(it.remarks) }
+                        }
+                    }
+                }.distinct()
+            }
+            FormDropdownField(
+                label = stringResource(R.string.server_lab_aether_exit_node),
+                value = uiState.aetherExitNode,
+                options = exitNodeOptions,
+                onValueChange = { uiState.aetherExitNode = it },
+            )
             FormDropdownField(
                 label = stringResource(R.string.server_lab_aether_protocol),
                 value = uiState.aetherProtocol,

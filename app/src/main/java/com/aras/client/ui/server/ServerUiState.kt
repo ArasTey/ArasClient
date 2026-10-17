@@ -69,6 +69,7 @@ class ServerUiState(
     aetherFragmentSize: String = "",
     aetherFragmentDelay: String = "",
     aetherEch: Boolean = false,
+    aetherExitNode: String = "",
     aetherEchDns: String = "",
     aetherEchDomain: String = "",
     aetherMasqueSni: String = "",
@@ -162,6 +163,7 @@ class ServerUiState(
     var aetherFragmentSize by mutableStateOf(aetherFragmentSize)
     var aetherFragmentDelay by mutableStateOf(aetherFragmentDelay)
     var aetherEch by mutableStateOf(aetherEch)
+    var aetherExitNode by mutableStateOf(aetherExitNode)
     var aetherEchDns by mutableStateOf(aetherEchDns)
     var aetherEchDomain by mutableStateOf(aetherEchDomain)
     var aetherMasqueSni by mutableStateOf(aetherMasqueSni)
@@ -272,6 +274,7 @@ class ServerUiState(
             aetherFragmentSize = aetherFragmentSize.nullIfBlank(),
             aetherFragmentDelay = aetherFragmentDelay.nullIfBlank(),
             aetherEch = aetherEch,
+            aetherExitNode = aetherExitNode.nullIfBlank(),
             aetherEchDns = aetherEchDns.nullIfBlank(),
             aetherEchDomain = aetherEchDomain.nullIfBlank(),
             aetherMasqueSni = aetherMasqueSni.nullIfBlank(),
@@ -375,6 +378,7 @@ class ServerUiState(
                 aetherFragmentSize = initialConfig.aetherFragmentSize ?: "",
                 aetherFragmentDelay = initialConfig.aetherFragmentDelay ?: "",
                 aetherEch = initialConfig.aetherEch == true,
+                aetherExitNode = initialConfig.aetherExitNode ?: "",
                 aetherEchDns = initialConfig.aetherEchDns ?: "",
                 aetherEchDomain = initialConfig.aetherEchDomain ?: "",
                 aetherMasqueSni = initialConfig.aetherMasqueSni ?: "",
