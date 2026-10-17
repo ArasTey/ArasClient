@@ -240,3 +240,73 @@ Everything is local and verified. Push in this exact order or CI fails:
 Local debris: `proxy/wireguard/client.go.rej` is still tracked in the core
 repo (came with the 26.9.27 port commit). Harmless, not compiled; delete in a
 later cleanup round.
+
+---
+
+## 7. Round 2026-10-17 (part 2) — Aether 2.3.0 + two UI/parse fixes
+
+### 7.1 Aether core updated to the official v2.3.0 release
+
+App-shipped `libaether.so` (arm64/armv7/x86_64) swapped for CluvexStudio
+Aether **v2.3.0** release binaries (official checksums verified against
+SHA256SUMS.txt; lyrebird + psiphon-tunnel-core were byte-identical to what the
+app already carried, so only the aether binary changed). The new core brings:
+
+- `--masque-sni` — the name the MASQUE handshakes put in their ClientHello
+- `--ech auto` with `--ech-dns` (key resolver) and `--ech-domain` (key domain)
+- the new `--gool` (WireGuard WARP inside MASQUE; classic gool stays on
+  `--gool-classic`) and full `--wiw-outer/--wiw-inner` (already wired)
+
+App-side additions (fields, links, editor UI, args, en+fa strings):
+`aetherMasqueSni`, `aetherEchDns`, `aetherEchDomain` (aetherEch existed). The
+carrier modes the owner asked about map to what the app already had:
+warp→Psiphon = `--psiphon` (chain), Psiphon→warp = `--psiphon-reverse`,
+Psiphon-only = `--psiphon-only`; masque-in-masque = the mim protocol;
+WireGuard-over-MASQUE = the gool protocol
+
+Unit tests + assembleDebug green. **Not verified on device yet** — needs an
+emulator/real connect pass before the release the owner approves.
+
+Pending from the owner's list: the release notes' "4 fingerprints" — in an
+aether 2.3 profile these are core-internal (Chrome's BoringSSL fingerprint
+with fragment variants), not user-selectable options; do not fake a picker.
+
+### 7.2 Bottom-sheet bounce (fixed)
+
+The main menu sheet (three-line → settings bar) visibly bounced up/down on a
+strong upward drag: the default modal state allows overshoot both directions
+and the content exceeds the peek height. Fix in `MainMenuSheet`: skip the
+partial expansion + a capped, inner-scrollable column — stable while a
+downward drag still dismisses.
+
+### 7.3 Subscription traffic display
+
+`applySubscriptionMetadata` now also accepts a `used=` key from the
+`subscription-userinfo` header (some panels send the sum directly instead of
+upload/download). If a specific provider still shows wrong figures, the owner
+should hand over that provider's header (or a screenshot) — the parse path is
+otherwise complete: upload/download summed, total, expire, used.
+
+### 7.4 Exit node — designed, not implemented (next round)
+
+PattNG's exit-node is a subsystem, not a field: an outbound tagged
+`exit-node` that the aether core dials out through — either freedom with
+finalMask/dialMode, or the outbound of ANOTHER profile chosen by name
+(`toOutboundOfNode`, unique-name lookup), whose content digest pins the
+session identity (env `PATTNG_AETHER_EXIT`), plus a secondary-socks inbound +
+routing rule for custom configs (`AetherDependency.routeThroughXray`), stats
+filtering in the notification, and an ECH-beside-the-node check. Porting it
+faithfully is its own round with its own emulator verification; a half-port
+would be worse than none. Design reference captured here; start from
+`AetherCoreManager.exitConfiguration` + `CoreOutboundBuilder.toOutboundAetherExit`
+in PattNG and our chain-dialer plumbing (`HelperProcessSupport` gives the
+per-core ports already).
+
+### 7.5 OpenVPN — feasibility per the official docs
+
+The blocker from brief §7 stands: no reachable Go OpenVPN client and no
+shippable binary. The realistic official-docs path is packaging ics-openvpn's
+native `libopenvpn.so` (VPNService-based, like our hev path) and driving its
+icc/profile API — GPL-3 compatible with this app, but it is its own sized
+project (native packaging per ABI + profile import bridging .ovpn). Plan it
+as a dedicated round; do not attempt inside a release round.

@@ -217,7 +217,19 @@ object AetherCoreManager {
                 }
             }
             // Encrypted Client Hello hides the server name of the MASQUE handshake.
-            if (protocol.overMasque && profile.aetherEch == true) addAll(listOf("--ech", "auto"))
+            // aether 2.3: the key lookup and the name inside the encrypted hello
+            // are configurable; an explicit key stays a job for the raw command.
+            if (protocol.overMasque && profile.aetherEch == true) {
+                addAll(listOf("--ech", "auto"))
+                profile.aetherEchDns?.takeIf { it.isNotBlank() }
+                    ?.let { addAll(listOf("--ech-dns", it)) }
+                profile.aetherEchDomain?.takeIf { it.isNotBlank() }
+                    ?.let { addAll(listOf("--ech-domain", it)) }
+            }
+            // aether 2.3: the name the MASQUE handshakes put in their ClientHello
+            // (the :authority of the CONNECT stays cloudflareaccess.com).
+            profile.aetherMasqueSni?.takeIf { it.isNotBlank() && protocol.overMasque }
+                ?.let { addAll(listOf("--masque-sni", it)) }
 
             if (protocol.twoHops) {
                 val hop = if (protocol == AetherProtocol.MIM) "--mim" else "--wiw"

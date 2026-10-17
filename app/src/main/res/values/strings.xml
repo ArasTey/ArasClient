@@ -73,6 +73,10 @@
     <string name="server_lab_aether_psiphon_cdn_sets">Psiphon CDN edge lists</string>
     <string name="server_lab_aether_psiphon_region">Psiphon region</string>
     <string name="server_lab_aether_psiphon_bundled">Use the bundled server list</string>
+    <string name="server_lab_aether_masque_sni">MASQUE SNI (default www.cloudflare.com)</string>
+    <string name="server_lab_aether_ech">Encrypted Client Hello (ECH)</string>
+    <string name="server_lab_aether_ech_dns">ECH key resolver (default udp://1.1.1.1)</string>
+    <string name="server_lab_aether_ech_domain">ECH key domain (default cloudflare-ech.com)</string>
     <string name="server_lab_aether_tor">Tor</string>
     <string name="server_lab_aether_tor_bridges">Tor bridges</string>
     <string name="server_lab_aether_tor_bridge_lines">Bridge lines, one per line</string>

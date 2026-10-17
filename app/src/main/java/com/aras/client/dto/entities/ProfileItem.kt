@@ -101,6 +101,12 @@ data class ProfileItem(
     var aetherFragmentSize: String? = null,
     var aetherFragmentDelay: String? = null,
     var aetherEch: Boolean? = null,
+    /** The resolver --ech auto asks for the ECH key (aether 2.3). */
+    var aetherEchDns: String? = null,
+    /** The domain whose key --ech auto takes (aether 2.3, default cloudflare-ech.com). */
+    var aetherEchDomain: String? = null,
+    /** The server name the MASQUE handshakes put in their ClientHello (aether 2.3). */
+    var aetherMasqueSni: String? = null,
     var aetherDns: String? = null,
     var aetherExitLoc: String? = null,
     var aetherListenPort: String? = null,

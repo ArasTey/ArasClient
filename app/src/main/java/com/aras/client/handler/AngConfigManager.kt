@@ -744,9 +744,13 @@ object AngConfigManager {
                 if (kv.size == 2) {
                     val v = kv[1].trim().toLongOrNull() ?: return@forEach
                     when (kv[0].trim().lowercase()) {
+                        // A "used" key is the panel's own number for both
+                        // directions together; where none is sent, the app
+                        // sums upload+download itself.
                         "upload", "download" -> used = if (used < 0) v else used + v
                         "total" -> total = v
                         "expire" -> expire = v
+                        "used" -> used = v
                     }
                 }
             }

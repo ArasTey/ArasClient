@@ -53,6 +53,9 @@ object AetherFmt : FmtBase() {
         config.aetherFragmentDelay =
             AetherRange.parse(queryParam["fragment_delay"], AetherRange.FRAGMENT_DELAY)?.toString()
         config.aetherEch = queryParam["ech"] == "1"
+        config.aetherEchDns = queryParam["ech_dns"]
+        config.aetherEchDomain = queryParam["ech_domain"]
+        config.aetherMasqueSni = queryParam["masque_sni"]
         config.aetherDns = queryParam["dns"]
         config.aetherExitLoc = queryParam["exit_loc"]
         config.aetherListenPort = listenPortOf(queryParam["listen"])?.let(::storedListenPort)
@@ -106,7 +109,14 @@ object AetherFmt : FmtBase() {
                 AetherRange.parse(config.aetherFragmentDelay, AetherRange.FRAGMENT_DELAY)
                     ?.let { query["fragment_delay"] = it.toString() }
             }
-            if (config.aetherEch == true) query["ech"] = "1"
+            if (config.aetherEch == true) {
+                query["ech"] = "1"
+                config.aetherEchDns?.takeIf { it.isNotBlank() }?.let { query["ech_dns"] = it }
+                config.aetherEchDomain?.takeIf { it.isNotBlank() }
+                    ?.let { query["ech_domain"] = it }
+            }
+            config.aetherMasqueSni?.takeIf { it.isNotBlank() }
+                ?.let { query["masque_sni"] = it }
         }
         if (protocol.twoHops) {
             AetherEndpoint.parse(config.aetherWiwOuter)?.let { query["outer"] = it.toString() }

@@ -69,6 +69,9 @@ class ServerUiState(
     aetherFragmentSize: String = "",
     aetherFragmentDelay: String = "",
     aetherEch: Boolean = false,
+    aetherEchDns: String = "",
+    aetherEchDomain: String = "",
+    aetherMasqueSni: String = "",
     aetherDns: String = "",
     aetherExitLoc: String = "",
     aetherListenPort: String = "",
@@ -159,6 +162,9 @@ class ServerUiState(
     var aetherFragmentSize by mutableStateOf(aetherFragmentSize)
     var aetherFragmentDelay by mutableStateOf(aetherFragmentDelay)
     var aetherEch by mutableStateOf(aetherEch)
+    var aetherEchDns by mutableStateOf(aetherEchDns)
+    var aetherEchDomain by mutableStateOf(aetherEchDomain)
+    var aetherMasqueSni by mutableStateOf(aetherMasqueSni)
     var aetherDns by mutableStateOf(aetherDns)
     var aetherExitLoc by mutableStateOf(aetherExitLoc)
     var aetherListenPort by mutableStateOf(aetherListenPort)
@@ -266,6 +272,9 @@ class ServerUiState(
             aetherFragmentSize = aetherFragmentSize.nullIfBlank(),
             aetherFragmentDelay = aetherFragmentDelay.nullIfBlank(),
             aetherEch = aetherEch,
+            aetherEchDns = aetherEchDns.nullIfBlank(),
+            aetherEchDomain = aetherEchDomain.nullIfBlank(),
+            aetherMasqueSni = aetherMasqueSni.nullIfBlank(),
             aetherDns = aetherDns.nullIfBlank(),
             aetherExitLoc = aetherExitLoc.nullIfBlank(),
             aetherListenPort = aetherListenPort.nullIfBlank(),
@@ -366,6 +375,9 @@ class ServerUiState(
                 aetherFragmentSize = initialConfig.aetherFragmentSize ?: "",
                 aetherFragmentDelay = initialConfig.aetherFragmentDelay ?: "",
                 aetherEch = initialConfig.aetherEch == true,
+                aetherEchDns = initialConfig.aetherEchDns ?: "",
+                aetherEchDomain = initialConfig.aetherEchDomain ?: "",
+                aetherMasqueSni = initialConfig.aetherMasqueSni ?: "",
                 aetherDns = initialConfig.aetherDns ?: "",
                 aetherExitLoc = initialConfig.aetherExitLoc ?: "",
                 aetherListenPort = initialConfig.aetherListenPort ?: "",

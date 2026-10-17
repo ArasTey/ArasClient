@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -125,16 +128,25 @@ fun MainMenuSheet(
 ) {
     if (!show) return
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
+        // The sheet content is taller than the screen's partial peek on some
+        // devices; the default nested-scroll lets a strong upward flick
+        // overshoot into the hidden state and a fast drag then yank the whole
+        // sheet up-and-down before settling. Pinning the sheet to the expanded
+        // anchor (skipPartiallyExpanded) plus a fixed-height inner scroll column
+        // keeps it visually stable while still letting a downward drag dismiss.
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Cap the content so the sheet never needs internal scroll
+                // chasing; everything below scrolls inside this column.
+                .heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
         ) {
             Row(

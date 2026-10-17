@@ -327,6 +327,33 @@ class ServerAetherActivity : BaseServerActivity() {
             )
         }
 
+        // aether 2.3 on the MASQUE carrier: the name the handshakes put in their
+        // ClientHello, and Encrypted Client Hello with its lookup settings.
+        if (overMasque) {
+            FormTextField(
+                stringResource(R.string.server_lab_aether_masque_sni),
+                state.aetherMasqueSni,
+                { state.aetherMasqueSni = it },
+            )
+            FormToggleField(
+                label = stringResource(R.string.server_lab_aether_ech),
+                checked = state.aetherEch,
+                onCheckedChange = { state.aetherEch = it },
+            )
+            if (state.aetherEch) {
+                FormTextField(
+                    stringResource(R.string.server_lab_aether_ech_dns),
+                    state.aetherEchDns,
+                    { state.aetherEchDns = it },
+                )
+                FormTextField(
+                    stringResource(R.string.server_lab_aether_ech_domain),
+                    state.aetherEchDomain,
+                    { state.aetherEchDomain = it },
+                )
+            }
+        }
+
         FormDropdownField(
             label = stringResource(R.string.server_lab_aether_tor),
             value = state.aetherTor,
