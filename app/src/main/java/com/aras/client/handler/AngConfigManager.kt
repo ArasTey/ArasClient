@@ -321,6 +321,7 @@ object AngConfigManager {
      */
     private fun parseBatchConfig(servers: String?, subid: String, append: Boolean): Int {
         val isClashYaml = servers != null && com.aras.client.fmt.ClashYamlFmt.isClashYaml(servers)
+        val isSingboxJson = servers != null && !isClashYaml && com.aras.client.fmt.SingboxFmt.isSingboxJson(servers)
         try {
             if (servers == null) {
                 return 0
@@ -329,9 +330,10 @@ object AngConfigManager {
 
             // Parse all configs first (no I/O during parsing)
             val configs = mutableListOf<ProfileItem>()
-            val links = if (isClashYaml) {
-                com.aras.client.fmt.ClashYamlFmt.toLinks(servers)
-            } else {
+            val links = when {
+                isClashYaml -> com.aras.client.fmt.ClashYamlFmt.toLinks(servers)
+                isSingboxJson -> com.aras.client.fmt.SingboxFmt.toLinks(servers)
+                else ->
                 servers.lineSequence()
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
@@ -343,7 +345,7 @@ object AngConfigManager {
                     val config = parseConfig(it, subid, subItem)
                     if (config != null) {
                         configs.add(config)
-                    } else if (isClashYaml && subItem?.filter.isNullOrEmpty()) {
+                    } else if ((isClashYaml || isSingboxJson) && subItem?.filter.isNullOrEmpty()) {
                         return 0
                     }
                 }
@@ -360,8 +362,8 @@ object AngConfigManager {
         } catch (e: ProfileStorageException) {
             throw e
         } catch (e: Exception) {
-            if (isClashYaml) {
-                LogUtil.w(AppConfig.TAG, "Invalid or unsupported Clash YAML proxy list")
+            if (isClashYaml || isSingboxJson) {
+                LogUtil.w(AppConfig.TAG, "Invalid or unsupported Clash YAML / sing-box proxy list")
             } else {
                 LogUtil.e(AppConfig.TAG, "Failed to parse batch config", e)
             }

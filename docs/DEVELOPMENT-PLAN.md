@@ -347,3 +347,42 @@ Faithful to PattNG's semantics, scoped to what the app runs:
   missing nodes, while the editor still shows what it picked.
 - Tests: `AetherExitNodeResolverTest` pins the identifying rules and the
   port-offset contract.
+
+---
+
+## 8. Round 2026-10-17 (part 3) — the owner's five reports, each verified
+
+1. **"The key is not as 1.7.10" — checked: it IS the same key.** The v1.7.10
+   release APK imports its certificate: SHA-256 3b2a6fa9…b5ba / SHA-1
+   65ee7664…868b — identical to the bundled keystore and to the rebuilt 1.8.1
+   APKs. Upgrades install over 1.7.10 without uninstalling. If a user still
+   sees a signature error, they hold one of the early 1.7.5-era debug-signed
+   builds, not 1.7.10.
+2. **"The app/file got much smaller" — checked: every APK is BIGGER than
+   v1.7.10's.** arm64 +0.6MB, armeabi +0.6MB, universal +2.5MB, x86 +0.7MB,
+   x86_64 +0.6MB (Aether 2.3.0's binaries). The deleted v1.8.1 release assets
+   were the same size; nothing was dropped. x86 never shipped aether (the core
+   has no x86 build) — that is PattNG's design, not a regression.
+3. **sing-box (.json) subscriptions imported nothing — fixed.** The import
+   path knew Clash YAML (and clash-style JSON) but not a sing-box document.
+   New `SingboxFmt`: detects a sing-box object, converts the DIALING outbounds
+   (vless incl. REALITY/pbk/sid/fp/cs, vmess as the standard QR JSON, trojan,
+   shadowsocks, hysteria2) to the same share links the app reads back, skips
+   selector/urltest/direct/block/dns groups, and validates the whole list
+   before storage changes. Wired into the batch-config path (imports and
+   subscription updates; both run through parseBatchConfig).
+   `SingboxFmtTest` covers detection, the four link shapes, REALITY survival
+   through VlessFmt, and the clash/sing-box discrimination.
+4. **Psiphon lists** — the shipped `psiphon_servers.dat` (Sep 28 snapshot,
+   327KB) is signature-checked by `PsiphonServerList` before use (a list
+   without Psiphon's signature is never handed on) and the aether core
+   downloads a fresh list once it has network; the Asset screen refresher
+   replaces the file. Bundled list refresh from an upstream source needs a
+   documented origin — no official Psiphon URL for the signed bundle is
+   published; treat the in-app refresh as the source of truth.
+5. **Download/upload display** — `%{used}` key added (last round + this
+   round's header). When a specific panel still misreads, hand over that
+   panel's userinfo header/screenshot: the parser covers
+   upload=, download=, used=, total=, expire=.
+   Note: PattNG v2.3.11 carries NO subscription-userinfo parsing at all —
+   this app's implementation is already beyond upstream.
