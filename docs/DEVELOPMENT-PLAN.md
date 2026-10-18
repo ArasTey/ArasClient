@@ -386,3 +386,53 @@ Faithful to PattNG's semantics, scoped to what the app runs:
    upload=, download=, used=, total=, expire=.
    Note: PattNG v2.3.11 carries NO subscription-userinfo parsing at all —
    this app's implementation is already beyond upstream.
+
+---
+
+## 9. Round 2026-10-18 — tasks 6 and 7 from the open list, closed
+
+### 9.1 The four TLS fingerprints (task 7 — implemented)
+
+PattNG captures four clients' ClientHello (Chrome, Firefox, Semi-Python, Go)
+and names them; a profile picks one, and the core offers that client's TLS 1.2
+suite order with GREASE left out where the client sends none. All of it:
+
+- `AetherFingerprint` enum (`type`/`ciphers`/`grease`), arguments =
+  `--tls-ciphers <suites>` + `--disable-grease` when non-grease — pixel-equal
+  to PattNG's tables (`AetherOption.kt`).
+- `ProfileItem.aetherFingerprint`; `AetherCoreManager.buildArguments` emits
+  the arguments for every overMasque protocol, exactly as PattNG does.
+- aether:// links carry `fingerprint=<type>` and NEVER the default chrome —
+  PattNG's wire rule, kept.
+- Editor: the dropdown next to the transport (labels Chrome / Firefox /
+  Semi-Python / Go, core values underneath), translatable=false arrays.
+- Tests: `AetherFingerprintTest` pins the four wire names, the arguments each
+  emits (chrome keeps GREASE; the others don't), the masque-vs-wg emission
+  rule, the link round trip, and unknown values reading as chrome.
+- The two new flags were probed against the bundled aether 2.3.0 binary on
+  the emulator (both accepted, the run reaching a real subsystem start);
+  `AetherFlagTest`'s accepted set now carries them with that note.
+
+### 9.2 Psiphon server lists (task 6 — verified three ways)
+
+- **Static:** the bundled `psiphon_servers.dat` (Sep 27 snapshot, 327KB)
+  inflates to a 1.1MB signed package: `data` + `signingPublicKeyDigest` +
+  `signature`; the digest matches the key in `PsiphonServerList`, and
+  openssl verifies the RSA signature over the entries — **Verified OK,
+  427 server entries.**
+- **Unit:** `PsiphonServerListTest` (existing) asserts the bundled file is
+  present, unpacks and verifies with Psiphon's real key, and its entries are
+  hex-encoded lines; corrupt/foreign/empty lists are refused.
+- **Runtime:** the aether 2.3.0 core on the emulator accepted the overlay
+  config carried by the app (`RemoteDnsAddresses` + the 427-entry
+  `ServerEntryList` in config.json, the exact document `psiphonOverlay`
+  feeds `--psiphon-config`) and started the psiphon-tunnel-core inside
+  /data/local/tmp/pt/ — the shape reached the controller. The full bootstrap
+  could not complete there: the emulator's resolver refused UDP 53 outright
+  (the degraded-network state already seen), so connections could not even be
+  attempted. The list's presence, signature and consumption are proven; a
+  live tunnel through it still wants a healthy network day.
+
+Also confirmed: the entry-proxy fix and psiphon flag set match
+(`--psiphon-server-entries` is rejected; the list rides in the config), so
+nothing in our overlay drifts from the core's interface.

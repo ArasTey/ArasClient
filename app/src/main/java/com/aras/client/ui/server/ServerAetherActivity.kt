@@ -144,6 +144,23 @@ class ServerAetherActivity : BaseServerActivity() {
                     options = stringArrayResource(R.array.aether_transports).toList(),
                     onValueChange = { uiState.aetherTransport = it },
                 )
+                // The ClientHello fingerprint of the core's TLS handshakes: the
+                // TLS 1.2 suites of a captured client, in its order. The value
+                // must stay the core's own name ("semi-python"), so the field
+                // keeps the type and shows the entry's label from the arrays.
+                val fingerprintEntries = stringArrayResource(R.array.aether_fingerprint_entries).toList()
+                val fingerprintValues = stringArrayResource(R.array.aether_fingerprint_values).toList()
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_fingerprint),
+                    value = fingerprintEntries.getOrElse(
+                        fingerprintValues.indexOf(uiState.aetherFingerprint)
+                    ) { fingerprintEntries.first() },
+                    options = fingerprintEntries,
+                    onValueChange = { picked ->
+                        fingerprintValues.indexOf(picked).takeIf { it >= 0 }
+                            ?.let { uiState.aetherFingerprint = fingerprintValues[it] }
+                    },
+                )
             }
 
             if (twoHops) {

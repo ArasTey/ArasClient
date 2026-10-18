@@ -17,7 +17,12 @@ import org.junit.Test
  */
 class AetherFlagTest {
 
-    /** Verified against aether 2.1.0, not taken from anyone's documentation. */
+    /**
+     * Verified against the real binaries, not taken from anyone's documentation:
+     * the 2.1.0 set the app used to ship, and the two fingerprint flags below
+     * re-probed against the bundled 2.3.0 (both accepted; the run reached tor
+     * bootstrap rather than a flag error).
+     */
     private val accepted = setOf(
         "--bind", "--http-proxy", "--upstream", "--mark", "--exit-loc", "--exit-loc-secs",
         "--stats", "--stats-secs", "--quick-reconnect", "--no-quick-reconnect",
@@ -40,7 +45,7 @@ class AetherFlagTest {
         "--team", "--access-id", "--access-secret", "--access-email", "--access-token",
         "--gateway", "--route-block", "--route-direct", "--routes",
         "--config", "--wg-config", "--masque-config",
-        "--tls-groups", "--perf", "--log-level", "--verbose",
+        "--tls-groups", "--tls-ciphers", "--disable-grease", "--perf", "--log-level", "--verbose",
     )
 
     /** Flags this app used to emit, which aether 2.1.0 rejects outright. */

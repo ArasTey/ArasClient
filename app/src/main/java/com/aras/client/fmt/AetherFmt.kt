@@ -4,6 +4,7 @@ import com.aras.client.AppConfig
 import com.aras.client.dto.AetherEndpoint
 import com.aras.client.dto.AetherRange
 import com.aras.client.dto.entities.ProfileItem
+import com.aras.client.enums.AetherFingerprint
 import com.aras.client.enums.AetherIpVersion
 import com.aras.client.enums.AetherObfuscation
 import com.aras.client.enums.AetherPsiphon
@@ -44,6 +45,8 @@ object AetherFmt : FmtBase() {
         config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty()).ifEmpty { "Aether" }
         config.aetherProtocol = protocol.type
         config.aetherTransport = AetherTransport.fromString(queryParam["transport"]).type
+        config.aetherFingerprint = queryParam["fingerprint"]
+            ?.let { AetherFingerprint.fromString(it).type }
         config.aetherScanMode = AetherScanMode.fromString(queryParam["scan"]).type
         config.aetherObfuscation = AetherObfuscation.fromString(queryParam["noize"]).type
         config.aetherIpVersion = AetherIpVersion.fromString(queryParam["ip"]).type
@@ -102,6 +105,10 @@ object AetherFmt : FmtBase() {
         config.aetherExitLoc?.takeIf { it.isNotBlank() }?.let { query["exit_loc"] = it }
         if (protocol.overMasque) {
             query["transport"] = AetherTransport.fromString(config.aetherTransport).type
+            // The default (Chrome) needs no word, as PattNG writes it.
+            AetherFingerprint.fromString(config.aetherFingerprint)
+                .takeUnless { it == AetherFingerprint.CHROME }
+                ?.let { query["fingerprint"] = it.type }
             if (config.aetherFragment == true) {
                 query["fragment"] = "1"
                 AetherRange.parse(config.aetherFragmentSize, AetherRange.FRAGMENT_SIZE)

@@ -5,6 +5,7 @@ import com.aras.client.AppConfig
 import com.aras.client.dto.AetherEndpoint
 import com.aras.client.dto.AetherRange
 import com.aras.client.dto.entities.ProfileItem
+import com.aras.client.enums.AetherFingerprint
 import com.aras.client.enums.AetherIpVersion
 import com.aras.client.enums.AetherObfuscation
 import com.aras.client.enums.AetherPsiphon
@@ -245,6 +246,11 @@ object AetherCoreManager {
             // (the :authority of the CONNECT stays cloudflareaccess.com).
             profile.aetherMasqueSni?.takeIf { it.isNotBlank() && protocol.overMasque }
                 ?.let { addAll(listOf("--masque-sni", it)) }
+            // The ClientHello fingerprint (PattNG's four choices); the core's
+            // own TLS 1.2 suites and GREASE behaviour follow the chosen client.
+            if (protocol.overMasque) {
+                addAll(AetherFingerprint.fromString(profile.aetherFingerprint).arguments)
+            }
 
             if (protocol.twoHops) {
                 val hop = if (protocol == AetherProtocol.MIM) "--mim" else "--wiw"

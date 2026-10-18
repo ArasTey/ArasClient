@@ -57,6 +57,22 @@
         <item>h2</item>
     </string-array>
 
+    <!-- The TLS handshake fingerprints, as PattNG offers them: the labels shown,
+         the values the core reads, position for position. -->
+    <string-array name="aether_fingerprint_entries" translatable="false">
+        <item>Chrome</item>
+        <item>Firefox</item>
+        <item>Semi-Python</item>
+        <item>Go</item>
+    </string-array>
+
+    <string-array name="aether_fingerprint_values" translatable="false">
+        <item>chrome</item>
+        <item>firefox</item>
+        <item>semi-python</item>
+        <item>go</item>
+    </string-array>
+
     <string-array name="aether_psiphons" translatable="false">
         <item>off</item>
         <item>chain</item>

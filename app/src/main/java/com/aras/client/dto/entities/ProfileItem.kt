@@ -91,6 +91,7 @@ data class ProfileItem(
     // (protocol "wg" not "wireguard", ip "v6" not "ipv6", obfuscation under "noize").
     var aetherProtocol: String? = null,
     var aetherTransport: String? = null,
+    var aetherFingerprint: String? = null,
     var aetherScanMode: String? = null,
     var aetherObfuscation: String? = null,
     var aetherIpVersion: String? = null,

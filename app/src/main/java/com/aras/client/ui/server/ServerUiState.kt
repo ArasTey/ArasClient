@@ -60,6 +60,7 @@ class ServerUiState(
     xdriveExtra: String = "",
     aetherProtocol: String = "wg",
     aetherTransport: String = "h3",
+    aetherFingerprint: String = "",
     aetherScanMode: String = "balanced",
     aetherObfuscation: String = "auto",
     aetherIpVersion: String = "v4",
@@ -154,6 +155,7 @@ class ServerUiState(
     var xdriveExtra by mutableStateOf(xdriveExtra)
     var aetherProtocol by mutableStateOf(aetherProtocol)
     var aetherTransport by mutableStateOf(aetherTransport)
+    var aetherFingerprint by mutableStateOf(aetherFingerprint)
     var aetherScanMode by mutableStateOf(aetherScanMode)
     var aetherObfuscation by mutableStateOf(aetherObfuscation)
     var aetherIpVersion by mutableStateOf(aetherIpVersion)
@@ -265,6 +267,7 @@ class ServerUiState(
             xdriveExtra = xdriveExtra.nullIfBlank(),
             aetherProtocol = aetherProtocol,
             aetherTransport = aetherTransport,
+            aetherFingerprint = aetherFingerprint.nullIfBlank(),
             aetherScanMode = aetherScanMode,
             aetherObfuscation = aetherObfuscation,
             aetherIpVersion = aetherIpVersion,
@@ -369,6 +372,7 @@ class ServerUiState(
                 xdriveExtra = initialConfig.xdriveExtra ?: "",
                 aetherProtocol = initialConfig.aetherProtocol ?: "wg",
                 aetherTransport = initialConfig.aetherTransport ?: "h3",
+                aetherFingerprint = initialConfig.aetherFingerprint ?: "",
                 aetherScanMode = initialConfig.aetherScanMode ?: "balanced",
                 aetherObfuscation = initialConfig.aetherObfuscation ?: "auto",
                 aetherIpVersion = initialConfig.aetherIpVersion ?: "v4",
