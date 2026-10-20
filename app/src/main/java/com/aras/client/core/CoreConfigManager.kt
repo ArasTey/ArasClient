@@ -18,6 +18,7 @@ import com.aras.client.enums.EConfigType
 import com.aras.client.extension.isNotNullEmpty
 import com.aras.client.handler.MmkvManager
 import com.aras.client.handler.SettingsManager
+import com.aras.client.R
 import com.aras.client.util.HttpUtil
 import com.aras.client.util.JsonUtil
 import com.aras.client.util.LogUtil
@@ -529,10 +530,33 @@ object CoreConfigManager {
      * Serialize a runtime configuration into a standard result object.
      */
     private fun toConfigResult(configContext: CoreConfigContext, xrayConfig: XrayConfig): ConfigResult {
+        val context = configContext.context
+        // The ECH config queries of the TLS outbounds go through their ECH outbounds, which
+        // EchOutbound.serialize checks, links and appends after every other outbound
+        val serialized = EchOutbound.serialize(xrayConfig)
+        if (serialized !is EchOutbound.Result.Done) {
+            val message = when (serialized) {
+                is EchOutbound.Result.Invalid -> when (serialized.error) {
+                    EchOutbound.Error.INVALID_JSON ->
+                        context.getString(
+                            R.string.toast_malformed_json_detail,
+                            context.getString(R.string.server_lab_ech_outbound)
+                        )
+                    EchOutbound.Error.NEEDS_ECH_CONFIG_LIST -> context.getString(R.string.toast_ech_outbound_needs_ech_config_list)
+                    EchOutbound.Error.INVALID_TAG -> context.getString(R.string.toast_ech_outbound_invalid_tag)
+                }
+                is EchOutbound.Result.TagConflict -> context.getString(
+                    R.string.toast_ech_outbound_tag_conflict, serialized.tag
+                )
+                else -> ""
+            }
+            LogUtil.e(AppConfig.TAG, message)
+            return ConfigResult(false, configContext.guid, "", message)
+        }
         return ConfigResult(
             status = true,
             guid = configContext.guid,
-            content = JsonUtil.toJsonPretty(xrayConfig) ?: ""
+            content = serialized.content
         )
     }
 

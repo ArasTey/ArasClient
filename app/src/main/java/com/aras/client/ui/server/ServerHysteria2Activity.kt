@@ -92,6 +92,16 @@ class ServerHysteria2Activity : BaseServerActivity() {
             { state.sni = it }
         )
         FormTextField(
+            stringResource(R.string.server_lab_ech_config_list),
+            state.echConfigList,
+            { state.echConfigList = it }
+        )
+        FormTextField(
+            stringResource(R.string.server_lab_ech_outbound),
+            state.echOutbound,
+            { state.echOutbound = it }
+        )
+        FormTextField(
             stringResource(R.string.server_lab_pinned_ca256),
             state.pinnedCA256,
             { state.pinnedCA256 = it }

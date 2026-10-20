@@ -107,6 +107,7 @@ class ServerUiState(
     spiderX: String = "",
     mldsa65Verify: String = "",
     echConfigList: String = "",
+    echOutbound: String = "",
     verifyPeerCertByName: String = "",
     pinnedCA256: String = "",
     isFetchingCert: Boolean = false
@@ -203,6 +204,7 @@ class ServerUiState(
     var spiderX by mutableStateOf(spiderX)
     var mldsa65Verify by mutableStateOf(mldsa65Verify)
     var echConfigList by mutableStateOf(echConfigList)
+    var echOutbound by mutableStateOf(echOutbound)
     var verifyPeerCertByName by mutableStateOf(verifyPeerCertByName)
     var pinnedCA256 by mutableStateOf(pinnedCA256)
     var isFetchingCert by mutableStateOf(isFetchingCert)
@@ -320,6 +322,7 @@ class ServerUiState(
             spiderX = spiderX,
             mldsa65Verify = mldsa65Verify,
             echConfigList = echConfigList,
+            echOutbound = echOutbound.nullIfBlank(),
             verifyPeerCertByName = verifyPeerCertByName,
             pinnedCA256 = pinnedCA256
         )
@@ -422,6 +425,7 @@ class ServerUiState(
                 spiderX = initialConfig.spiderX ?: "",
                 mldsa65Verify = initialConfig.mldsa65Verify ?: "",
                 echConfigList = initialConfig.echConfigList ?: "",
+                echOutbound = initialConfig.echOutbound ?: "",
                 verifyPeerCertByName = initialConfig.verifyPeerCertByName ?: "",
                 pinnedCA256 = initialConfig.pinnedCA256 ?: ""
             )

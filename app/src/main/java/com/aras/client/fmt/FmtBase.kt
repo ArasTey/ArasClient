@@ -114,6 +114,7 @@ open class FmtBase {
         config.alpn = queryParam["alpn"]
         config.cipherSuites = queryParam["cs"]
         config.echConfigList = queryParam["ech"]
+        config.echOutbound = queryParam["echOutbound"]
         config.verifyPeerCertByName = queryParam["vcn"]
         config.pinnedCA256 = queryParam["pcs"]
         config.publicKey = queryParam["pbk"]
@@ -136,6 +137,7 @@ open class FmtBase {
         config.alpn?.nullIfBlank()?.let { dicQuery["alpn"] = it }
         config.cipherSuites?.nullIfBlank()?.let { dicQuery["cs"] = it }
         config.echConfigList?.nullIfBlank()?.let { dicQuery["ech"] = it }
+        config.echOutbound?.nullIfBlank()?.let { dicQuery["echOutbound"] = it }
         config.verifyPeerCertByName?.nullIfBlank()?.let { dicQuery["vcn"] = it }
         config.pinnedCA256?.nullIfBlank()?.let { dicQuery["pcs"] = it }
         config.fingerPrint?.nullIfBlank()?.let { dicQuery["fp"] = it }

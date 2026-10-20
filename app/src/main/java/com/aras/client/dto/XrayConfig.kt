@@ -253,6 +253,10 @@ data class XrayConfig(
                 val disableSystemRoot: Boolean? = null,
                 val enableSessionResumption: Boolean? = null,
                 var echConfigList: String? = null,
+                var echSockopt: SockoptBean? = null,
+                // The profile's ECH outbound as written, which EchOutbound.serialize checks, links and
+                // appends; never serialized straight into the configuration
+                @Transient var echOutbound: String? = null,
                 var verifyPeerCertByName: String? = null,
                 var pinnedPeerCertSha256: String? = null,
                 // REALITY settings
