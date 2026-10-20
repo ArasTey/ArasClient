@@ -1,51 +1,83 @@
 package com.aras.client.service
 
+import android.util.Log
+import com.aras.client.core.CoreOutboundBuilder
+import com.aras.client.core.TestSettings
+import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.EConfigType
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Before
 import org.junit.Test
+import org.mockito.MockedStatic
+import org.mockito.Mockito.mockStatic
 
 /**
- * Which component is allowed to read the TUN.
+ * The TUN has exactly one reader.
  *
- * There is exactly one TUN descriptor and two things that want it: hev-socks5-
- * tunnel (`TProxyStartService(config, vpnInterface.fd)`) and the standalone
- * AmneziaWG tunnel (`pfd.detachFd()` in CoreServiceManager). Handing it to both
- * gives the TUN two readers — tun2socks drains every packet into the local SOCKS
- * proxy, which in AmneziaWG mode no core is serving, so the tunnel is up and
- * carries nothing. That is why AmneziaWG appeared to start and then do nothing.
+ * There is one TUN descriptor and one thing that reads it: hev-socks5-tunnel,
+ * which forwards every packet to the local SOCKS the core serves. A protocol
+ * that took the descriptor for itself — the standalone AmneziaWG tunnel did —
+ * gives the TUN a second reader: tun2socks drains the packets into a SOCKS
+ * proxy that nothing serves in that mode, the tunnel comes up, and it carries
+ * nothing. That is why AmneziaWG appeared to start and then do nothing.
+ *
+ * So every protocol the app offers is dialled by the core, WireGuard and
+ * AmneziaWG included, and the app builds an outbound for each of them.
  */
 class TunOwnershipTest {
 
-    @Test
-    fun `amneziawg does not start tun2socks`() {
-        assertFalse(shouldRunTun2Socks(EConfigType.AMNEZIAWG))
+    private lateinit var mockLog: MockedStatic<Log>
+
+    @Before
+    fun setUp() {
+        mockLog = mockStatic(Log::class.java)
+        TestSettings.install()
+    }
+
+    @After
+    fun tearDown() {
+        mockLog.close()
     }
 
     @Test
-    fun `plain wireguard still uses tun2socks`() {
-        // WIREGUARD goes through the Xray wireguard outbound, unlike AMNEZIAWG.
-        assertTrue(shouldRunTun2Socks(EConfigType.WIREGUARD))
-    }
-
-    @Test
-    fun `every core-dialed protocol still uses tun2socks`() {
-        val coreDialed = listOf(
+    fun `every protocol the app offers is dialled by the core`() {
+        val dialled = listOf(
             EConfigType.VMESS, EConfigType.VLESS, EConfigType.TROJAN,
             EConfigType.SHADOWSOCKS, EConfigType.SOCKS, EConfigType.HTTP,
-            EConfigType.HYSTERIA, EConfigType.HYSTERIA2,
+            EConfigType.WIREGUARD, EConfigType.AMNEZIAWG,
+            EConfigType.HYSTERIA2,
             EConfigType.ANYTLS, EConfigType.MASQUE,
             EConfigType.AETHER, EConfigType.MIERU,
-            EConfigType.CUSTOM,
         )
 
-        coreDialed.forEach { assertTrue("tun2socks must run for $it", shouldRunTun2Socks(it)) }
+        dialled.forEach { type ->
+            val outbound = CoreOutboundBuilder.convert(profile(type))
+            assertNotNull("$type must be dialled by the core, not by the app", outbound)
+        }
     }
 
     @Test
-    fun `an unresolved profile falls back to tun2socks`() {
-        // A null type means we could not decode the selection; the safe default is
-        // the path every other profile takes.
-        assertTrue(shouldRunTun2Socks(null))
+    fun `the profiles that are resolved elsewhere build no outbound of their own`() {
+        // Policies and proxy chains are resolved by the config manager; the builder
+        // must decline them rather than emit a half-populated outbound.
+        listOf(EConfigType.CUSTOM, EConfigType.POLICYGROUP, EConfigType.PROXYCHAIN).forEach { type ->
+            assertNull(
+                "$type must not build an outbound",
+                CoreOutboundBuilder.convert(profile(type)),
+            )
+        }
     }
+
+    private fun profile(type: EConfigType) = ProfileItem(
+        configType = type,
+        remarks = "test",
+        server = "1.2.3.4",
+        serverPort = "443",
+        publicKey = "pubkey",
+        secretKey = "secretkey",
+        localAddress = "10.0.0.2/32",
+        password = "pw",
+    )
 }

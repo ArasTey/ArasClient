@@ -89,8 +89,9 @@ class CoreOutboundBuilderTest {
         assertEquals("wireguard", outbound!!.protocol)
         // Kernel TUN cannot apply junk packets, so the userspace device is mandatory.
         assertEquals(true, outbound.settings?.noKernelTun)
-        // Cloudflare WARP endpoints drop IPv6 handshakes; AWG binds v4 only.
-        assertEquals("forceIPv4", outbound.settings?.domainStrategy)
+        // Cloudflare WARP endpoints drop IPv6 handshakes; AWG binds v4 only, and
+        // the IPv6 route goes with the IPv6 address it would have covered.
+        assertEquals(listOf("0.0.0.0/0"), outbound.settings?.peers?.firstOrNull()?.allowedIPs)
     }
 
     @Test
@@ -373,5 +374,119 @@ class CoreOutboundBuilderTest {
         // Policies and proxy chains are resolved elsewhere; the builder must decline
         // them rather than emit a half-populated outbound the core would reject.
         assertNull(CoreOutboundBuilder.convert(profile(EConfigType.POLICYGROUP)))
+    }
+
+    @Test
+    fun `a wireguard peer covers the whole tunnel`() {
+        val peer = CoreOutboundBuilder.convert(wireguardProfile())?.settings?.peers?.firstOrNull()
+
+        // The device routes packets into the tunnel by the peer's allowed IPs.
+        // Without them it has no route and drops everything it is handed, which
+        // reads as a tunnel that comes up and carries nothing.
+        assertEquals(listOf("0.0.0.0/0"), peer?.allowedIPs)
+    }
+
+    @Test
+    fun `a wireguard peer keeps its mapping alive`() {
+        // Without a keep-alive the peer's NAT mapping expires after a few minutes
+        // and the tunnel goes quiet.
+        assertEquals(25, CoreOutboundBuilder.convert(wireguardProfile())?.settings?.peers?.firstOrNull()?.keepAlive)
+
+        val own = wireguardProfile().apply { keepAlive = "45" }
+        assertEquals(45, CoreOutboundBuilder.convert(own)?.settings?.peers?.firstOrNull()?.keepAlive)
+
+        // Zero turns it off, and is not mistaken for "not set".
+        val off = wireguardProfile().apply { keepAlive = "0" }
+        assertEquals(0, CoreOutboundBuilder.convert(off)?.settings?.peers?.firstOrNull()?.keepAlive)
+    }
+
+    @Test
+    fun `wireguard uses the userspace tunnel`() {
+        // The kernel TUN needs CAP_NET_ADMIN, which an unprivileged app has not,
+        // and in root mode it would create a second TUN device fighting the app's.
+        assertEquals(true, CoreOutboundBuilder.convert(wireguardProfile())?.settings?.noKernelTun)
+    }
+
+    @Test
+    fun `the peer fields carry the names the core reads`() {
+        val peer = CoreOutboundBuilder.convert(wireguardProfile())?.settings?.peers?.firstOrNull()
+
+        val json = JsonUtil.toJson(peer)
+
+        assertTrue(json.contains("\"allowedIPs\""))
+        assertTrue(json.contains("\"keepAlive\""))
+        assertTrue(json.contains("\"publicKey\""))
+        assertTrue(json.contains("\"endpoint\""))
+    }
+
+    @Test
+    fun `reserved bytes are only sent as three of them`() {
+        // The core accepts the reserved bytes as an empty list or as exactly three,
+        // and rejects the whole config otherwise.
+        val three = wireguardProfile().apply { reserved = "1,2,3" }
+        assertEquals(listOf(1, 2, 3), CoreOutboundBuilder.convert(three)?.settings?.reserved)
+
+        val two = wireguardProfile().apply { reserved = "1,2" }
+        assertNull(CoreOutboundBuilder.convert(two)?.settings?.reserved)
+
+        val broken = wireguardProfile().apply { reserved = "a,b,c" }
+        assertNull(CoreOutboundBuilder.convert(broken)?.settings?.reserved)
+    }
+
+    @Test
+    fun `an ipv6 endpoint is bracketed`() {
+        val item = wireguardProfile().apply { server = "2001:db8::1" }
+
+        val peer = CoreOutboundBuilder.convert(item)?.settings?.peers?.firstOrNull()
+
+        assertEquals("[2001:db8::1]:443", peer?.endpoint)
+    }
+
+    @Test
+    fun `a wireguard profile without an endpoint yields no outbound`() {
+        assertNull(CoreOutboundBuilder.convert(wireguardProfile().apply { serverPort = "0" }))
+        assertNull(CoreOutboundBuilder.convert(wireguardProfile().apply { server = "" }))
+    }
+
+    private fun wireguardProfile() = profile(EConfigType.WIREGUARD).apply {
+        publicKey = "pubkey"
+        secretKey = "secretkey"
+        localAddress = "10.0.0.2/32"
+    }
+
+    @Test
+    fun `the amneziawg outbound can be dumped for the end to end check`() {
+        // The host check runs the app's own outbound through the real core, so
+        // the JSON it runs has to be the JSON the app builds. The dump is written
+        // only when a path is asked for, so the ordinary test run leaves nothing
+        // behind.
+        val path: String = System.getenv("ARAS_DUMP_OUTBOUND")
+            ?: System.getProperty("aras.dump.outbound")
+            ?: return
+        val item = profile(EConfigType.AMNEZIAWG).apply {
+            publicKey = "pubkey"
+            secretKey = "secretkey"
+            localAddress = "172.16.0.2/32"
+        }
+
+        val outbound = CoreOutboundBuilder.buildAmneziawgOutbound(item, ipv6Enabled = false)
+
+        java.io.File(path).writeText(JsonUtil.toJsonPretty(outbound) ?: return)
+    }
+
+    @Test
+    fun `the wireguard outbound can be dumped for the end to end check`() {
+        val path: String = System.getenv("ARAS_DUMP_WIREGUARD_OUTBOUND")
+            ?: System.getProperty("aras.dump.wireguard.outbound")
+            ?: return
+        val item = profile(EConfigType.WIREGUARD).apply {
+            publicKey = "pubkey"
+            secretKey = "secretkey"
+            localAddress = "172.16.0.2/32"
+        }
+
+        val outbound = CoreOutboundBuilder.buildWireguardOutbound(item, ipv6Enabled = false)
+
+        java.io.File(path).writeText(JsonUtil.toJsonPretty(outbound) ?: return)
     }
 }

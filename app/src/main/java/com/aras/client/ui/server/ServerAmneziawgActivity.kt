@@ -75,6 +75,12 @@ class ServerAmneziawgActivity : BaseServerActivity() {
             { state.mtu = it },
             keyboardType = KeyboardType.Number
         )
+        FormTextField(
+            stringResource(R.string.server_lab_keepalive),
+            state.keepAlive,
+            { state.keepAlive = it },
+            keyboardType = KeyboardType.Number
+        )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(

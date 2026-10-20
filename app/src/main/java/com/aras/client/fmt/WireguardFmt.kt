@@ -25,6 +25,9 @@ object WireguardFmt : FmtBase() {
 
         config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty()).let { it.ifEmpty { "none" } }
         config.server = uri.idnHost
+        // A link without a port cannot be dialled; -1 from the URI parser would
+        // otherwise become an endpoint of "host:-1".
+        if (uri.port <= 0) return null
         config.serverPort = uri.port.toString()
 
         config.secretKey = uri.userInfo.orEmpty()
@@ -33,6 +36,9 @@ object WireguardFmt : FmtBase() {
         config.preSharedKey = queryParam["presharedkey"]?.nullIfBlank()
         config.mtu = Utils.parseInt(queryParam["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
         config.reserved = queryParam["reserved"] ?: "0,0,0"
+        // The keep-alive is the app's own addition to the link: without it the
+        // peer's mapping expires after a few minutes and the tunnel goes quiet.
+        config.keepAlive = queryParam["keepalive"]?.nullIfBlank()
 
         return config
     }
@@ -78,20 +84,18 @@ object WireguardFmt : FmtBase() {
         }
 
         config.secretKey = interfaceParams["privatekey"].orEmpty()
-        config.remarks = System.currentTimeMillis().toString()
+        config.remarks = interfaceParams["description"]?.takeIf { it.isNotBlank() }
+            ?: System.currentTimeMillis().toString()
         config.localAddress = interfaceParams["address"] ?: AppConfig.WIREGUARD_LOCAL_ADDRESS_V4
         config.mtu = Utils.parseInt(interfaceParams["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
         config.publicKey = peerParams["publickey"].orEmpty()
         config.preSharedKey = peerParams["presharedkey"]?.nullIfBlank()
-        val endpoint = peerParams["endpoint"].orEmpty()
-        val endpointParts = endpoint.split(":", limit = 2)
-        if (endpointParts.size == 2) {
-            config.server = endpointParts[0]
-            config.serverPort = endpointParts[1]
-        } else {
-            config.server = endpoint
-            config.serverPort = ""
-        }
+        // Without a keep-alive the peer's NAT mapping expires after a few minutes
+        // and the tunnel goes quiet, which reads as "it worked, then it didn't".
+        config.keepAlive = peerParams["persistentkeepalive"]?.nullIfBlank()
+        val (server, port) = parseEndpoint(peerParams["endpoint"])
+        config.server = server
+        config.serverPort = port
         config.reserved = peerParams["reserved"] ?: "0,0,0"
 
         return config
@@ -118,6 +122,7 @@ object WireguardFmt : FmtBase() {
         if (config.preSharedKey != null) {
             dicQuery["presharedkey"] = config.preSharedKey.removeWhiteSpace().orEmpty()
         }
+        config.keepAlive?.nullIfBlank()?.let { dicQuery["keepalive"] = it }
 
         return toUri(config, config.secretKey, dicQuery)
     }

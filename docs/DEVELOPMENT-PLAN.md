@@ -436,3 +436,137 @@ suite order with GREASE left out where the client sends none. All of it:
 Also confirmed: the entry-proxy fix and psiphon flag set match
 (`--psiphon-server-entries` is rejected; the list rides in the config), so
 nothing in our overlay drifts from the core's interface.
+
+## 10. Round 2026-10-19/20 — WireGuard and AmneziaWG, rebuilt inside the app
+
+The owner's report: **the wireguard and amnezia are not working, none in app**.
+Both protocols were audited end to end, and both are now dialled by the app's
+core — one path, one owner of the TUN.
+
+### 10.1 What the audit found
+
+**AmneziaWG had two implementations, and the one that carried the connection
+was the broken one.**
+
+- The *selected* AWG profile bypassed the core entirely: `CoreServiceManager`
+  handed the VpnService TUN descriptor to a standalone `awg-go` device
+  (`AwgConfigBuilder` → `CoreNativeManager.awgTurnOn`). Nothing else served
+  the local SOCKS in that mode, the TUN kept the app's generic VPN address
+  instead of the profile's tunnel address, and the profile got no DNS, no
+  routing rules, no statistics and no per-app proxy.
+- The *latency test* of the very same profile went through the core's
+  WireGuard outbound, with the junk parameters on the peer. So the app shipped
+  two different AmneziaWG clients, and only the broken one was on the data
+  path.
+
+**The WireGuard outbound was missing two things the core needs.**
+
+- No keep-alive on the peer: the mapping the peer holds expires after a few
+  minutes, and the tunnel goes quiet — "it worked, then it didn't".
+- `noKernelTun` was left unset for plain WireGuard. In root mode the core
+  then has CAP_NET_ADMIN and builds a *kernel* TUN device of its own, which
+  fights the app's VPN interface.
+
+**Import bugs that produced broken profiles.**
+
+- A `.conf` endpoint was split on the first colon, so an IPv6 endpoint became
+  host `[2001` and port `db8::1]:51820`.
+- The WireGuard `.conf` parser dropped `PersistentKeepalive` entirely (only
+  the AmneziaWG parser read it).
+- A `wireguard://` or `awg://` link without a port became the endpoint
+  `host:-1`.
+- The `reserved` bytes were written with `toInt()` — a hand-typed value threw
+  a `NumberFormatException` out of the whole config build — and they were
+  handed to the core even when they were not three bytes, which the core
+  rejects outright.
+
+### 10.2 What changed
+
+**Both protocols are dialled by the core now.**
+
+- `CoreServiceManager` no longer has an AmneziaWG branch: the profile is built
+  as a core config like every other protocol. `AwgConfigBuilder`,
+  `CoreNativeManager.awgTurnOn/awgTurnOff/awgIsRunning`,
+  `ArasCore.awg*` and `shouldRunTun2Socks()` are gone; the bindings lost
+  `awg_tunnel.go` and `awg_fd_tun.go` with them.
+- The TUN therefore has exactly one reader again — hev-socks5-tunnel, which
+  feeds the core's local SOCKS inbound — for every protocol.
+- `CoreOutboundBuilder.buildWireguardOutbound` is now the single place where
+  the WireGuard outbound is built, and it fills in what the core needs:
+  the peer's allowed IPs, a keep-alive, `noKernelTun`, the reserved bytes
+  (only when they are three of them), and an IPv6 endpoint in brackets.
+- `buildAmneziawgOutbound` is that same outbound plus the obfuscation
+  parameters and the mimic packets on the peer, and it drops the IPv6 route
+  together with the IPv6 address it would have covered.
+- The core's wireguard config has no `domainStrategy` field, so the
+  `forceIPv4` the app used to set was never read by anything — the v4
+  preference is now made in the address list itself.
+
+**Import and editor.**
+
+- `FmtBase.parseEndpoint` splits an endpoint on the last colon and knows the
+  bracketed IPv6 form; both `.conf` parsers use it.
+- The WireGuard `.conf` parser reads `PersistentKeepalive` and uses the
+  interface's `Description` as the remark.
+- A link without a port is refused instead of becoming `host:-1`.
+- The keep-alive is a field of the WireGuard and AmneziaWG editors, and it is
+  saved with the profile.
+
+### 10.3 How it was verified
+
+**The app's own outbound, through the real core.** The unit test dumps
+`CoreOutboundBuilder.buildWireguardOutbound` / `buildAmneziawgOutbound` to
+disk, and the harness runs *that file* as the client config — a copy in the
+harness could drift from the app without anything noticing. The harness lives
+in `tools/wg-e2e/` with its own README.
+
+- **Plain WireGuard, end to end:** the core's WireGuard *inbound* as the
+  server, the app's outbound as the client, a real HTTP request through the
+  SOCKS inbound → **HTTP 200**, the body served by a local HTTP server,
+  through the tunnel.
+- **AmneziaWG, end to end:** a real `amneziawg-go` device as the server (the
+  core's own inbound cannot serve as the AWG side — it writes the plain
+  WireGuard UAPI and never applies the obfuscation), the app's outbound as the
+  client → **handshake initiation received, handshake response sent, a TCP
+  segment carried through the tunnel** with the profile's tunnel address as its
+  source. The junk parameters matched on both sides.
+
+**Unit tests** (`254 @Test`, 0 failures):
+
+- `CoreOutboundBuilderTest` — the allowed IPs, the keep-alive (the profile's
+  own value, `0` honoured as "off", the default 25 otherwise), `noKernelTun`,
+  the reserved bytes (three of them or none), the bracketed IPv6 endpoint, the
+  JSON field names the core reads, and a profile without an endpoint yielding
+  no outbound.
+- `AmneziaConfSectionTest` — the exported `.conf` reaching the core with the
+  values it was exported with, not the defaults.
+- `TunOwnershipTest` — every protocol the app offers is dialled by the core.
+
+### 10.4 A core bug found on the way: the mimic packets never arrived
+
+The app has sent `mimicPacket1..5` on the peer since 1.8.0, and the core's
+proto has carried `mimic_packet_1..5` since then as well — but the layer in
+between dropped them. `infra/conf/wireguard.go`, the JSON-to-proto loader, had
+no fields for them, so the values never reached the proto and
+`proxy/wireguard/client.go` wrote no `i1..i5` at all. The decoys did nothing,
+and nothing said so.
+
+Fixed in the core (`ArasTey/xray-core`, `infra/conf/wireguard.go`): the five
+fields are read and handed to the proto, with a test
+(`infra/conf/wireguard_mimic_test.go`) that pins both directions — the values
+reach the proto, and a profile without them grows no empty specs, which the
+device would reject.
+
+### 10.5 Still open
+
+- **A device test against the owner's own servers.** The host check proves the
+  app's config and the core's implementation; what it cannot prove is a
+  server the app has never talked to. This wants a healthy network day.
+- **Hysteria v1 has no outbound builder.** `EConfigType.HYSTERIA` exists and a
+  `hysteria://` link imports into it, but `CoreOutboundBuilder.convert` does
+  not map it, so such a profile builds no outbound. It was not reported and
+  the core's hysteria proxy is a different protocol from hysteria2, so it is
+  left alone here — noted, not fixed.
+- **The bindings change is local.** `ArasTey/AndroidLibXrayLite` lost the
+  standalone AWG tunnel in a local commit; the release AAR is built by CI from
+  that repository, so the push is the owner's call.

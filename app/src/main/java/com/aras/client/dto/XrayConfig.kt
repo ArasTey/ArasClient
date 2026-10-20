@@ -107,6 +107,14 @@ data class XrayConfig(
                 var publicKey: String = "",
                 var preSharedKey: String? = null,
                 var endpoint: String = "",
+                // The routes the tunnel covers. The core falls back to "everything"
+                // when the field is absent, but that fallback also covers IPv6, and
+                // an IPv6 route in a tunnel that carries no IPv6 address makes the
+                // device drop what it is handed.
+                var allowedIPs: List<String>? = null,
+                // Seconds between keep-alive packets. Zero means none, and a peer
+                // behind NAT loses its mapping after a few minutes without them.
+                var keepAlive: Int? = null,
                 /*AmneziaWG*/
                 var junkPacketCount: Int? = null,
                 var junkPacketMinSize: Int? = null,

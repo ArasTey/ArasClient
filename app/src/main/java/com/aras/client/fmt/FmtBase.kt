@@ -46,6 +46,30 @@ open class FmtBase {
     }
 
     /**
+     * Splits an endpoint into its host and its port.
+     *
+     * An IPv6 endpoint is written with brackets — "[2001:db8::1]:51820" — and
+     * splitting it on the first colon cuts the address in half, which left the
+     * profile with a host of "[2001" and a port of "db8::1]:51820". The port is
+     * taken from the last colon, so a host without one is left whole.
+     */
+    fun parseEndpoint(endpoint: String?): Pair<String, String> {
+        val value = endpoint?.trim().orEmpty()
+        if (value.isEmpty()) return "" to ""
+        if (value.startsWith("[")) {
+            val closing = value.indexOf(']')
+            if (closing > 1) {
+                val host = value.substring(1, closing)
+                val port = value.substring(closing + 1).removePrefix(":")
+                return host to port
+            }
+        }
+        val separator = value.lastIndexOf(':')
+        if (separator <= 0 || separator == value.length - 1) return value to ""
+        return value.substring(0, separator) to value.substring(separator + 1)
+    }
+
+    /**
      * Populates a ProfileItem object with values from query parameters.
      *
      * @param config the ProfileItem object to populate

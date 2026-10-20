@@ -12,12 +12,12 @@ deep reference. Everything below was verified, not remembered.
 | Owner | **ArasTey** — Persian-speaking. Reply in Persian if they write in Persian. |
 | Git identity | `ArasTey <308009703+ArasTey@users.noreply.github.com>` — set repo-locally on both repos already. Never use a placeholder identity. |
 | App repo | `/Users/admin/Documents/ArasClient/ArasClient` — remote `ArasTey/ArasClient`, branch `main` |
-| Core repo | `~/corebuild/xray-core` — remote `ArasTey/xray-core`, branch **`feat/awg-mimic-packets`** at `478176a0`. **Pushed**, together with the tag `aras-core-26.9.28`; both remote refs resolve to `478176a0`. |
+| Core repo | `~/corebuild/xray-core` — remote `ArasTey/xray-core`, branch **`feat/awg-mimic-packets-26.10`** (patterniha v26.10.13 + the app's patches). The tag `aras-core-26.10.13` is what CI builds the AAR from. |
 | Bindings | `~/corebuild/AndroidLibXrayLite` — remote `ArasTey/AndroidLibXrayLite` |
-| Builds | `~/Desktop/ArasClient-1.8.0/` — 5 APKs + `SHA-256SUMS.txt` + `README.txt` |
-| Current commit | one commit, unpushed; `main` is 1 ahead of `origin/main`. Run `git rev-parse --short HEAD` — a hash written *inside* the commit it describes cannot stay correct, because amending changes it. |
-| Version | `versionName 1.8.0`, `versionCode 180` (`app/build.gradle.kts`) |
-| Tests | 235 `@Test` across 33 files, 0 failures |
+| Builds | the release APKs of the last round, built by CI for `v1.8.1` |
+| Current commit | run `git rev-parse --short HEAD` and `git status --short --branch` — a hash written *inside* the commit it describes cannot stay correct, because amending changes it. |
+| Version | `versionName 1.8.1`, `versionCode 181` (`app/build.gradle.kts`) |
+| Tests | 254 `@Test` across 33 files, 0 failures |
 
 
 The owner prefers changes kept as **one clean commit** on `main`, fully local,
@@ -173,7 +173,10 @@ Five defects, each with a test. They are the reason this build exists.
 3. **The TUN descriptor had two readers.** hev-socks5-tunnel and the standalone
    awg-go tunnel were both handed it; tun2socks won the race and drained packets
    into a SOCKS proxy that no core serves in AmneziaWG mode.
-   `shouldRunTun2Socks()` skips it for AMNEZIAWG. (`CoreVpnService.kt`)
+   `shouldRunTun2Socks()` skipped it for AMNEZIAWG in 1.8.0 — **the standalone
+   tunnel is gone entirely since 2026-10-20**: every protocol, AmneziaWG
+   included, is dialled by the core, so the TUN has one reader again.
+   (`CoreVpnService.kt`, `CoreServiceManager.kt`, `CoreOutboundBuilder.kt`)
 
 4. **AmneziaWG junk params were read from `[Peer]`, but AmneziaVPN writes them
    under `[Interface]`** — they are device-level, and the UAPI parser is in peer
@@ -216,18 +219,20 @@ explicitly whenever a config fix ships.
   (`go-tun2socks`'s companion, `hectap/go-openvpn`, `KaringX/go-openvpn` all 404
   from `goproxy.cn`); patterniha v26.9.27 has no OpenVPN across all 42 refs of
   its remotes. Do not start on the app side.
-- **The standalone AWG socket has no `protect()`.** `awg_tunnel.go` uses
-  `conn.NewDefaultBind()`. The Xray path is safe because it dials `127.0.0.1`,
-  but a tunnel owning the TUN itself normally needs its sockets protected in
-  full-tunnel mode. Not observed failing on the emulator (bypass-LAN is on by
-  default there), so this is unverified — do not "fix" it speculatively.
-- **A batch latency test cannot report an egress country.**
-  `MeasureOutboundDelay` in the gomobile shim nulls the inbounds and dials via
-  `core.Dial`, so there is no local inbound to route an IP-echo request
-  through. Needs a core change, not an app change.
+- **The standalone AWG socket is gone** (2026-10-20): AmneziaWG is dialled by
+  the core like every other protocol, so the question of a socket that owns the
+  TUN and has no `protect()` no longer exists. The TUN has one reader.
+- **A batch latency test cannot report an egress country.** *Solved in 1.8.1*:
+  the gomobile shim grew `MeasureOutboundDelayWithInfo`, which fetches the
+  egress country and IP through the same `core.Dial` path as the delay test,
+  and the card is patched with it.
 - **The entry-proxy chain fixes were never tested on a device** — they need an
   Aether or Mieru profile to exercise.
-- `proxy/wireguard/client.go.rej` is tracked debris from an old failed patch.
+- **Hysteria v1 has no outbound builder.** `EConfigType.HYSTERIA` exists and
+  a `hysteria://` link imports into it, but `CoreOutboundBuilder.convert` does
+  not map it, so such a profile builds no outbound. The core's `hysteria`
+  proxy is a different protocol from hysteria2, so this needs a decision
+  before it is touched.
   Harmless, not compiled. Deleting it is optional cleanup.
 
 ---
@@ -268,8 +273,8 @@ explicitly whenever a config fix ships.
 app/src/main/java/com/aras/client/
   core/            CoreConfigManager (outbound assembly), CoreOutboundBuilder
                    (profile → outbound), CoreServiceManager (start/stop/reload),
-                   AwgConfigBuilder (standalone UAPI), CoreConfigContextBuilder
-                   (chain resolution), HelperProcessSupport, core/aether/, core/mieru/
+                   CoreConfigContextBuilder (chain resolution), HelperProcessSupport,
+                   core/aether/, core/mieru/
   service/         CoreVpnService (TUN lifecycle), RealPingWorkerService
   fmt/             AmneziawgFmt, WireguardFmt, AetherFmt, ArasFmt — link parsers
   ui/              Compose screens

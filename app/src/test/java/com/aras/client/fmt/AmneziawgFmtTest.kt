@@ -96,4 +96,15 @@ class AmneziawgFmtTest {
         assertEquals("5", config.junkPacketCount)
         assertTrue(config.remarks.isNotBlank())
     }
+
+    @Test
+    fun `the keepalive survives a link round trip`() {
+        // Without the keep-alive the peer's mapping expires after a few minutes
+        // and the tunnel goes quiet, so a share/import cycle must not lose it.
+        val original = AmneziawgFmt.parse(link)!!.apply { keepAlive = "45" }
+
+        val reparsed = AmneziawgFmt.parse(shareLink(original))!!
+
+        assertEquals("45", reparsed.keepAlive)
+    }
 }

@@ -12,7 +12,6 @@ import android.os.ParcelFileDescriptor
 import android.system.OsConstants
 import androidx.core.content.ContextCompat
 import com.aras.client.AppConfig
-import com.aras.client.enums.EConfigType
 import com.aras.client.util.ConnectionStatsManager
 import com.aras.client.contracts.IDialerService
 import com.aras.client.contracts.ServiceControl
@@ -138,39 +137,9 @@ object CoreServiceManager {
 
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting core loop for ${config.remarks}")
 
-        // AmneziaWG profiles bypass Xray entirely: the standalone awg-go
-        // tunnel takes the VPN TUN fd directly — exactly how the AmneziaVPN
-        // client runs AmneziaWG on Android. Must be checked BEFORE building
-        // any xray config.
-        if (config.configType == EConfigType.AMNEZIAWG) {
-            currentConfig = config
-            if (CoreNativeManager.awgIsRunning()) {
-                // Tunnel already up (e.g. reload triggered by a subscription
-                // update) — leave it as-is.
-                notifyTileState(service, AppConfig.MSG_STATE_START_SUCCESS)
-                return
-            }
-            val pfd = vpnInterface ?: error("VPN interface missing for AmneziaWG")
-            // Transfer fd ownership to the Go tunnel: Kotlin detaches (its
-            // close() will no longer touch this fd), Go closes it on stop.
-            val fd = pfd.detachFd()
-            val uapi = AwgConfigBuilder.buildUapi(config)
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: AWG UAPI:\n$uapi")
-            // Must be the MTU the TUN was established with, and the profile's own MTU wins
-            // when it names one — a .conf that says MTU = 1280 was written for that
-            // endpoint and using the global 1500 instead disagrees with the server's
-            // expectation as well as with the device's buffers.
-            val mtu = config.mtu?.takeIf { it > 0 } ?: SettingsManager.getVpnMtu()
-            CoreNativeManager.awgTurnOn(fd, uapi, mtu)
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: standalone AmneziaWG tunnel up")
-            notifyTileState(service, AppConfig.MSG_STATE_START_SUCCESS)
-            ConnectionStatsManager.onSessionStarted()
-            return
-        }
-
         // An Aether or Mieru hop is dialled by a separate process serving a local SOCKS,
         // so the daemon has to be up and listening before the config that dials it is
-        // built — the same ordering constraint AmneziaWG has above. The hop can be
+        // built. The hop can be
         // anywhere in the chain, not just the selected profile: an entry proxy is the
         // outermost hop of every profile in its subscription, so its daemon is what
         // the whole subscription depends on.
@@ -254,13 +223,6 @@ object CoreServiceManager {
         networkMonitor = null
         currentVpnInterface = null
 
-        // Tear down the standalone AmneziaWG tunnel if one is active.
-        try {
-            CoreNativeManager.awgTurnOff()
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop AWG tunnel", e)
-        }
-
         // The aether core and the mieru client are child processes; stopping them here
         // keeps them from outliving the session they were started for. reset() also
         // clears the refcounts HelperProcessSupport keeps for concurrent chain tests.
@@ -333,9 +295,7 @@ object CoreServiceManager {
             isReloading = true
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core reload start...")
 
-            if (!CoreNativeManager.awgIsRunning()) {
-                coreController.stopLoop()
-            }
+            coreController.stopLoop()
             launchCore(service, tunFd, isReload = true)
 
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core reload finished")

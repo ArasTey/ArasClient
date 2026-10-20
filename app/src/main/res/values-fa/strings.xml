@@ -110,6 +110,7 @@
     <string name="server_lab_reserved">Reserved (اختیاری، جدا شده با کاما)</string>
     <string name="server_lab_local_address">آدرس محلی (IPv4/IPv6 اختیاری، جدا شده با کاما)</string>
     <string name="server_lab_local_mtu">MTU (اختیاری، پیش‌فرض 1420)</string>
+    <string name="server_lab_keepalive">حفظ اتصال (ثانیه، اختیاری، پیش‌فرض ۲۵)</string>
     <string name="server_amnezia_section">پارامترهای مبهم‌سازی AmneziaWG (باید با سرور یکسان باشد)</string>
     <string name="server_awg_junk_packet_count">Jc — تعداد بسته‌های قراردادی (اختیاری)</string>
     <string name="server_awg_junk_packet_min">Jmin — حداقل حجم بسته قراردادی (اختیاری)</string>

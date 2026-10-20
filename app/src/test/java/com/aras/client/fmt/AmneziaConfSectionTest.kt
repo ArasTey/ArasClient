@@ -1,7 +1,8 @@
 package com.aras.client.fmt
 
-import com.aras.client.core.AwgConfigBuilder
+import com.aras.client.core.CoreOutboundBuilder
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,6 +17,10 @@ import org.junit.Test
  * established, the UI reported success, and nothing passed. Nothing surfaced
  * it because the defaults are valid-looking numbers, and because the project
  * had never been run on a device.
+ *
+ * The parameters travel to the core on the peer of the WireGuard outbound,
+ * which is where the core lifts them back to device level when it writes the
+ * UAPI — so these tests read them off the outbound the app builds.
  */
 class AmneziaConfSectionTest {
 
@@ -47,6 +52,9 @@ class AmneziaConfSectionTest {
 
     private fun parsed() = AmneziawgFmt.parseAmneziaConfFile(exportedConf)
 
+    private fun peer() = CoreOutboundBuilder.buildAmneziawgOutbound(parsed(), ipv6Enabled = false)
+        ?.settings?.peers?.firstOrNull()
+
     @Test
     fun `obfuscation params are read from the interface section`() {
         val config = parsed()
@@ -75,16 +83,17 @@ class AmneziaConfSectionTest {
 
     @Test
     fun `the exported values are not replaced by amneziawg defaults`() {
-        val uapi = AwgConfigBuilder.buildUapi(parsed())
+        val peer = peer()
 
-        assertTrue(uapi, uapi.contains("jc=8\n"))
-        assertTrue(uapi, uapi.contains("jmin=49\n"))
-        assertTrue(uapi, uapi.contains("jmax=76\n"))
-        assertTrue(uapi, uapi.contains("s1=0\n"))
-        assertTrue(uapi, uapi.contains("s2=0\n"))
+        assertNotNull(peer)
+        assertEquals(8, peer!!.junkPacketCount)
+        assertEquals(49, peer.junkPacketMinSize)
+        assertEquals(76, peer.junkPacketMaxSize)
+        assertEquals(0, peer.initPacketJunkSize)
+        assertEquals(0, peer.responsePacketJunkSize)
         // The defaults that used to be substituted in.
-        assertTrue(uapi, !uapi.contains("jc=4\n"))
-        assertTrue(uapi, !uapi.contains("s1=15\n"))
+        assertTrue(peer.junkPacketCount != 4)
+        assertTrue(peer.initPacketJunkSize != 15)
     }
 
     @Test
@@ -108,51 +117,30 @@ class AmneziaConfSectionTest {
     }
 
     @Test
-    fun `the uapi carries no key this build of amneziawg rejects`() {
-        // amneziawg-go's IpcSet answers "invalid UAPI device key: <x>" and fails the
-        // whole tunnel for anything outside this set. It deliberately has no `address`
-        // key: the device is handed a VpnService TUN the kernel already configured.
-        // Sending one produced exactly that error and broke every connect.
-        val accepted = setOf(
-            "private_key", "listen_port", "fwmark", "replace_peers", "update_only",
-            "jc", "jmin", "jmax", "s1", "s2", "s3", "s4",
-            "h1", "h2", "h3", "h4", "i1", "i2", "i3", "i4", "i5",
-            "header_protection_key", "random_trailers",
-            "content_padding_addition", "disable_cookies",
-            "rekey_after_time", "rekey_timeout", "reject_after_time",
-            "keepalive_timeout", "max_handshake_attempts",
-            "public_key", "preshared_key", "endpoint",
-            "persistent_keepalive_interval", "allowed_ip", "remove",
-            "replace_allowed_ips",
-        )
+    fun `the local address reaches the core as the tunnel address`() {
+        val outbound = CoreOutboundBuilder.buildAmneziawgOutbound(parsed(), ipv6Enabled = false)
 
-        val keys = AwgConfigBuilder.buildUapi(parsed())
-            .lineSequence()
-            .filter { it.contains('=') }
-            .map { it.substringBefore('=').trim() }
-            .distinct()
-            .toList()
+        val address = outbound?.settings?.address as? List<*>
 
-        val rejected = keys.filterNot { it in accepted }
-        assertTrue("keys this core rejects: $rejected", rejected.isEmpty())
-    }
-
-    @Test
-    fun `no address line is written`() {
-        // The address belongs to the kernel-side VpnService interface, which is
-        // established before the core starts. amneziawg-go has no `address` key.
-        val uapi = AwgConfigBuilder.buildUapi(parsed())
-
-        assertTrue(uapi, !uapi.contains("address="))
+        assertNotNull("expected a list of local addresses", address)
+        assertTrue("expected the tunnel address, got $address",
+            requireNotNull(address).contains("172.16.0.2/32"))
     }
 
     @Test
     fun `persistent keepalive is parsed and sent`() {
         assertEquals("25", parsed().keepAlive)
 
-        val uapi = AwgConfigBuilder.buildUapi(parsed())
+        assertEquals(25, peer()?.keepAlive)
+    }
 
-        assertTrue(uapi, uapi.contains("persistent_keepalive_interval=25\n"))
+    @Test
+    fun `a profile with no keepalive falls back to the default interval`() {
+        val config = parsed().apply { keepAlive = null }
+
+        val outbound = CoreOutboundBuilder.buildAmneziawgOutbound(config, ipv6Enabled = false)
+
+        assertEquals(25, outbound?.settings?.peers?.firstOrNull()?.keepAlive)
     }
 
     @Test
@@ -167,9 +155,20 @@ class AmneziaConfSectionTest {
     }
 
     @Test
-    fun `a profile with no keepalive writes none`() {
-        val config = parsed().apply { keepAlive = null }
+    fun `an ipv6 endpoint keeps its address whole`() {
+        val conf = """
+            [Interface]
+            PrivateKey = 8GYMxCC+QxurPSDGDrTnm2HmDROdYL5ZjYD3mBrnpEQ=
+            Address = 172.16.0.2/32
 
-        assertTrue(!AwgConfigBuilder.buildUapi(config).contains("persistent_keepalive_interval"))
+            [Peer]
+            PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+            Endpoint = [2606:4700:110:8c08::1]:2408
+        """.trimIndent()
+
+        val config = AmneziawgFmt.parseAmneziaConfFile(conf)
+
+        assertEquals("2606:4700:110:8c08::1", config.server)
+        assertEquals("2408", config.serverPort)
     }
 }

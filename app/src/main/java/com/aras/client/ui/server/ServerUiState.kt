@@ -30,6 +30,7 @@ class ServerUiState(
     reserved: String = "0,0,0",
     localAddress: String = WIREGUARD_LOCAL_ADDRESS_V4,
     mtu: String = WIREGUARD_LOCAL_MTU,
+    keepAlive: String = "",
     junkPacketCount: String = "",
     junkPacketMinSize: String = "",
     junkPacketMaxSize: String = "",
@@ -125,6 +126,7 @@ class ServerUiState(
     var reserved by mutableStateOf(reserved)
     var localAddress by mutableStateOf(localAddress)
     var mtu by mutableStateOf(mtu)
+    var keepAlive by mutableStateOf(keepAlive)
     var junkPacketCount by mutableStateOf(junkPacketCount)
     var junkPacketMinSize by mutableStateOf(junkPacketMinSize)
     var junkPacketMaxSize by mutableStateOf(junkPacketMaxSize)
@@ -237,6 +239,7 @@ class ServerUiState(
             reserved = if (isWireguard || isAmneziawg) reserved else null,
             localAddress = if (isWireguard || isAmneziawg) localAddress else null,
             mtu = if (isWireguard || isAmneziawg) mtu.toIntOrNull() else null,
+            keepAlive = if (isWireguard || isAmneziawg) keepAlive.trim().takeIf { it.isNotEmpty() } else null,
             junkPacketCount = if (isAmneziawg) junkPacketCount.nullIfBlank() else null,
             junkPacketMinSize = if (isAmneziawg) junkPacketMinSize.nullIfBlank() else null,
             junkPacketMaxSize = if (isAmneziawg) junkPacketMaxSize.nullIfBlank() else null,
@@ -342,6 +345,7 @@ class ServerUiState(
                 reserved = initialConfig.reserved ?: "0,0,0",
                 localAddress = initialConfig.localAddress ?: WIREGUARD_LOCAL_ADDRESS_V4,
                 mtu = initialConfig.mtu?.toString() ?: WIREGUARD_LOCAL_MTU,
+                keepAlive = initialConfig.keepAlive ?: "",
                 junkPacketCount = initialConfig.junkPacketCount ?: "",
                 junkPacketMinSize = initialConfig.junkPacketMinSize ?: "",
                 junkPacketMaxSize = initialConfig.junkPacketMaxSize ?: "",

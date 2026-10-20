@@ -199,7 +199,7 @@ each is a SOCKS hop to that process's loopback listener.
 | Aether | `libaether.so run` | `AETHER_CONFIG`, `AETHER_MASQUE_CONFIG`, `AETHER_WG_CONFIG` env + flags | `identity ready: device=` |
 | Aether scan | same, with `scan=true` arguments | one-shot | `selected WireGuard endpoint X` |
 | Mieru | `libmieru.so run` | `MIERU_CONFIG_JSON_FILE` env | `socks5 server is running` |
-| AmneziaWG | in-process, `awg-go` | via `ArasCoreManager` | listener probe |
+| AmneziaWG | none — the core's WireGuard outbound | — | — |
 
 **Both external processes can be orphaned** by an app process that is killed — Rust ignores
 SIGPIPE and neither daemon has parent-death handling. A survivor keeps the loopback port and the
@@ -399,6 +399,15 @@ strings /tmp/v/*.apk >/dev/null   # then the marker checks from §4
   - Hysteria2 share links dropped bandwidth and the port-hopping interval
   - AmneziaWG H3 (`cookiePacketJunkHeader`) was parsed from `.conf` but never from a URI, and
     never emitted
+  - **WireGuard and AmneziaWG were dialled by the wrong thing** (fixed 2026-10-20). The
+    selected AmneziaWG profile bypassed the core and took the VpnService TUN descriptor for
+    itself, so the tunnel came up carrying nothing and the profile got no DNS, no routing and
+    no statistics, while the *latency test* of the same profile went through the core. The
+    plain WireGuard outbound had no keep-alive (the peer's mapping expires after minutes) and
+    left `noKernelTun` unset (in root mode the core then builds a kernel TUN that fights the
+    app's own interface). Both are dialled by the core now, with the allowed IPs, the
+    keep-alive and `noKernelTun` filled in, and the `.conf` parsers no longer cut an IPv6
+    endpoint in half or drop `PersistentKeepalive`.
 - **MASQUE, XDRIVE, AETHER and MIERU** config types, Aether and Mieru import-only.
 - **Core failures are diagnosable**: the core's own error reaches the UI instead of a generic
   "Failed to start service", and the generated config is logged at error level.
@@ -406,7 +415,7 @@ strings /tmp/v/*.apk >/dev/null   # then the marker checks from §4
   the built core.
 - **Release signing** with a dedicated key, out of the repository, failing loudly if absent.
 - **RTL**: the wordmark reads correctly in Persian, and Persian covers every string.
-- 212 unit tests, up from 17.
+- 254 unit tests, up from 17.
 
 ## 12. What is not done
 

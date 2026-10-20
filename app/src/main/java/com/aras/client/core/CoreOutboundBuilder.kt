@@ -24,6 +24,13 @@ import com.aras.client.util.Utils
  */
 object CoreOutboundBuilder {
 
+    /**
+     * Seconds between keep-alive packets when a profile says nothing: the
+     * interval AmneziaVPN uses, and the one a peer behind NAT needs to keep
+     * its mapping.
+     */
+    private const val DEFAULT_KEEP_ALIVE = 25
+
     /** Dispatches a profile to protocol-specific outbound builder. */
     fun convert(profileItem: ProfileItem): OutboundBean? {
         val outbound = when (profileItem.configType) {
@@ -267,8 +274,35 @@ object CoreOutboundBuilder {
         return outboundBean
     }
 
-    private fun toOutboundWireguard(profileItem: ProfileItem): OutboundBean? {
-        val outboundBean = createInitOutbound(EConfigType.WIREGUARD)
+    /**
+     * The WireGuard outbound.
+     *
+     * Three things the core needs that a profile may not carry:
+     *  - the peer's allowed IPs: the device routes packets into the tunnel by
+     *    them, so without a route it drops every packet it is handed;
+     *  - a keep-alive: without it the peer's NAT mapping expires after a few
+     *    minutes and the tunnel goes quiet — "it worked, then it didn't";
+     *  - the gVisor TUN: the kernel TUN needs CAP_NET_ADMIN, which an
+     *    unprivileged app does not have, and in root mode it would create a
+     *    second TUN device fighting the app's own VPN interface.
+     */
+    private fun toOutboundWireguard(profileItem: ProfileItem): OutboundBean? =
+        buildWireguardOutbound(
+            profileItem = profileItem,
+            ipv6Enabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true,
+        )
+
+    /**
+     * The WireGuard outbound as the core receives it, without the settings the
+     * app reads from its own storage — kept separate so it can be built and
+     * checked without a device.
+     */
+    internal fun buildWireguardOutbound(profileItem: ProfileItem, ipv6Enabled: Boolean): OutboundBean? {
+        val outboundBean = createInitOutbound(EConfigType.WIREGUARD) ?: return null
+
+        val server = profileItem.server?.trim().orEmpty()
+        val port = profileItem.serverPort?.trim()?.toIntOrNull() ?: 0
+        if (server.isEmpty() || port <= 0 || port > 65535) return null
 
         val rawAddresses = profileItem.localAddress
             ?.split(",")
@@ -277,28 +311,34 @@ object CoreOutboundBuilder {
             ?.ifEmpty { null }
             ?: listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4)
 
-        val addresses = if (MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true) {
+        val addresses = if (ipv6Enabled) {
             rawAddresses
         } else {
             val ipv4Addresses = rawAddresses.filter { !it.contains(":") }
             ipv4Addresses.ifEmpty { listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4) }
         }
 
-        outboundBean?.settings?.let { wireguard ->
+        outboundBean.settings?.let { wireguard ->
             wireguard.secretKey = profileItem.secretKey
             wireguard.address = addresses
+            wireguard.mtu = profileItem.mtu?.takeIf { it > 0 }
+            // The core accepts the reserved bytes only as an empty list or as
+            // exactly three of them, so a value the user typed by hand that does
+            // not fit is left out rather than handed over to be rejected.
+            wireguard.reserved = reservedBytes(profileItem.reserved)
+            wireguard.noKernelTun = true
             wireguard.peers?.firstOrNull()?.let { peer ->
                 peer.publicKey = profileItem.publicKey.orEmpty()
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()
-                peer.endpoint = Utils.getIpv6Address(profileItem.server) + ":${profileItem.serverPort}"
+                peer.endpoint = Utils.getIpv6Address(server) + ":$port"
+                peer.allowedIPs = allowedIps(ipv6Enabled)
+                peer.keepAlive = keepAliveSeconds(profileItem)
             }
-            wireguard.mtu = profileItem.mtu
-            wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
         }
 
         if (!profileItem.finalMask.isNullOrBlank()) {
-            outboundBean?.streamSettings = OutboundBean.StreamSettingsBean()
-            outboundBean?.streamSettings?.let {
+            outboundBean.streamSettings = OutboundBean.StreamSettingsBean()
+            outboundBean.streamSettings?.let {
                 updateOutboundFinalMask(it, profileItem)
                 it.network = null
             }
@@ -307,13 +347,61 @@ object CoreOutboundBuilder {
     }
 
     /**
+     * The routes the tunnel covers: everything, in IPv4 and — when the app runs
+     * with IPv6 on — in IPv6 as well.
+     */
+    private fun allowedIps(ipv6Enabled: Boolean): List<String> =
+        if (ipv6Enabled) listOf("0.0.0.0/0", "::/0") else listOf("0.0.0.0/0")
+
+    /**
+     * Seconds between keep-alive packets. The profile's own value wins, including
+     * zero, which turns the keep-alive off; a profile that says nothing gets the
+     * interval AmneziaVPN uses, because a peer behind NAT loses its mapping
+     * after a few minutes of silence.
+     */
+    private fun keepAliveSeconds(profileItem: ProfileItem): Int {
+        val parsed = profileItem.keepAlive?.trim()?.toIntOrNull()
+        return when {
+            parsed == null -> DEFAULT_KEEP_ALIVE
+            parsed < 0 -> DEFAULT_KEEP_ALIVE
+            parsed > 65535 -> DEFAULT_KEEP_ALIVE
+            else -> parsed
+        }
+    }
+
+    /**
+     * The three reserved bytes, or nothing when the value is not three bytes.
+     */
+    private fun reservedBytes(reserved: String?): List<Int>? {
+        val parts = reserved?.trim()?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: return null
+        if (parts.size != 3) return null
+        val bytes = parts.map { it.toIntOrNull() ?: return null }
+        if (bytes.any { it < 0 || it > 255 }) return null
+        return bytes
+    }
+
+    /**
      * AmneziaWG uses the same wireguard outbound protocol as plain WireGuard,
      * but the bundled core is compiled against amneziawg-go, so the junk
      * packet parameters ride along on the peer. Kernel TUN is disabled:
      * the obfuscation only exists in the userspace AWG device.
      */
-    private fun toOutboundAmneziawg(profileItem: ProfileItem): OutboundBean? {
-        val outboundBean = toOutboundWireguard(profileItem) ?: return null
+    private fun toOutboundAmneziawg(profileItem: ProfileItem): OutboundBean? =
+        buildAmneziawgOutbound(
+            profileItem = profileItem,
+            ipv6Enabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true,
+        )
+
+    /**
+     * The AmneziaWG outbound as the core receives it, without the settings the
+     * app reads from its own storage.
+     */
+    internal fun buildAmneziawgOutbound(profileItem: ProfileItem, ipv6Enabled: Boolean): OutboundBean? {
+        val outboundBean = buildWireguardOutbound(
+            profileItem = profileItem,
+            ipv6Enabled = ipv6Enabled,
+        ) ?: return null
 
         fun parseJunkInt(value: String?): Int? {
             return value?.nullIfBlank()?.trim()?.toIntOrNull()?.takeIf { it >= 0 }
@@ -374,10 +462,17 @@ object CoreOutboundBuilder {
         // Kernel TUN cannot apply AmneziaWG junk packets — always use the
         // userspace (gVisor) TUN for AWG profiles.
         outboundBean.settings?.noKernelTun = true
-        outboundBean.settings?.domainStrategy = "forceIPv4"
-        outboundBean.settings?.address = outboundBean.settings?.address
+        // The v6 addresses are dropped, so the IPv6 route has to go with them:
+        // a route into a tunnel that carries no IPv6 address makes the device
+        // drop what it is handed. The core's wireguard config has no
+        // domain-strategy field, so the v4 preference is made here.
+        val v4Addresses = outboundBean.settings?.address
             ?.let { list -> (list as? List<*>)?.filterIsInstance<String>()?.filter { !it.contains(":") } }
-            ?.takeIf { it.isNotEmpty() } ?: outboundBean.settings?.address
+            ?.takeIf { it.isNotEmpty() }
+        if (v4Addresses != null) {
+            outboundBean.settings?.address = v4Addresses
+            outboundBean.settings?.peers?.firstOrNull()?.allowedIPs = listOf("0.0.0.0/0")
+        }
         return outboundBean
     }
 
