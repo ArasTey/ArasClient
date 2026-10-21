@@ -95,7 +95,9 @@ object DnsTunnelProcessManager {
         val config = File(work, CONFIG_FILE)
         val resolvers = File(work, RESOLVERS_FILE)
         val written = runCatching {
-            config.writeText(DnsTunnelConfigRenderer.renderToml(profile, engine, socksPort, dnsPort))
+            config.writeText(
+                DnsTunnelConfigRenderer.renderConfig(profile, engine, socksPort, dnsPort)
+            )
             resolvers.writeText(DnsTunnelConfigRenderer.renderResolvers(profile))
         }
         if (written.isFailure) {
@@ -254,6 +256,87 @@ object DnsTunnelProcessManager {
         }
     } catch (e: IOException) {
         false
+    }
+
+    /**
+     * What a scan of a resolver list found.
+     *
+     * @param valid the resolvers that carried the tunnel
+     * @param rejected the ones that did not
+     * @param finished whether the engine reported the scan as complete
+     */
+    data class ScanResult(
+        val valid: List<String>,
+        val rejected: List<String>,
+        val finished: Boolean,
+    )
+
+    /**
+     * Scans a resolver list with the engine, the way the engine's own scan mode
+     * does: the engine resolves the tunnel zone through every resolver and says
+     * which ones carried it.
+     *
+     * The engine has to reach a real tunnel server for any resolver to pass, so
+     * a list scanned against a zone that does not exist comes back empty.
+     */
+    fun scan(
+        context: Context,
+        profile: ProfileItem,
+        engine: DnsTunnelEngine,
+        resolvers: List<String>,
+        timeoutMs: Long = 120_000L,
+    ): ScanResult {
+        val exe = binary(context, engine)
+        if (!exe.canExecute()) {
+            return ScanResult(emptyList(), emptyList(), false)
+        }
+        val work = File(context.cacheDir, "$WORK_DIR-scan").apply { mkdirs() }
+        val config = File(work, CONFIG_FILE)
+        val resolverFile = File(work, RESOLVERS_FILE)
+        runCatching {
+            config.writeText(
+                DnsTunnelConfigRenderer.renderConfig(profile, engine, 0, null)
+            )
+            resolverFile.writeText(resolvers.joinToString("\n"))
+        }.onFailure {
+            LogUtil.e(AppConfig.TAG, "DNS tunnel: could not write the scan configuration", it)
+            return ScanResult(emptyList(), emptyList(), false)
+        }
+
+        val valid = mutableListOf<String>()
+        val rejected = mutableListOf<String>()
+        var finished = false
+        try {
+            val process = ProcessBuilder(
+                listOf(
+                    exe.absolutePath,
+                    "-config", config.absolutePath,
+                    "-resolvers", resolverFile.absolutePath,
+                    "-scan-only",
+                )
+            )
+                .directory(work)
+                .redirectErrorStream(true)
+                .start()
+            val deadline = System.currentTimeMillis() + timeoutMs
+            process.inputStream.bufferedReader().forEachLine { line ->
+                LogUtil.i(AppConfig.TAG, "DNS tunnel scan | $line")
+                when {
+                    line.contains("event=valid") -> line.substringAfter("resolver=").trim()
+                        .takeIf { it.isNotEmpty() }?.let { valid.add(it) }
+                    line.contains("event=rejected") -> line.substringAfter("resolver=").trim()
+                        .takeIf { it.isNotEmpty() }?.let { rejected.add(it) }
+                    line.contains("event=complete") -> finished = true
+                }
+                if (finished || System.currentTimeMillis() > deadline) {
+                    runCatching { process.destroy() }
+                }
+            }
+            runCatching { process.destroy() }
+        } catch (e: IOException) {
+            LogUtil.e(AppConfig.TAG, "DNS tunnel: the scan could not be started", e)
+        }
+        return ScanResult(valid, rejected, finished)
     }
 
     /**

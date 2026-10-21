@@ -107,8 +107,59 @@ class DnsTunnelConfigRendererTest {
     }
 
     @Test
-    fun `a resolver is an address, an address with a port, or an address with a prefix`() {
-        assertTrue(DnsTunnelConfigRenderer.isValidResolver("1.1.1.1"))
+    fun `the CottenDns preset is written when one is chosen`() {
+        val withPreset = DnsTunnelConfigRenderer.renderToml(
+            profile().apply { dnsTunnelPreset = "speed" },
+            DnsTunnelEngine.COTTEN,
+            socksPort = 10821,
+            dnsPort = null,
+        )
+        assertTrue(withPreset.contains("""CONFIG_PRESET = "speed""""))
+
+        val withoutPreset = DnsTunnelConfigRenderer.renderToml(
+            profile(),
+            DnsTunnelEngine.COTTEN,
+            socksPort = 10821,
+            dnsPort = null,
+        )
+        assertFalse(withoutPreset.contains("CONFIG_PRESET"))
+    }
+
+    @Test
+    fun `the Soar configuration is JSON, with the zone, the key and the listeners`() {
+        val json = DnsTunnelConfigRenderer.renderConfig(
+            profile().apply {
+                dnsTunnelEngine = "soar"
+                dnsTunnelKey = "AAAAC3NzaC1lZDI1NTE5AAAAIB2Sample"
+                dnsTunnelCountry = "ir"
+            },
+            DnsTunnelEngine.SOAR,
+            socksPort = 10821,
+            dnsPort = 10822,
+        )
+
+        assertTrue(json.contains(""""zone": "v.example.com""""))
+        assertTrue(json.contains(""""server_public_key": "AAAAC3NzaC1lZDI1NTE5AAAAIB2Sample""""))
+        assertTrue(json.contains(""""listen": "127.0.0.1:10821""""))
+        assertTrue(json.contains(""""dns_listen": "127.0.0.1:10822""""))
+        assertTrue(json.contains(""""resolvers": ["1.1.1.1", "8.8.8.8"]"""))
+        assertTrue(json.contains(""""country": "IR""""))
+    }
+
+    @Test
+    fun `a public key is 32 bytes, as base64 or as hex`() {
+        val base64 = java.util.Base64.getEncoder().encodeToString(ByteArray(32) { it.toByte() })
+        val hex = ByteArray(32) { it.toByte() }.joinToString("") { "%02x".format(it) }
+
+        assertTrue(DnsTunnelConfigRenderer.isValidPublicKey(base64))
+        assertTrue(DnsTunnelConfigRenderer.isValidPublicKey(hex))
+        assertFalse(DnsTunnelConfigRenderer.isValidPublicKey("short"))
+        assertFalse(DnsTunnelConfigRenderer.isValidPublicKey(""))
+        assertFalse(DnsTunnelConfigRenderer.isValidPublicKey(null))
+    }
+
+    @Test
+    fun `a resolver is an address, an address with a port, or an address with a prefix`() {        assertTrue(DnsTunnelConfigRenderer.isValidResolver("1.1.1.1"))
         assertTrue(DnsTunnelConfigRenderer.isValidResolver("1.1.1.1:5353"))
         assertTrue(DnsTunnelConfigRenderer.isValidResolver("192.168.1.0/30"))
         assertTrue(DnsTunnelConfigRenderer.isValidResolver("[2001:4860:4860::8888]:53"))

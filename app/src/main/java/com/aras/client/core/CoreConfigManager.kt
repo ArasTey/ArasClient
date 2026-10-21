@@ -8,6 +8,7 @@ import com.aras.client.AppConfig
 import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.core.aether.AetherExitNodeResolver
 import com.aras.client.core.dnstunnel.DnsTunnelTargetResolver
+import com.aras.client.fmt.DnsTunnelFmt
 import com.aras.client.dto.ConfigResult
 import com.aras.client.dto.CoreConfigContext
 import com.aras.client.dto.XrayConfig
@@ -1007,6 +1008,21 @@ object CoreConfigManager {
         val servers = ArrayList<Any>()
         val remoteDns = SettingsManager.getRemoteDnsServers()
         val domesticDns = SettingsManager.getDomesticDnsServers()
+
+        // The tunnel's own DNS, when the session runs through one: the queries
+        // are answered by the resolver the engine reaches through the tunnel,
+        // so the name look-ups travel the way the traffic does.
+        val tunnelDnsPort = configContext.resolvedOutbounds
+            .flatMap { it.resolvedProfiles + it.profile }
+            .firstOrNull { it.configType == EConfigType.DNSTUNNEL }
+            ?.let { DnsTunnelFmt.listenPortOf(it.dnsTunnelDnsPort) }
+        if (tunnelDnsPort != null) {
+            servers.add(
+                XrayConfig.DnsBean.ServersBean(
+                    address = "${AppConfig.LOOPBACK}:$tunnelDnsPort",
+                )
+            )
+        }
 
         remoteDns.forEach { servers.add(it) }
 

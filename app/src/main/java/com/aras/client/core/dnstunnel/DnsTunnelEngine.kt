@@ -19,9 +19,12 @@ enum class DnsTunnelEngine(
     val binaryName: String,
     /** What the editor calls it. */
     val displayName: String,
+    /** Whether the engine's configuration is JSON rather than the StormDNS TOML. */
+    val jsonConfig: Boolean = false,
 ) {
     STORM("storm", "libstormdns_client.so", "StormDNS"),
     COTTEN("cotten", "libcottendns_client.so", "CottenDns"),
+    SOAR("soar", "libsoar_client.so", "Soar", jsonConfig = true),
     ;
 
     companion object {

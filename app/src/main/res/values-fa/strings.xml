@@ -694,6 +694,13 @@
     <string name="server_lab_dnstunnel_bad_resolvers">تونل حداقل به یک resolver نیاز دارد، هر کدام در یک خط، مانند 1.1.1.1</string>
     <string name="server_lab_dnstunnel_extra">تنظیمات اضافهٔ موتور، با کلیدهای TOML خود موتور</string>
     <string name="server_lab_dnstunnel_extra_hint">UPLOAD_COMPRESSION_TYPE = 2</string>
+    <string name="server_lab_dnstunnel_server_key">کلید عمومی سرور</string>
+    <string name="server_lab_dnstunnel_country">کشوری که تونل از آن استفاده می‌شود</string>
+    <string name="server_lab_dnstunnel_bad_server_key">Soar به کلید عمومی سرور تونل نیاز دارد: ۳۲ بایت، به‌صورت base64 یا hex</string>
+    <string name="server_lab_dnstunnel_preset">پیش‌تنظیم موتور</string>
+    <string name="server_lab_dnstunnel_scan">بررسی resolverها</string>
+    <string name="server_lab_dnstunnel_scan_done">%1$d resolver تونل را حمل کرد</string>
+    <string name="server_lab_dnstunnel_scan_none">هیچ resolver تونل را حمل نکرد؛ ناحیه و کلید را بررسی کنید</string>
     <string name="server_lab_mieru_username">کاربر Mieru</string>
     <string name="server_lab_mieru_password">رمز عبور Mieru</string>
     <string name="server_lab_mieru_listen_port">پورت شنود محلی</string>

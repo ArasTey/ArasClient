@@ -55,6 +55,8 @@ object DnsTunnelFmt : FmtBase() {
         config.dnsTunnelPort = queryParam["port"]?.takeIf { isValidPort(it) }
         config.dnsTunnelDnsPort = queryParam["dns"]?.takeIf { isValidPort(it) }
         config.dnsTunnelTarget = queryParam["target"]
+        config.dnsTunnelCountry = queryParam["country"]
+        config.dnsTunnelPreset = queryParam["preset"]
 
         return config
     }
@@ -68,6 +70,8 @@ object DnsTunnelFmt : FmtBase() {
         config.dnsTunnelPort?.nullIfBlank()?.let { dicQuery["port"] = it }
         config.dnsTunnelDnsPort?.nullIfBlank()?.let { dicQuery["dns"] = it }
         config.dnsTunnelTarget?.nullIfBlank()?.let { dicQuery["target"] = it }
+        config.dnsTunnelCountry?.nullIfBlank()?.let { dicQuery["country"] = it }
+        config.dnsTunnelPreset?.nullIfBlank()?.let { dicQuery["preset"] = it }
 
         val host = config.dnsTunnelDomain?.trim().orEmpty()
         val query = dicQuery.entries.joinToString("&") {

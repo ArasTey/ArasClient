@@ -86,6 +86,11 @@ data class ProfileItem(
     var dnsTunnelTarget: String? = null,
     // Extra engine settings, as the engine's own TOML keys.
     var dnsTunnelExtra: String? = null,
+    // The country the tunnel is used from, for the engines that discover their
+    // own resolvers by it.
+    var dnsTunnelCountry: String? = null,
+    // The engine's own preset, for the engines that have presets.
+    var dnsTunnelPreset: String? = null,
 
     var obfsPassword: String? = null,
     var portHopping: String? = null,

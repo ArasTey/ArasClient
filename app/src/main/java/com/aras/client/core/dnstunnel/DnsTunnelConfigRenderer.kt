@@ -34,8 +34,75 @@ object DnsTunnelConfigRenderer {
         "Lowest latency" to 4,
     )
 
+    /** The presets the CottenDns engine ships. */
+    val COTTEN_PRESETS = listOf("default", "speed", "survival", "tcp-survival")
+
     /**
      * The engine's client configuration.
+     *
+     * The StormDNS family reads a TOML file; Soar reads a JSON one. Both are
+     * written from the profile here, so the app does not have to know which
+     * engine it is starting beyond the format it hands over.
+     *
+     * @param socksPort the loopback port the engine serves its SOCKS5 on
+     * @param dnsPort the loopback port the engine serves its own DNS on, or null
+     *   to leave the engine's local DNS off
+     */
+    fun renderConfig(
+        profile: ProfileItem,
+        engine: DnsTunnelEngine,
+        socksPort: Int,
+        dnsPort: Int?,
+    ): String =
+        if (engine.jsonConfig) {
+            renderSoarJson(profile, socksPort, dnsPort)
+        } else {
+            renderToml(profile, engine, socksPort, dnsPort)
+        }
+
+    /**
+     * The Soar client's configuration.
+     *
+     * The key here is the tunnel server's public key rather than a shared
+     * secret: Soar authenticates the server, it does not encrypt the tunnel.
+     */
+    fun renderSoarJson(profile: ProfileItem, socksPort: Int, dnsPort: Int?): String {
+        val zone = profile.dnsTunnelDomain?.trim().orEmpty()
+        val key = profile.dnsTunnelKey?.trim().orEmpty()
+        val resolvers = normalizeResolvers(profile.dnsTunnelResolvers)
+        val country = profile.dnsTunnelCountry?.trim()?.uppercase()?.takeIf { it.length == 2 }
+        return buildString {
+            append("{\n")
+            append("  \"zone\": ${quote(zone)},\n")
+            append("  \"server_public_key\": ${quote(key)},\n")
+            append("  \"listen\": ${quote("127.0.0.1:$socksPort")}")
+            if (dnsPort != null) {
+                append(",\n  \"dns_listen\": ${quote("127.0.0.1:$dnsPort")}")
+            }
+            append(",\n  \"resolvers\": [")
+            append(resolvers.joinToString(", ") { quote(it) })
+            append("]")
+            if (country != null) {
+                append(",\n  \"discovery\": { \"enabled\": true, \"country\": ${quote(country)} }")
+            }
+            append("\n}\n")
+        }
+    }
+
+    /**
+     * Whether [text] is a server public key the engine can use: 32 bytes, as
+     * base64 or as hex.
+     */
+    fun isValidPublicKey(text: String?): Boolean {
+        val value = text?.trim().orEmpty()
+        if (value.isEmpty()) return false
+        if (value.length == 64 && value.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return true
+        return runCatching { java.util.Base64.getDecoder().decode(value) }.getOrNull()?.size == 32 ||
+            runCatching { java.util.Base64.getUrlDecoder().decode(value) }.getOrNull()?.size == 32
+    }
+
+    /**
+     * The engine's client configuration, in the StormDNS family's TOML.
      *
      * @param socksPort the loopback port the engine serves its SOCKS5 on
      * @param dnsPort the loopback port the engine serves its own DNS on, or null
@@ -72,6 +139,11 @@ object DnsTunnelConfigRenderer {
                 // CottenDns can carry the tunnel over DoT and DoH as well as plain
                 // UDP, which is what survives a network that throttles UDP/53.
                 appendLine("RESOLVER_TRANSPORT = \"auto\"")
+                // The engine's own presets: the speed, survival and tcp-survival
+                // ones it ships as client_config.*.toml.
+                profile.dnsTunnelPreset?.trim()?.takeIf { it in COTTEN_PRESETS }?.let {
+                    appendLine("CONFIG_PRESET = \"$it\"")
+                }
             }
             profile.dnsTunnelExtra?.nullIfBlank()?.let { extra ->
                 appendLine()

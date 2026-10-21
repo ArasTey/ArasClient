@@ -120,6 +120,13 @@
     <string name="server_lab_dnstunnel_bad_resolvers">The tunnel needs at least one resolver, one per line, such as 1.1.1.1</string>
     <string name="server_lab_dnstunnel_extra">Extra engine settings, as the engine\'s own TOML keys</string>
     <string name="server_lab_dnstunnel_extra_hint">UPLOAD_COMPRESSION_TYPE = 2</string>
+    <string name="server_lab_dnstunnel_server_key">Server public key</string>
+    <string name="server_lab_dnstunnel_country">Country the tunnel is used from</string>
+    <string name="server_lab_dnstunnel_bad_server_key">Soar needs the tunnel server\'s public key: 32 bytes, as base64 or as hex</string>
+    <string name="server_lab_dnstunnel_preset">Engine preset</string>
+    <string name="server_lab_dnstunnel_scan">Scan the resolvers</string>
+    <string name="server_lab_dnstunnel_scan_done">%1$d resolvers carried the tunnel</string>
+    <string name="server_lab_dnstunnel_scan_none">No resolver carried the tunnel; check the zone and the key</string>
     <string name="server_lab_mieru_username">Mieru user</string>
     <string name="server_lab_mieru_password">Mieru password</string>
     <string name="server_lab_mieru_listen_port">Local listen port</string>

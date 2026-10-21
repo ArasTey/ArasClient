@@ -1,0 +1,4 @@
+github.com/getlantern/soar v0.2.3 h1:BAahWy3b4J6wtrAJD7WgoO2O+x2Q3T6KN2r0E3ogNgs=
+github.com/getlantern/soar v0.2.3/go.mod h1:6T2+Kbx0GVqYIHqfEaUqlYI5ZRRVZYYhuoMWcxHC+xA=
+golang.org/x/crypto v0.52.0 h1:RMs7fP2rXdep0CftQlK8Uf+kibLm7qkCcradZWYz988=
+golang.org/x/crypto v0.52.0/go.mod h1:1QgfPxDqh0T2M/elOJtp9RvuR95kVjir0e6/BvEmGbc=

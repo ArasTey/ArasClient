@@ -100,6 +100,8 @@ class ServerUiState(
     dnsTunnelDnsPort: String = "",
     dnsTunnelTarget: String = "",
     dnsTunnelExtra: String = "",
+    dnsTunnelCountry: String = "",
+    dnsTunnelPreset: String = "",
     finalMask: String = "",
     seed: String = "",
     kcpMtu: String = "",
@@ -206,6 +208,8 @@ class ServerUiState(
     var dnsTunnelDnsPort by mutableStateOf(dnsTunnelDnsPort)
     var dnsTunnelTarget by mutableStateOf(dnsTunnelTarget)
     var dnsTunnelExtra by mutableStateOf(dnsTunnelExtra)
+    var dnsTunnelCountry by mutableStateOf(dnsTunnelCountry)
+    var dnsTunnelPreset by mutableStateOf(dnsTunnelPreset)
     var finalMask by mutableStateOf(finalMask)
     var seed by mutableStateOf(seed)
     var kcpMtu by mutableStateOf(kcpMtu)
@@ -330,6 +334,8 @@ class ServerUiState(
             dnsTunnelDnsPort = dnsTunnelDnsPort.nullIfBlank(),
             dnsTunnelTarget = dnsTunnelTarget.nullIfBlank(),
             dnsTunnelExtra = dnsTunnelExtra.nullIfBlank(),
+            dnsTunnelCountry = dnsTunnelCountry.nullIfBlank(),
+            dnsTunnelPreset = dnsTunnelPreset.nullIfBlank(),
             finalMask = finalMask.nullIfBlank(),
             seed = seed.nullIfBlank(),
             kcpMtu = kcpMtu.toIntOrNull(),
@@ -445,6 +451,8 @@ class ServerUiState(
                 dnsTunnelDnsPort = initialConfig.dnsTunnelDnsPort ?: "",
                 dnsTunnelTarget = initialConfig.dnsTunnelTarget ?: "",
                 dnsTunnelExtra = initialConfig.dnsTunnelExtra ?: "",
+                dnsTunnelCountry = initialConfig.dnsTunnelCountry ?: "",
+                dnsTunnelPreset = initialConfig.dnsTunnelPreset ?: "",
                 finalMask = initialConfig.finalMask ?: "",
                 seed = initialConfig.seed ?: "",
                 kcpMtu = initialConfig.kcpMtu?.toString() ?: "",
