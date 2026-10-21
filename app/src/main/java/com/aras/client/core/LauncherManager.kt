@@ -9,6 +9,7 @@ import com.aras.client.R
 import com.aras.client.extension.isComplexType
 import com.aras.client.extension.toast
 import com.aras.client.extension.toastError
+import com.aras.client.enums.EConfigType
 import com.aras.client.handler.MmkvManager
 import com.aras.client.handler.SettingsManager
 import com.aras.client.helper.MessageHelper
@@ -87,7 +88,10 @@ object LauncherManager {
                 error(context.getString(R.string.toast_config_file_invalid))
             }
 
-        if (!config.configType.isComplexType()
+        // A DNS tunnel has no address of its own: the tunnel zone is what it
+        // reaches, and the engine's own configuration carries it.
+        if (config.configType != EConfigType.DNSTUNNEL
+            && !config.configType.isComplexType()
             && !Utils.isValidUrl(config.server)
             && !Utils.isPureIpAddress(config.server.orEmpty())
         ) {

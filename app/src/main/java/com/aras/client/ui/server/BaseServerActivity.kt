@@ -111,11 +111,15 @@ abstract class BaseServerActivity : BaseComponentActivity() {
                 state.remarks,
                 { state.remarks = it }
             )
-            FormTextField(
-                stringResource(R.string.server_lab_address),
-                state.address,
-                { state.address = it }
-            )
+            // A DNS tunnel has no address of its own: the tunnel zone is the
+            // endpoint it reaches, and it is asked for in its own field.
+            if (state.configType != EConfigType.DNSTUNNEL) {
+                FormTextField(
+                    stringResource(R.string.server_lab_address),
+                    state.address,
+                    { state.address = it }
+                )
+            }
             FormTextField(
                 stringResource(R.string.server_lab_port),
                 state.port,
@@ -403,7 +407,8 @@ abstract class BaseServerActivity : BaseComponentActivity() {
             toast(R.string.server_lab_remarks)
             return false
         }
-        if (state.address.isBlank()) {
+        // A DNS tunnel has no address: the tunnel zone is what it reaches.
+        if (state.configType != EConfigType.DNSTUNNEL && state.address.isBlank()) {
             toast(R.string.server_lab_address)
             return false
         }
