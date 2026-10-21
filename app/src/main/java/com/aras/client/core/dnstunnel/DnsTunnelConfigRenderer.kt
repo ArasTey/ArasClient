@@ -164,12 +164,18 @@ object DnsTunnelConfigRenderer {
     /**
      * The resolvers of [text], in the order they were written, without comments
      * and without repeats.
+     *
+     * A resolver list is written one per line, but a list typed on one line —
+     * with commas or spaces between the entries — is read the same way: the
+     * engine's own file is one per line, and the app writes it that way.
      */
     fun normalizeResolvers(text: String?): List<String> {
         val seen = LinkedHashSet<String>()
         text?.lineSequence()?.forEach { line ->
-            val entry = line.substringBefore('#').trim()
-            if (entry.isNotEmpty()) seen.add(entry)
+            line.substringBefore('#').split(',', ' ', '\t', ';')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .forEach { seen.add(it) }
         }
         return seen.toList()
     }

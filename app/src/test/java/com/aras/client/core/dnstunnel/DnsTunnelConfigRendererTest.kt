@@ -95,6 +95,15 @@ class DnsTunnelConfigRendererTest {
     }
 
     @Test
+    fun `a resolver list written on one line is read the same way`() {
+        val resolvers = DnsTunnelConfigRenderer.renderResolvers(
+            profile().apply { dnsTunnelResolvers = "1.1.1.1, 8.8.8.8 9.9.9.9:5353" }
+        )
+
+        assertEquals("1.1.1.1\n8.8.8.8\n9.9.9.9:5353", resolvers)
+    }
+
+    @Test
     fun `extra engine settings are written as they were given`() {
         val toml = DnsTunnelConfigRenderer.renderToml(
             profile().apply { dnsTunnelExtra = "UPLOAD_COMPRESSION_TYPE = 2" },
