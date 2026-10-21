@@ -131,6 +131,9 @@ object AppConfig {
     const val TAG_BLOCKED = "block"
     const val TAG_EXIT_NODE = "exit-node"
     const val TAG_EXIT_NODE_INBOUND = "exit-node-in"
+
+    /** The tag of the outbound that reaches the internet through a DNS tunnel. */
+    const val TAG_DNSTUNNEL = "dns-tunnel"
     /** The SOCKS inbound the Aether exit node serves on: aetherPort + this. */
     const val AETHER_EXIT_IN_PORT_OFFSET = 5
     const val TAG_FRAGMENT = "fragment"
@@ -246,6 +249,7 @@ object AppConfig {
     const val MASQUE = "masque://"
     const val AETHER = "aether://"
     const val MIERU = "mieru://"
+    const val DNSTUNNEL = "dnstunnel://"
     const val ARASFMTS = "xrayn://"
 
     /** Where the aether core is published; the app fetches its own Android build from here. */
@@ -256,6 +260,12 @@ object AppConfig {
 
     /** The loopback port a mieru client listens on unless the profile says otherwise. */
     const val PORT_MIERU_SOCKS = "10820"
+
+    /** The loopback port a DNS-tunnel engine serves its SOCKS5 on unless the profile says otherwise. */
+    const val PORT_DNSTUNNEL_SOCKS = "10821"
+
+    /** The loopback port a DNS-tunnel engine serves its own DNS on unless the profile says otherwise. */
+    const val PORT_DNSTUNNEL_DNS = "10822"
 
     /** Where the mieru client is published; the app takes its own Android build. */
     const val MIERU_URL = "https://github.com/enfein/mieru"

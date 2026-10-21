@@ -104,6 +104,22 @@
     <string name="server_lab_aether_reset_key">Reset WARP key</string>
     <string name="server_lab_aether_note">A WARP gateway often does not answer a plain ping, and its exit address reads as Iranian — both are normal. Check the connection, not the ping.</string>
     <string name="menu_item_import_config_manually_mieru">Add Mieru config manually</string>
+    <!-- DNS tunnel -->
+    <string name="menu_item_import_config_manually_dnstunnel">Add DNS tunnel config manually</string>
+    <string name="server_lab_dnstunnel_engine">DNS tunnel engine</string>
+    <string name="server_lab_dnstunnel_domain">Tunnel zone (the delegated domain of the tunnel server)</string>
+    <string name="server_lab_dnstunnel_key">Encryption key</string>
+    <string name="server_lab_dnstunnel_method">Encryption method</string>
+    <string name="server_lab_dnstunnel_resolvers">Resolvers, one per line</string>
+    <string name="server_lab_dnstunnel_resolvers_hint">1.1.1.1\n8.8.8.8</string>
+    <string name="server_lab_dnstunnel_port">Local SOCKS port of the engine</string>
+    <string name="server_lab_dnstunnel_dns_port">Local DNS port of the engine (empty to leave it off)</string>
+    <string name="server_lab_dnstunnel_target">The profile the tunnel carries</string>
+    <string name="server_lab_dnstunnel_bad_domain">The tunnel zone must be a domain name, such as v.example.com</string>
+    <string name="server_lab_dnstunnel_no_key">The tunnel needs its encryption key</string>
+    <string name="server_lab_dnstunnel_bad_resolvers">The tunnel needs at least one resolver, one per line, such as 1.1.1.1</string>
+    <string name="server_lab_dnstunnel_extra">Extra engine settings, as the engine\'s own TOML keys</string>
+    <string name="server_lab_dnstunnel_extra_hint">UPLOAD_COMPRESSION_TYPE = 2</string>
     <string name="server_lab_mieru_username">Mieru user</string>
     <string name="server_lab_mieru_password">Mieru password</string>
     <string name="server_lab_mieru_listen_port">Local listen port</string>

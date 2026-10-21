@@ -73,6 +73,20 @@ data class ProfileItem(
     // Mimic packets I1..I5, one obfuscation spec per line. Blank means none.
     var mimicPackets: String? = null,
 
+    // DNS tunnel: the engine, the tunnel zone and its key, the resolvers the
+    // engine asks, and the ports it serves its SOCKS5 and its own DNS on.
+    var dnsTunnelEngine: String? = null,
+    var dnsTunnelDomain: String? = null,
+    var dnsTunnelKey: String? = null,
+    var dnsTunnelMethod: Int? = null,
+    var dnsTunnelResolvers: String? = null,
+    var dnsTunnelPort: String? = null,
+    var dnsTunnelDnsPort: String? = null,
+    // The profile whose traffic the tunnel carries, by name.
+    var dnsTunnelTarget: String? = null,
+    // Extra engine settings, as the engine's own TOML keys.
+    var dnsTunnelExtra: String? = null,
+
     var obfsPassword: String? = null,
     var portHopping: String? = null,
     var portHoppingInterval: String? = null,

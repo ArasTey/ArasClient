@@ -7,6 +7,7 @@ import com.aras.client.dto.XrayConfig.OutboundBean
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.fmt.AetherFmt
+import com.aras.client.fmt.DnsTunnelFmt
 import com.aras.client.enums.EConfigType
 import com.aras.client.enums.NetworkType
 import com.aras.client.extension.isNotNullEmpty
@@ -47,6 +48,7 @@ object CoreOutboundBuilder {
             EConfigType.MASQUE -> toOutboundMasque(profileItem)
             EConfigType.AETHER -> toOutboundAether(profileItem)
             EConfigType.MIERU -> toOutboundMieru(profileItem)
+            EConfigType.DNSTUNNEL -> toOutboundDnsTunnel(profileItem)
             else -> null
         }
 
@@ -577,6 +579,24 @@ object CoreOutboundBuilder {
      */
     private fun toOutboundMieru(profileItem: ProfileItem): OutboundBean? {
         val port = AetherFmt.listenPortOf(profileItem.mieruListenPort) ?: AppConfig.PORT_MIERU_SOCKS.toInt()
+        val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
+        outbound.settings?.let { settings ->
+            settings.address = AppConfig.LOOPBACK
+            settings.port = port
+            settings.level = AppConfig.DEFAULT_LEVEL
+        }
+        return outbound
+    }
+
+    /**
+     * A DNS tunnel is dialled by its own client process, which carries the traffic
+     * through DNS queries and serves a local SOCKS5, so the outbound is a hop to that
+     * listener — the same shape as an Aether or a Mieru profile and for the same
+     * reason: the tunnel and its credentials belong to that process.
+     */
+    private fun toOutboundDnsTunnel(profileItem: ProfileItem): OutboundBean? {
+        val port = DnsTunnelFmt.listenPortOf(profileItem.dnsTunnelPort)
+            ?: AppConfig.PORT_DNSTUNNEL_SOCKS.toInt()
         val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
         outbound.settings?.let { settings ->
             settings.address = AppConfig.LOOPBACK

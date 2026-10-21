@@ -4,10 +4,13 @@ import android.content.Context
 import com.aras.client.AppConfig
 import com.aras.client.core.aether.AetherCore
 import com.aras.client.core.aether.AetherCoreManager
+import com.aras.client.core.dnstunnel.DnsTunnelEngine
+import com.aras.client.core.dnstunnel.DnsTunnelProcessManager
 import com.aras.client.core.mieru.MieruProcessManager
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.EConfigType
 import com.aras.client.fmt.AetherFmt
+import com.aras.client.fmt.DnsTunnelFmt
 import com.aras.client.util.LogUtil
 
 /**
@@ -31,6 +34,8 @@ object HelperProcessSupport {
     private var aetherRefs = 0
     private var mieruKey: String? = null
     private var mieruRefs = 0
+    private var dnsTunnelKey: String? = null
+    private var dnsTunnelRefs = 0
 
     /**
      * The hops of [chain] that an external process has to serve, in chain order.
@@ -95,6 +100,24 @@ object HelperProcessSupport {
                         mieruRefs++
                     }
 
+                    EConfigType.DNSTUNNEL -> {
+                        val key = helper.helperKey()
+                        when {
+                            dnsTunnelRefs == 0 -> {
+                                val error = startDnsTunnel(context, helper)
+                                if (error != null) return Acquired(emptyList(), error)
+                                dnsTunnelKey = key
+                            }
+
+                            dnsTunnelKey != key -> return Acquired(
+                                emptyList(),
+                                "The DNS tunnel is already running for a different profile " +
+                                    "(${helper.remarks}); it can only serve one at a time"
+                            )
+                        }
+                        dnsTunnelRefs++
+                    }
+
                     else -> Unit
                 }
             }
@@ -123,6 +146,14 @@ object HelperProcessSupport {
                         }
                     }
 
+                    EConfigType.DNSTUNNEL -> {
+                        dnsTunnelRefs = (dnsTunnelRefs - 1).coerceAtLeast(0)
+                        if (dnsTunnelRefs == 0) {
+                            dnsTunnelKey = null
+                            DnsTunnelProcessManager.stop()
+                        }
+                    }
+
                     else -> Unit
                 }
             }
@@ -139,8 +170,11 @@ object HelperProcessSupport {
             aetherKey = null
             mieruRefs = 0
             mieruKey = null
+            dnsTunnelRefs = 0
+            dnsTunnelKey = null
             AetherCoreManager.stop()
             MieruProcessManager.stop()
+            DnsTunnelProcessManager.stop()
         }
     }
 
@@ -170,15 +204,34 @@ object HelperProcessSupport {
         return null
     }
 
+    private fun startDnsTunnel(context: Context, profile: ProfileItem): String? {
+        val engine = DnsTunnelEngine.of(profile.dnsTunnelEngine)
+        if (!DnsTunnelProcessManager.isAvailable(context, engine)) {
+            return "This build does not carry the ${engine.displayName} client"
+        }
+        val socksPort = DnsTunnelFmt.listenPortOf(profile.dnsTunnelPort)
+            ?: AppConfig.PORT_DNSTUNNEL_SOCKS.toInt()
+        val dnsPort = DnsTunnelFmt.listenPortOf(profile.dnsTunnelDnsPort)
+        LogUtil.i(AppConfig.TAG, "HelperProcess: starting the ${engine.displayName} client on $socksPort")
+        if (!DnsTunnelProcessManager.start(context, profile, engine, socksPort, dnsPort)) {
+            DnsTunnelProcessManager.stop()
+            return "The ${engine.displayName} client did not start; see the log for its own error"
+        }
+        return null
+    }
+
     private val ProfileItem.needsHelperProcess: Boolean
-        get() = configType == EConfigType.AETHER || configType == EConfigType.MIERU
+        get() = configType == EConfigType.AETHER ||
+            configType == EConfigType.MIERU ||
+            configType == EConfigType.DNSTUNNEL
 
     /** What identifies a running daemon: the profile plus the port it was told to bind. */
     private fun ProfileItem.helperKey(): String {
-        val port = if (configType == EConfigType.AETHER) {
-            com.aras.client.core.aether.AetherCoreManager.listenPort(this)
-        } else {
-            AetherFmt.listenPortOf(mieruListenPort) ?: AppConfig.PORT_MIERU_SOCKS.toInt()
+        val port = when (configType) {
+            EConfigType.AETHER -> com.aras.client.core.aether.AetherCoreManager.listenPort(this)
+            EConfigType.DNSTUNNEL -> DnsTunnelFmt.listenPortOf(dnsTunnelPort)
+                ?: AppConfig.PORT_DNSTUNNEL_SOCKS.toInt()
+            else -> AetherFmt.listenPortOf(mieruListenPort) ?: AppConfig.PORT_MIERU_SOCKS.toInt()
         }
         return "${remarks}|$port"
     }

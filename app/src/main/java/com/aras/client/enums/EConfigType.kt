@@ -27,6 +27,9 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
     AETHER(14, AppConfig.AETHER),
     // Mieru: a separate client process serving a local SOCKS, like Aether.
     MIERU(15, AppConfig.MIERU),
+    // A DNS tunnel: a separate client process that carries TCP through DNS queries
+    // and serves a local SOCKS, like Aether and Mieru.
+    DNSTUNNEL(16, AppConfig.DNSTUNNEL),
     POLICYGROUP(101, AppConfig.CUSTOM),
     PROXYCHAIN(102, AppConfig.CUSTOM);
 

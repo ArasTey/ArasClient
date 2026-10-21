@@ -186,6 +186,7 @@ class RealPingWorkerService(
             && config.configType != EConfigType.MASQUE
             && config.configType != EConfigType.AETHER
             && config.configType != EConfigType.MIERU
+            && config.configType != EConfigType.DNSTUNNEL
             && config.alpn?.split(',')?.all { it.trim().startsWith("h3") } != true
             && config.server.isNotNullEmpty()
             && config.serverPort?.toIntOrNull() != null

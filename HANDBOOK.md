@@ -172,6 +172,7 @@ which is why these are shipped rather than downloaded.
 | `libpsiphon-tunnel-core.so` | `enfein/mieru` v3.38.0 — actually Mieru's psiphon | arm64-v8a, armeabi-v7a, x86_64 |
 | `liblyrebird.so` | same tarball — Tor's pluggable transport | arm64-v8a, armeabi-v7a, x86_64 |
 | `libhev-socks5-tunnel.so`, `libhevsockstun.so` | prebuilt, long-standing | all four |
+| `libstormdns_client.so`, `libcottendns_client.so` | DNS-tunnel clients, built from pinned upstream sources (see `docs/DNS-TUNNEL.md`) | all four |
 
 Mieru publishes **no `armeabi-v7a` or `x86` Android build** — only arm64. That is why those
 splits are smaller and why the Mieru editor reports the client as absent rather than failing
@@ -199,6 +200,7 @@ each is a SOCKS hop to that process's loopback listener.
 | Aether | `libaether.so run` | `AETHER_CONFIG`, `AETHER_MASQUE_CONFIG`, `AETHER_WG_CONFIG` env + flags | `identity ready: device=` |
 | Aether scan | same, with `scan=true` arguments | one-shot | `selected WireGuard endpoint X` |
 | Mieru | `libmieru.so run` | `MIERU_CONFIG_JSON_FILE` env | `socks5 server is running` |
+| DNS tunnel | `libstormdns_client.so` / `libcottendns_client.so` | `-config <toml> -resolvers <file>` | the SOCKS listener accepts |
 | AmneziaWG | none — the core's WireGuard outbound | — | — |
 
 **Both external processes can be orphaned** by an app process that is killed — Rust ignores
@@ -230,6 +232,7 @@ commit (`27c03be`) touched 22 files and is the template to follow.
 | MASQUE | import-only: no editor, `EConfigType.IMPORT_ONLY` hides Edit |
 | AETHER | import-only; dials the aether daemon's SOCKS |
 | MIERU | import-only; dials the mieru client's SOCKS |
+| DNSTUNNEL | a transport: carries the traffic of a named profile through DNS queries; dials the engine's SOCKS |
 | POLICYGROUP, PROXYCHAIN | complex; no outbound of their own |
 
 **Adding a protocol, the checklist:** `EConfigType` → scheme in `AppConfig` → `XxxFmt` parser

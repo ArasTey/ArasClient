@@ -91,6 +91,15 @@ class ServerUiState(
     aetherTorBridges: String = "auto",
     aetherTorBridgeLines: String = "",
     aetherTorRelays: String = "auto",
+    dnsTunnelEngine: String = "storm",
+    dnsTunnelDomain: String = "",
+    dnsTunnelKey: String = "",
+    dnsTunnelMethod: String = "1",
+    dnsTunnelResolvers: String = "",
+    dnsTunnelPort: String = "",
+    dnsTunnelDnsPort: String = "",
+    dnsTunnelTarget: String = "",
+    dnsTunnelExtra: String = "",
     finalMask: String = "",
     seed: String = "",
     kcpMtu: String = "",
@@ -188,6 +197,15 @@ class ServerUiState(
     var aetherTorBridges by mutableStateOf(aetherTorBridges)
     var aetherTorBridgeLines by mutableStateOf(aetherTorBridgeLines)
     var aetherTorRelays by mutableStateOf(aetherTorRelays)
+    var dnsTunnelEngine by mutableStateOf(dnsTunnelEngine)
+    var dnsTunnelDomain by mutableStateOf(dnsTunnelDomain)
+    var dnsTunnelKey by mutableStateOf(dnsTunnelKey)
+    var dnsTunnelMethod by mutableStateOf(dnsTunnelMethod)
+    var dnsTunnelResolvers by mutableStateOf(dnsTunnelResolvers)
+    var dnsTunnelPort by mutableStateOf(dnsTunnelPort)
+    var dnsTunnelDnsPort by mutableStateOf(dnsTunnelDnsPort)
+    var dnsTunnelTarget by mutableStateOf(dnsTunnelTarget)
+    var dnsTunnelExtra by mutableStateOf(dnsTunnelExtra)
     var finalMask by mutableStateOf(finalMask)
     var seed by mutableStateOf(seed)
     var kcpMtu by mutableStateOf(kcpMtu)
@@ -303,6 +321,15 @@ class ServerUiState(
             aetherTorBridges = aetherTorBridges.takeUnless { aetherTor == "off" },
             aetherTorBridgeLines = aetherTorBridgeLines.nullIfBlank(),
             aetherTorRelays = aetherTorRelays.takeUnless { it == "auto" || aetherTor == "off" },
+            dnsTunnelEngine = dnsTunnelEngine.nullIfBlank() ?: "storm",
+            dnsTunnelDomain = dnsTunnelDomain.nullIfBlank(),
+            dnsTunnelKey = dnsTunnelKey.nullIfBlank(),
+            dnsTunnelMethod = dnsTunnelMethod.toIntOrNull()?.takeIf { it in 0..5 },
+            dnsTunnelResolvers = dnsTunnelResolvers.nullIfBlank(),
+            dnsTunnelPort = dnsTunnelPort.nullIfBlank(),
+            dnsTunnelDnsPort = dnsTunnelDnsPort.nullIfBlank(),
+            dnsTunnelTarget = dnsTunnelTarget.nullIfBlank(),
+            dnsTunnelExtra = dnsTunnelExtra.nullIfBlank(),
             finalMask = finalMask.nullIfBlank(),
             seed = seed.nullIfBlank(),
             kcpMtu = kcpMtu.toIntOrNull(),
@@ -409,6 +436,15 @@ class ServerUiState(
                 aetherTorBridges = initialConfig.aetherTorBridges ?: "auto",
                 aetherTorBridgeLines = initialConfig.aetherTorBridgeLines ?: "",
                 aetherTorRelays = initialConfig.aetherTorRelays ?: "auto",
+                dnsTunnelEngine = initialConfig.dnsTunnelEngine ?: "storm",
+                dnsTunnelDomain = initialConfig.dnsTunnelDomain ?: "",
+                dnsTunnelKey = initialConfig.dnsTunnelKey ?: "",
+                dnsTunnelMethod = (initialConfig.dnsTunnelMethod ?: 1).toString(),
+                dnsTunnelResolvers = initialConfig.dnsTunnelResolvers ?: "",
+                dnsTunnelPort = initialConfig.dnsTunnelPort ?: "",
+                dnsTunnelDnsPort = initialConfig.dnsTunnelDnsPort ?: "",
+                dnsTunnelTarget = initialConfig.dnsTunnelTarget ?: "",
+                dnsTunnelExtra = initialConfig.dnsTunnelExtra ?: "",
                 finalMask = initialConfig.finalMask ?: "",
                 seed = initialConfig.seed ?: "",
                 kcpMtu = initialConfig.kcpMtu?.toString() ?: "",

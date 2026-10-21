@@ -678,6 +678,22 @@
 
     <!-- Mieru -->
     <string name="menu_item_import_config_manually_mieru">افزودن دستی کانفیگ Mieru</string>
+    <!-- تونل DNS -->
+    <string name="menu_item_import_config_manually_dnstunnel">افزودن دستی کانفیگ تونل DNS</string>
+    <string name="server_lab_dnstunnel_engine">موتور تونل DNS</string>
+    <string name="server_lab_dnstunnel_domain">ناحیهٔ تونل (دامنهٔ واگذارشدهٔ سرور تونل)</string>
+    <string name="server_lab_dnstunnel_key">کلید رمزنگاری</string>
+    <string name="server_lab_dnstunnel_method">روش رمزنگاری</string>
+    <string name="server_lab_dnstunnel_resolvers">Resolverها، هر کدام در یک خط</string>
+    <string name="server_lab_dnstunnel_resolvers_hint">1.1.1.1\n8.8.8.8</string>
+    <string name="server_lab_dnstunnel_port">پورت SOCKS محلی موتور</string>
+    <string name="server_lab_dnstunnel_dns_port">پورت DNS محلی موتور (خالی یعنی خاموش)</string>
+    <string name="server_lab_dnstunnel_target">پروفایلی که تونل حمل می‌کند</string>
+    <string name="server_lab_dnstunnel_bad_domain">ناحیهٔ تونل باید نام دامنه باشد، مانند v.example.com</string>
+    <string name="server_lab_dnstunnel_no_key">تونل به کلید رمزنگاری نیاز دارد</string>
+    <string name="server_lab_dnstunnel_bad_resolvers">تونل حداقل به یک resolver نیاز دارد، هر کدام در یک خط، مانند 1.1.1.1</string>
+    <string name="server_lab_dnstunnel_extra">تنظیمات اضافهٔ موتور، با کلیدهای TOML خود موتور</string>
+    <string name="server_lab_dnstunnel_extra_hint">UPLOAD_COMPRESSION_TYPE = 2</string>
     <string name="server_lab_mieru_username">کاربر Mieru</string>
     <string name="server_lab_mieru_password">رمز عبور Mieru</string>
     <string name="server_lab_mieru_listen_port">پورت شنود محلی</string>

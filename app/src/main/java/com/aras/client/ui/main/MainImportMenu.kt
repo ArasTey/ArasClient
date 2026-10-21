@@ -48,7 +48,8 @@ private enum class ImportManualProtocolMenuAction(@StringRes val labelRes: Int, 
     Hysteria2(R.string.menu_item_import_config_manually_hysteria2, MainAction.ImportManually(EConfigType.HYSTERIA2.value)),
     AnyTLS(R.string.menu_item_import_config_manually_anytls, MainAction.ImportManually(EConfigType.ANYTLS.value)),
     AmneziaWG(R.string.menu_item_import_config_manually_amneziawg, MainAction.ImportManually(EConfigType.AMNEZIAWG.value)),
-    Mieru(R.string.menu_item_import_config_manually_mieru, MainAction.ImportManually(EConfigType.MIERU.value))
+    Mieru(R.string.menu_item_import_config_manually_mieru, MainAction.ImportManually(EConfigType.MIERU.value)),
+    DnsTunnel(R.string.menu_item_import_config_manually_dnstunnel, MainAction.ImportManually(EConfigType.DNSTUNNEL.value))
 }
 
 enum class MainMoreMenuAction(@StringRes val labelRes: Int) {

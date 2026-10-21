@@ -132,6 +132,10 @@
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged|adjustResize" />
         <activity
+            android:name=".ui.server.ServerDnsTunnelActivity"
+            android:exported="false"
+            android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity
             android:name=".ui.server.ServerAetherActivity"
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged|adjustResize" />

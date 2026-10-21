@@ -7,6 +7,7 @@ import com.google.gson.JsonObject
 import com.aras.client.AppConfig
 import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.core.aether.AetherExitNodeResolver
+import com.aras.client.core.dnstunnel.DnsTunnelTargetResolver
 import com.aras.client.dto.ConfigResult
 import com.aras.client.dto.CoreConfigContext
 import com.aras.client.dto.XrayConfig
@@ -230,8 +231,42 @@ object CoreConfigManager {
         resolveOutboundDomainsToHosts(xrayConfig)
 
         applyAetherExitNode(primaryResolvedOutbound, xrayConfig)
+        applyDnsTunnelTarget(primaryResolvedOutbound, xrayConfig)
 
         return xrayConfig
+    }
+
+    /**
+     * The DNS tunnel's target: when the profile names one, the tunnel carries that
+     * profile's traffic.
+     *
+     * A DNS tunnel is a transport, not a protocol: the engine serves a local SOCKS
+     * and something has to speak over it. The target is that something. The
+     * outbound the builder made for the tunnel is the SOCKS, so it is given the
+     * tunnel's own tag and the target's outbound is dialed through it — the
+     * target reaches the internet the way any other profile does, only its first
+     * hop is a tunnel through DNS.
+     */
+    private fun applyDnsTunnelTarget(
+        primaryResolved: CoreConfigContext.ResolvedOutbound,
+        xrayConfig: XrayConfig,
+    ) {
+        val profile = primaryResolved.profile
+        if (profile.configType != EConfigType.DNSTUNNEL) return
+        val name = profile.dnsTunnelTarget?.trim().orEmpty()
+        if (name.isEmpty()) return
+        if (xrayConfig.outbounds.any { it.tag == AppConfig.TAG_DNSTUNNEL }) return
+
+        val target = DnsTunnelTargetResolver.resolve(name).single ?: return
+        val tunnel = xrayConfig.outbounds.firstOrNull {
+            it.protocol == "socks" && it.settings?.address == AppConfig.LOOPBACK
+        } ?: return
+        val targetOutbound = CoreOutboundBuilder.convert(target) ?: return
+
+        tunnel.tag = AppConfig.TAG_DNSTUNNEL
+        targetOutbound.tag = AppConfig.TAG_PROXY
+        targetOutbound.ensureSockopt().dialerProxy = AppConfig.TAG_DNSTUNNEL
+        xrayConfig.outbounds.add(0, targetOutbound)
     }
 
     /**
