@@ -45,6 +45,7 @@ object DnsTunnelProcessManager {
     )
 
     private val state = AtomicReference(State())
+    private val lastError = AtomicReference<String?>(null)
     private var process: Process? = null
 
     fun binary(context: Context, engine: DnsTunnelEngine): File =
@@ -55,6 +56,15 @@ object DnsTunnelProcessManager {
 
     /** What the engine has reported so far. */
     fun currentState(): State = state.get()
+
+    /**
+     * The last thing the engine complained about.
+     *
+     * A tunnel whose zone is wrong, or whose resolvers cannot reach the zone,
+     * never brings its listener up — and the engine says why. That reason is
+     * worth more to the user than "the listener never came up", so it is kept.
+     */
+    fun lastError(): String? = lastError.get()
 
     private fun workDir(context: Context, engine: DnsTunnelEngine): File =
         File(File(context.filesDir, WORK_DIR), engine.id).apply { mkdirs() }
@@ -115,6 +125,7 @@ object DnsTunnelProcessManager {
         }
         process = started
         state.set(State())
+        lastError.set(null)
         pumpOutput(started)
 
         val up = awaitListener(socksPort)
@@ -131,7 +142,7 @@ object DnsTunnelProcessManager {
             try {
                 started.inputStream.bufferedReader().forEachLine { line ->
                     LogUtil.i(AppConfig.TAG, "DNS tunnel | $line")
-                    applyTelemetry(line)
+                    handleOutput(line)
                 }
             } catch (_: Throwable) {
                 // The engine ended or the stream closed.
@@ -188,8 +199,21 @@ object DnsTunnelProcessManager {
         }
     }
 
-    /** The key=value pairs of a telemetry line, the marker itself left out. */
-    private fun telemetryFields(line: String): Map<String, String> =
+    /**
+     * What one line of the engine's output means.
+     *
+     * The telemetry is read for the session's state, and a complaint is kept:
+     * a tunnel whose zone does not resolve never brings its listener up, and
+     * the engine's own reason is worth more to the user than the closed port.
+     */
+    internal fun handleOutput(line: String) {
+        applyTelemetry(line)
+        if (line.contains("[ERROR]") || line.contains("Rejected")) {
+            lastError.set(line.substringAfter("] ").trim())
+        }
+    }
+
+    /** The key=value pairs of a telemetry line, the marker itself left out. */    private fun telemetryFields(line: String): Map<String, String> =
         line.split(WHITESPACE)
             .drop(1)
             .mapNotNull { field ->

@@ -1,6 +1,7 @@
 package com.aras.client.core.dnstunnel
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -55,5 +56,15 @@ class DnsTunnelTelemetryTest {
         DnsTunnelProcessManager.applyTelemetry("starting the client")
 
         assertEquals(before, DnsTunnelProcessManager.currentState())
+    }
+
+    @Test
+    fun `the engine's own complaint is kept for the user`() {
+        DnsTunnelProcessManager.handleOutput(
+            "[StormDNS Client] [WARN] ❌ Rejected (1/1): v.example.com via 1.1.1.1:53 | reason=UPLOAD_MTU"
+        )
+
+        val error = DnsTunnelProcessManager.lastError()
+        assertTrue(error != null && error.contains("v.example.com"))
     }
 }

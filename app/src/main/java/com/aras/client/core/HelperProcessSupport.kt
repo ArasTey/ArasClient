@@ -215,7 +215,11 @@ object HelperProcessSupport {
         LogUtil.i(AppConfig.TAG, "HelperProcess: starting the ${engine.displayName} client on $socksPort")
         if (!DnsTunnelProcessManager.start(context, profile, engine, socksPort, dnsPort)) {
             DnsTunnelProcessManager.stop()
-            return "The ${engine.displayName} client did not start; see the log for its own error"
+            // The engine says why a tunnel never comes up — a zone that does not
+            // resolve, a resolver that cannot reach it — and that is worth more
+            // to the user than the listener that stayed closed.
+            val reason = DnsTunnelProcessManager.lastError()?.let { ": $it" }.orEmpty()
+            return "The ${engine.displayName} client did not start$reason; see the log for its own error"
         }
         return null
     }
