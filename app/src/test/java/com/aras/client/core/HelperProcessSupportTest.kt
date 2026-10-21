@@ -57,6 +57,18 @@ class HelperProcessSupportTest {
     }
 
     @Test
+    fun `a dns tunnel hop is found in the chain`() {
+        // The tunnel is a transport: it lowers to a SOCKS hop like Aether and
+        // Mieru, so its engine has to be up before the core dials it.
+        val chain = listOf(
+            profile(EConfigType.VLESS, "exit"),
+            profile(EConfigType.DNSTUNNEL, "tunnel"),
+        )
+
+        assertEquals(listOf("tunnel"), HelperProcessSupport.helperProfilesOf(chain).map { it.remarks })
+    }
+
+    @Test
     fun `every daemon-backed hop is collected and chain order is kept`() {
         // Built innermost first, entry proxy last — the order CoreConfigManager
         // wires dialerProxy in, and the order it must be started in.
