@@ -125,6 +125,7 @@
     <string name="server_lab_dnstunnel_bad_server_key">Soar needs the tunnel server\'s public key: 32 bytes, as base64 or as hex</string>
     <string name="server_lab_dnstunnel_preset">Engine preset</string>
     <string name="server_lab_dnstunnel_scan">Scan the resolvers</string>
+    <string name="server_lab_dnstunnel_scan_unsupported">This engine cannot scan resolvers</string>
     <string name="server_lab_dnstunnel_scan_done">%1$d resolvers carried the tunnel</string>
     <string name="server_lab_dnstunnel_scan_none">No resolver carried the tunnel; check the zone and the key</string>
     <string name="server_lab_mieru_username">Mieru user</string>

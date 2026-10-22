@@ -131,10 +131,14 @@ object DnsTunnelConfigRenderer {
             } else {
                 appendLine("LOCAL_DNS_ENABLED = false")
             }
-            // The engine writes its own log files next to the configuration; the
-            // app reads the engine's output instead and has no use for them.
+            // The engine's own log files; the app reads the engine's output
+            // instead and has no use for them.
             appendLine("LOG_TO_FILE = false")
             appendLine("LOG_LEVEL = \"warning\"")
+            // The engine's default asks on its terminal how to start and waits
+            // ten seconds for an answer; an app has no terminal, so it starts
+            // from the resolver list right away.
+            appendLine("STARTUP_MODE = \"resolvers\"")
             if (engine == DnsTunnelEngine.COTTEN) {
                 // CottenDns can carry the tunnel over DoT and DoH as well as plain
                 // UDP, which is what survives a network that throttles UDP/53.

@@ -118,7 +118,8 @@ class ServerDnsTunnelActivity : BaseServerActivity() {
                 placeholder = stringResource(R.string.server_lab_dnstunnel_resolvers_hint),
             )
             // The engine knows which of the resolvers carried the tunnel and which
-            // did not; asking it is the only way to tell.
+            // did not; asking it is the only way to tell. An engine that cannot
+            // scan says so instead of starting a session that never ends.
             var scanning by remember { mutableStateOf(false) }
             Button(
                 onClick = {
@@ -144,9 +145,17 @@ class ServerDnsTunnelActivity : BaseServerActivity() {
                         }
                     }
                 },
-                enabled = !scanning,
+                enabled = !scanning && engine.supportsScan,
             ) {
-                Text(stringResource(R.string.server_lab_dnstunnel_scan))
+                Text(
+                    stringResource(
+                        if (engine.supportsScan) {
+                            R.string.server_lab_dnstunnel_scan
+                        } else {
+                            R.string.server_lab_dnstunnel_scan_unsupported
+                        }
+                    )
+                )
             }
             FormTextField(
                 stringResource(R.string.server_lab_dnstunnel_port),

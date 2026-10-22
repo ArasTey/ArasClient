@@ -286,6 +286,11 @@ object DnsTunnelProcessManager {
         resolvers: List<String>,
         timeoutMs: Long = 120_000L,
     ): ScanResult {
+        // An engine that cannot scan is not asked to: it would start a session
+        // that never ends, and the scan would wait for the timeout.
+        if (!engine.supportsScan) {
+            return ScanResult(emptyList(), emptyList(), false)
+        }
         val exe = binary(context, engine)
         if (!exe.canExecute()) {
             return ScanResult(emptyList(), emptyList(), false)

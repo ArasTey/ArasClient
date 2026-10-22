@@ -7,6 +7,7 @@ import com.google.gson.JsonObject
 import com.aras.client.AppConfig
 import com.aras.client.core.aether.AetherCoreManager
 import com.aras.client.core.aether.AetherExitNodeResolver
+import com.aras.client.core.dnstunnel.DnsTunnelDns
 import com.aras.client.core.dnstunnel.DnsTunnelTargetResolver
 import com.aras.client.fmt.DnsTunnelFmt
 import com.aras.client.dto.ConfigResult
@@ -1019,7 +1020,7 @@ object CoreConfigManager {
         if (tunnelDnsPort != null) {
             servers.add(
                 XrayConfig.DnsBean.ServersBean(
-                    address = "${AppConfig.LOOPBACK}:$tunnelDnsPort",
+                    address = DnsTunnelDns.serverAddress(tunnelDnsPort),
                 )
             )
         }

@@ -168,6 +168,15 @@ class DnsTunnelConfigRendererTest {
     }
 
     @Test
+    fun `the engine is told to start from the resolver list, not to ask`() {
+        val toml = DnsTunnelConfigRenderer.renderToml(profile(), DnsTunnelEngine.STORM, 10821, null)
+
+        // The engine's default asks on its terminal how to start and waits ten
+        // seconds; an app has no terminal.
+        assertTrue(toml.contains("""STARTUP_MODE = "resolvers""""))
+    }
+
+    @Test
     fun `a resolver is an address, an address with a port, or an address with a prefix`() {        assertTrue(DnsTunnelConfigRenderer.isValidResolver("1.1.1.1"))
         assertTrue(DnsTunnelConfigRenderer.isValidResolver("1.1.1.1:5353"))
         assertTrue(DnsTunnelConfigRenderer.isValidResolver("192.168.1.0/30"))

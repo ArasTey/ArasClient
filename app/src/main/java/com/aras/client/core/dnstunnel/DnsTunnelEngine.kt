@@ -21,10 +21,19 @@ enum class DnsTunnelEngine(
     val displayName: String,
     /** Whether the engine's configuration is JSON rather than the StormDNS TOML. */
     val jsonConfig: Boolean = false,
+    /**
+     * Whether the engine can scan a resolver list on its own.
+     *
+     * The StormDNS family does: it resolves the tunnel zone through every
+     * resolver in the list and says which ones carried it. Soar is a library
+     * with no such mode, and asking it to scan would only start a session that
+     * never ends.
+     */
+    val supportsScan: Boolean = true,
 ) {
     STORM("storm", "libstormdns_client.so", "StormDNS"),
     COTTEN("cotten", "libcottendns_client.so", "CottenDns"),
-    SOAR("soar", "libsoar_client.so", "Soar", jsonConfig = true),
+    SOAR("soar", "libsoar_client.so", "Soar", jsonConfig = true, supportsScan = false),
     ;
 
     companion object {
