@@ -43,6 +43,29 @@ object Utils {
     }
 
     /**
+     * True for a link a subscription panel sent that can be opened with an ACTION_VIEW: an
+     * http or https link with a host, or a Telegram one. Anything else — javascript:, an
+     * empty host, a link beyond any intent to open it — is not handed to the UI.
+     */
+    fun isSafeLink(raw: String?): Boolean {
+        val value = raw?.trim().orEmpty()
+        if (value.isEmpty() || value.length > MAX_LINK_LENGTH) return false
+        val uri = runCatching { URI(value) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase(Locale.US) ?: return false
+        if (scheme !in SAFE_LINK_SCHEMES) return false
+        if (scheme != "tg" && uri.host.isNullOrEmpty()) return false
+        return true
+    }
+
+    /** True for links that open in the Telegram app, by scheme or by host. */
+    fun isTelegramLink(raw: String?): Boolean {
+        val uri = runCatching { URI(raw.orEmpty().trim()) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase(Locale.US) ?: return false
+        if (scheme == "tg") return true
+        return uri.host?.lowercase(Locale.US) in TELEGRAM_HOSTS
+    }
+
+    /**
      * Get text from the clipboard.
      *
      * @param context The context to use.
@@ -485,4 +508,11 @@ object Utils {
             ""
         }
     }
+
+    /** The schemes a subscription panel's links are opened by, and the longest link handed over. */
+    private val SAFE_LINK_SCHEMES = setOf("http", "https", "tg")
+    private const val MAX_LINK_LENGTH = 2048
+
+    /** The hosts a link opens in the Telegram app, scheme aside. */
+    private val TELEGRAM_HOSTS = setOf("t.me", "telegram.me", "telegram.dog", "telegram.org")
 }

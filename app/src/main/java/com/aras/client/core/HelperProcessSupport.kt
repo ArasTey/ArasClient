@@ -47,10 +47,18 @@ object HelperProcessSupport {
      * than restarted, and a profile whose daemon is taken by a *different*
      * profile is refused rather than measured through the wrong tunnel.
      *
+     * [onAetherExit] runs once the session's aether core has ended on its own —
+     * the caller of the session reacts to a tunnel that will not carry traffic
+     * any more. Tests and ping workers pass nothing.
+     *
      * An error message is returned instead of a throw, because every caller
      * reports this to the user in its own words.
      */
-    fun acquire(context: Context, chain: List<ProfileItem>): Acquired {
+    fun acquire(
+        context: Context,
+        chain: List<ProfileItem>,
+        onAetherExit: ((String?) -> Unit)? = null,
+    ): Acquired {
         val helpers = helperProfilesOf(chain)
         if (helpers.isEmpty()) return Acquired(emptyList(), null)
 
@@ -63,7 +71,7 @@ object HelperProcessSupport {
                         val key = helper.helperKey()
                         when {
                             aetherRefs == 0 -> {
-                                val error = startAether(context, helper)
+                                val error = startAether(context, helper, onAetherExit)
                                 if (error != null) return Acquired(emptyList(), error)
                                 aetherKey = key
                             }
@@ -144,13 +152,19 @@ object HelperProcessSupport {
         }
     }
 
-    private fun startAether(context: Context, profile: ProfileItem): String? {
+    private fun startAether(context: Context, profile: ProfileItem, onExit: ((String?) -> Unit)?): String? {
         if (!AetherCoreManager.isAvailable(context)) return "This build does not carry the aether core"
         val core = AetherCore.of(profile)
         LogUtil.i(AppConfig.TAG, "HelperProcess: aether core: ${core.command}")
-        val started = AetherCoreManager.start(context, core) { line ->
-            LogUtil.d(AppConfig.TAG, "aether | $line")
-        }
+        // A listener the core cannot bind or the app cannot reach makes the session fail
+        // only once it is up; saying so before the process is started says it plainly.
+        AetherCoreManager.problemsOf(core)?.let { return it }
+        val started = AetherCoreManager.start(
+            context,
+            core,
+            { line -> LogUtil.d(AppConfig.TAG, "aether | $line") },
+            { reason -> onExit?.invoke(reason) },
+        )
         if (!started) {
             AetherCoreManager.stop()
             return "The aether core did not start; see the log for its own error"

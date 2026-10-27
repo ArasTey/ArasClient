@@ -25,5 +25,11 @@ data class SubscriptionItem(
 
     /** Optional creator/owner message shown with the announcement. */
     var creatorMessage: String? = null,
+
+    /** A link to ask the owner for help (the panel's Support-Url), checked as a plain http(s)//tg link. */
+    var supportUrl: String? = null,
+
+    /** The panel's subscription information page (its Profile-Web-Page-Url), checked as a plain link. */
+    var webPageUrl: String? = null,
 )
 

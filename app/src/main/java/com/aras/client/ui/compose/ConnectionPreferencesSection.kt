@@ -26,7 +26,7 @@ fun ConnectionPreferencesSection(modifier: Modifier = Modifier) {
     var autoScrollToTop by rememberMmkvBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)
     var showDelayChips by rememberMmkvBool(AppConfig.PREF_SHOW_DELAY_CHIPS, true)
     var showSubInfo by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_INFO, true)
-    var showSubAnnouncement by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
+    var showSubAnnouncement by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, false)
 
     Column(modifier = modifier.fillMaxWidth()) {
         SettingsSwitchItem(

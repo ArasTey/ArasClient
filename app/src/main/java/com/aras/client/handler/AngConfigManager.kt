@@ -768,11 +768,19 @@ object AngConfigManager {
             }
         }
         headers["profile-title"]?.let { v -> decodeHeaderValue(v)?.let { sub.creatorMessage = it } }
+        // The panel's links to its support and its subscription information page; checked at the
+        // UI, so an odd link stays on the profile and reaches no intent.
+        headers["support-url"]?.let { sub.supportUrl = safeLink(it) }
+        headers["profile-web-page-url"]?.let { sub.webPageUrl = safeLink(it) }
     }
 
+    /** [value] as a link the UI may open, or null where no intent would. */
+    private fun safeLink(value: String?): String? =
+        decodeHeaderValue(value)?.takeIf { Utils.isSafeLink(it) }
+
     /** Decodes "base64:..."-prefixed header values used by many panels. */
-    private fun decodeHeaderValue(value: String): String? {
-        val trimmed = value.trim()
+    private fun decodeHeaderValue(value: String?): String? {
+        val trimmed = value?.trim().orEmpty()
         if (trimmed.isEmpty()) return null
         return if (trimmed.startsWith("base64:", ignoreCase = true)) {
             try {

@@ -143,7 +143,20 @@ object CoreServiceManager {
         // anywhere in the chain, not just the selected profile: an entry proxy is the
         // outermost hop of every profile in its subscription, so its daemon is what
         // the whole subscription depends on.
-        val helpers = HelperProcessSupport.acquire(service, CoreConfigContextBuilder.resolveChainProfiles(service, guid))
+        val helpers = HelperProcessSupport.acquire(
+            service,
+            CoreConfigContextBuilder.resolveChainProfiles(service, guid),
+        ) { reason ->
+            // The session's aether core ended on its own, Tor or Psiphon inside its tunnel
+            // among the reasons: the tunnel carries nothing from here on, so the session
+            // ends with it, and the core's own words say why.
+            val message = AetherCoreManager.stoppedMessage(service)
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message (reason: $reason)")
+            CoroutineScope(Dispatchers.Main).launch {
+                notifyTileState(service, AppConfig.MSG_STATE_START_FAILURE, message)
+                stopCoreLoop()
+            }
+        }
         helpers.error?.let { reason ->
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: $reason")
             HelperProcessSupport.reset()

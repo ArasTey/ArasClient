@@ -15,7 +15,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ArasTey/AndroidLibXrayLite
-          ref: main
+          # Pinned to the commit main stood on when the plugin was built; like
+          # the core tag below, the same run of a release builds from the same
+          # bindings source.
+          ref: 33f200abc13762b5c79a11597f2273fdef1d21e7
           path: core-bindings
 
       - name: Checkout xray-core source
@@ -24,7 +27,7 @@ jobs:
           repository: ArasTey/xray-core
           # Pinned by tag, not to a branch: the core is built from source here, so
           # what it is has to be the same on every run of a given release.
-          ref: aras-core-26.10.13
+          ref: aras-core-26.10.22
           path: xray-core-src
 
       - name: Set up Go

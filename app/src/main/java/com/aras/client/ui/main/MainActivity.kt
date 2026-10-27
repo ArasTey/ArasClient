@@ -200,6 +200,24 @@ class MainActivity : HelperBaseComponentActivity() {
                 }
             )
         }
+        // The Free-group question for users whose onboarding already ran before it
+        // existed; fresh installs answer it inside the onboarding checkboxes above.
+        var showFreeSubAsk by remember {
+            mutableStateOf(
+                MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_DONE, false) &&
+                    !MmkvManager.decodeSettingsBool(AppConfig.PREF_FREE_SUB_ASKED, false)
+            )
+        }
+        if (showFreeSubAsk) {
+            FreeSubAskDialog { showFreeSub ->
+                MmkvManager.encodeSettings(AppConfig.PREF_SHOW_FREE_SUB, showFreeSub)
+                MmkvManager.encodeSettings(AppConfig.PREF_FREE_SUB_ASKED, true)
+                showFreeSubAsk = false
+                // The tabs read the setting through setupGroupTab, so the answer
+                // takes effect the moment the dialog closes.
+                mainViewModel.setupGroupTab(forceRefresh = true)
+            }
+        }
         if (!showOnboarding && showQuickSettingsInfo) {
             val dismissQuickSettingsInfo = {
                 MmkvManager.encodeSettings(

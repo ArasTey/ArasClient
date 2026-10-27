@@ -327,6 +327,8 @@ class AetherCoreTest {
         )
         assertEquals("direct", direct.valueOf("--psiphon-mode"))
         assertNull(direct.valueOf("--psiphon-cdn-ips"))
+        // The direct shape uses no fronted transport, so neither list goes with it.
+        assertNull(direct.valueOf("--psiphon-cdn-sets"))
 
         val cdn = AetherCoreManager.buildArguments(
             profile {
@@ -339,9 +341,9 @@ class AetherCoreTest {
             port = 10819,
         )
         assertEquals("1.2.3.4", cdn.valueOf("--psiphon-cdn-ips"))
-        // aether 2.1 has no flag for the edge lists; --psiphon-mode and the client's
-        // own built-in list decide. The profile keeps the field for link round-trip.
-        assertTrue(cdn.none { it.startsWith("--psiphon-cdn-sets") })
+        // The fronting scan tries the edge lists the profile names, after its own IP list;
+        // aether dropped the flag for a while and took it back by 2.3.5.
+        assertEquals("cloudflare,github", cdn.valueOf("--psiphon-cdn-sets"))
     }
 
     @Test

@@ -619,6 +619,15 @@
     <string name="title_connection_preferences">ترجیحات اتصال</string>
     <string name="setup_auto_scroll">پیمایش خودکار به بهترین سرور پس از آزمایش</string>
     <string name="setup_show_sub_messages">نمایش ترافیک و اطلاعیه‌های اشتراک</string>
+    <string name="setup_show_sub_info">نمایش ترافیک و انقضای اشتراک</string>
+    <string name="setup_show_sub_announcement">نمایش اطلاعیه‌های اشتراک</string>
+    <string name="setup_show_free_sub">نمایش گروه اشتراک رایگان</string>
+    <string name="free_sub_ask_title">اشتراک رایگان</string>
+    <string name="free_sub_ask_message">گروه «رایگان» با کانفیگ‌های رایگانش نشان داده شود؟ بعداً هم می‌توانید در تنظیمات اشتراک تغییرش بدهید — خاموش کردنش فقط تب‌ها را پنهان می‌کند و کانفیگ‌ها به‌روز می‌مانند.</string>
+    <string name="free_sub_ask_show">بله نشان بده</string>
+    <string name="free_sub_ask_hide">نه پنهان کن</string>
+    <string name="title_pref_show_free_sub">نمایش گروه اشتراک رایگان</string>
+    <string name="summary_pref_show_free_sub">تب گروه «رایگان» روی صفحه اصلی دیده شود. خاموش کردنش فقط تب‌ها را پنهان می‌کند و کانفیگ‌ها همیشه به‌روز می‌مانند.</string>
 
     <!-- Aether -->
     <string name="menu_item_import_config_manually_aether">افزودن دستی کانفیگ Aether</string>
@@ -647,6 +656,11 @@
     <string name="server_lab_aether_hint_ready">آماده است. کلید ذخیره شده و دیگر دوباره پرسیده نمی‌شود.\nپیش از جست‌وجوی دروازه، VPN را خاموش کنید تا جست‌وجو همان شبکه‌ای را ببیند که واقعاً استفاده می‌کنید.</string>
     <string name="server_lab_aether_vpn_on">ابتدا VPN را روشن کنید — ثبت‌نام نزد Cloudflare باید به سرویس آن‌ها برسد.</string>
     <string name="server_lab_aether_vpn_off">ابتدا VPN را خاموش کنید تا جست‌وجو همان شبکه‌ای را ببیند که واقعاً استفاده می‌کنید.</string>
+    <string name="aether_core_stopped">هسته Aether متوقف شده است</string>
+    <string name="aether_core_stopped_no_ech_key">هسته Aether متوقف شد: ECH روشن است ولی هیچ کلید ECH قابل استفاده‌ای پیدا نشد. بدون آن، نام سرور به‌صورت آشکار فرستاده می‌شد.</string>
+    <string name="aether_core_stopped_chain_ended">تور یا سایفون درون تونل Aether از کار افتاد، پس اتصال متوقف شد: %1$s</string>
+    <string name="sub_info_open_support">باز کردن لینک پشتیبانی</string>
+    <string name="sub_info_open_page">باز کردن صفحه اطلاعات اشتراک</string>
     <string name="server_lab_aether_note">دروازه WARP اغلب به پینگ معمولی پاسخ نمی‌دهد و نشانی خروجی‌اش ایرانی دیده می‌شود — هر دو طبیعی است. اتصال را بررسی کنید، نه پینگ را.</string>
     <string name="server_lab_aether_psiphon">سایفون</string>
     <string name="server_lab_aether_psiphon_mode">حالت سایفون</string>
@@ -661,6 +675,13 @@
     <string name="server_lab_aether_ech">سلام‌دادن رمزشده مشتری (ECH)</string>
     <string name="server_lab_aether_ech_dns">مبدل کلید ECH (پیش‌فرض udp://1.1.1.1)</string>
     <string name="server_lab_aether_ech_domain">دامنه کلید ECH (پیش‌فرض cloudflare-ech.com)</string>
+    <string name="server_lab_aether_api_address">نشانی API برای WARP</string>
+    <string name="server_lab_aether_api_sni">نام سرور API (SNI)</string>
+    <string name="server_lab_aether_api_host">میزبان API</string>
+    <string name="server_lab_aether_api_address_hint">خالی بگذارید تا نشانی نام سرور API استفاده شود</string>
+    <string name="server_lab_aether_api_sni_hint">خالی بگذارید تا میزبان API استفاده شود</string>
+    <string name="server_lab_aether_api_host_hint">خالی بگذارید تا api.devices.cloudflare.com استفاده شود؛ اگر پاسخی ندهد و نام سرور هم خالی باشد، api.cloudflareclient.com استفاده می‌شود. Cloudflare نام سروری را که با میزبان فرق داشته باشد نمی‌پذیرد</string>
+    <string name="preset_default">پیش‌فرض</string>
     <string name="server_lab_aether_tor">تور</string>
     <string name="server_lab_aether_tor_bridges">پل‌های تور</string>
     <string name="server_lab_aether_tor_bridge_lines">خطوط پل، هر خط یکی</string>

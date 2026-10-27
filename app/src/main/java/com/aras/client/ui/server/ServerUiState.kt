@@ -74,6 +74,9 @@ class ServerUiState(
     aetherExitNode: String = "",
     aetherEchDns: String = "",
     aetherEchDomain: String = "",
+    aetherApiAddress: String = "",
+    aetherApiSni: String = "",
+    aetherApiHost: String = "",
     aetherMasqueSni: String = "",
     aetherDns: String = "",
     aetherExitLoc: String = "",
@@ -171,6 +174,9 @@ class ServerUiState(
     var aetherExitNode by mutableStateOf(aetherExitNode)
     var aetherEchDns by mutableStateOf(aetherEchDns)
     var aetherEchDomain by mutableStateOf(aetherEchDomain)
+    var aetherApiAddress by mutableStateOf(aetherApiAddress)
+    var aetherApiSni by mutableStateOf(aetherApiSni)
+    var aetherApiHost by mutableStateOf(aetherApiHost)
     var aetherMasqueSni by mutableStateOf(aetherMasqueSni)
     var aetherDns by mutableStateOf(aetherDns)
     var aetherExitLoc by mutableStateOf(aetherExitLoc)
@@ -285,6 +291,9 @@ class ServerUiState(
             aetherExitNode = aetherExitNode.nullIfBlank(),
             aetherEchDns = aetherEchDns.nullIfBlank(),
             aetherEchDomain = aetherEchDomain.nullIfBlank(),
+            aetherApiAddress = aetherApiAddress.nullIfBlank(),
+            aetherApiSni = aetherApiSni.nullIfBlank(),
+            aetherApiHost = aetherApiHost.nullIfBlank(),
             aetherMasqueSni = aetherMasqueSni.nullIfBlank(),
             aetherDns = aetherDns.nullIfBlank(),
             aetherExitLoc = aetherExitLoc.nullIfBlank(),
@@ -392,6 +401,9 @@ class ServerUiState(
                 aetherExitNode = initialConfig.aetherExitNode ?: "",
                 aetherEchDns = initialConfig.aetherEchDns ?: "",
                 aetherEchDomain = initialConfig.aetherEchDomain ?: "",
+                aetherApiAddress = initialConfig.aetherApiAddress ?: "",
+                aetherApiSni = initialConfig.aetherApiSni ?: "",
+                aetherApiHost = initialConfig.aetherApiHost ?: "",
                 aetherMasqueSni = initialConfig.aetherMasqueSni ?: "",
                 aetherDns = initialConfig.aetherDns ?: "",
                 aetherExitLoc = initialConfig.aetherExitLoc ?: "",

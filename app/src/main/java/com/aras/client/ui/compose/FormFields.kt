@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -82,6 +83,7 @@ fun FormDropdownField(
     enabled: Boolean = true,
     placeholder: String? = null,
     supportingText: String? = null,
+    defaultOption: String? = null,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val menuScrollState = rememberScrollState()
@@ -138,6 +140,19 @@ fun FormDropdownField(
             scrollState = menuScrollState,
             containerColor = MaterialTheme.colorScheme.surface
         ) {
+            // A first entry, by its name, whose pick blanks the field, as the
+            // default of a preset field does.
+            defaultOption?.let { name ->
+                DropdownMenuItem(
+                    text = { Text(name) },
+                    onClick = {
+                        onValueChange("")
+                        expanded = false
+                        focusManager.clearFocus()
+                    }
+                )
+                HorizontalDivider()
+            }
             options.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option) },

@@ -121,6 +121,10 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
                     else ->
                         toast(getString(R.string.title_update_subscription_result, result.configCount, result.successCount, result.failureCount, result.skipCount))
                 }
+                // New configs arrived behind the main list's back; mark the group tab for refresh.
+                if (result.configCount > 0) {
+                    SettingsChangeManager.makeSetupGroupTab()
+                }
                 reload()
             } catch (cancelled: CancellationException) {
                 throw cancelled

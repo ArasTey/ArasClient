@@ -60,6 +60,14 @@ object AppConfig {
     const val PREF_UI_MODE_NIGHT = "pref_ui_mode_night"
     const val PREF_DYNAMIC_COLOR = "pref_dynamic_color"
     const val PREF_IPV6_ENABLED = "pref_ipv6_enabled"
+
+    /**
+     * The VPN interface takes IPv6 unless the user says otherwise: apps under the VPN use
+     * both families, and an interface without the address leaves IPv6 running around the
+     * VPN. Where the kernel refuses the address the interface still starts, on IPv4 alone.
+     */
+    const val DEFAULT_IPV6_ENABLED = true
+
     const val PREF_PREFER_IPV6 = "pref_prefer_ipv6"
     const val PREF_PROXY_SHARING = "pref_proxy_sharing_enabled"
     const val PREF_ENABLE_LOCAL_PROXY = "pref_enable_local_proxy"
@@ -101,6 +109,8 @@ object AppConfig {
     const val PREF_FREE_SYNC_LAST_ATTEMPT = "pref_free_sync_last_attempt"
     const val PREF_FREE_SYNC_LAST_URL = "pref_free_sync_last_url"
     const val PREF_GEOIP_LAST_REFRESH = "pref_geoip_last_refresh"
+    const val PREF_SHOW_FREE_SUB = "pref_show_free_sub"
+    const val PREF_FREE_SUB_ASKED = "pref_free_sub_asked"
 
     /** Reserved guid of the built-in Free group — cannot be edited or deleted. */
     const val FREE_SUB_GUID = "aras_free_sub_builtin"

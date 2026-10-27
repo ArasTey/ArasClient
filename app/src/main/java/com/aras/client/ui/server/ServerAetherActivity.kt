@@ -494,6 +494,45 @@ class ServerAetherActivity : BaseServerActivity() {
                 )
                 Spacer(Modifier.height(8.dp))
 
+                // Where the calls that register and renew the key go, the server
+                // name of their ClientHello and their HTTP host: each left blank
+                // follows the next, as the core has them, the address the server
+                // name and the server name the host. Each is written, or picked
+                // from the two names of the API.
+                val apiNames = stringArrayResource(R.array.aether_api_name_options).toList()
+                val defaultName = stringResource(R.string.preset_default)
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_api_address),
+                    value = state.aetherApiAddress,
+                    options = apiNames,
+                    onValueChange = { state.aetherApiAddress = it },
+                    editable = true,
+                    placeholder = stringResource(R.string.server_lab_aether_api_address_hint),
+                    defaultOption = defaultName
+                )
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_api_sni),
+                    value = state.aetherApiSni,
+                    options = apiNames,
+                    onValueChange = { state.aetherApiSni = it },
+                    editable = true,
+                    placeholder = stringResource(R.string.server_lab_aether_api_sni_hint),
+                    defaultOption = defaultName
+                )
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_api_host),
+                    value = state.aetherApiHost,
+                    options = apiNames,
+                    onValueChange = { state.aetherApiHost = it },
+                    editable = true,
+                    supportingText = listOfNotNull(
+                        defaultName.takeIf { state.aetherApiHost.isBlank() },
+                        stringResource(R.string.server_lab_aether_api_host_hint)
+                    ).joinToString("\n"),
+                    defaultOption = defaultName
+                )
+                Spacer(Modifier.height(8.dp))
+
                 if (key != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(

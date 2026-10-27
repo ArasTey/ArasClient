@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +39,7 @@ import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.dto.entities.SubscriptionItem
 import com.aras.client.handler.MmkvManager
+import com.aras.client.util.Utils
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -58,7 +60,7 @@ fun SubscriptionInfoBar(
     if (groupId.isEmpty()) return
     val showInfo = MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true)
     val showAnnouncement =
-        MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
+        MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, false)
 
     var sub by remember(groupId) { mutableStateOf<SubscriptionItem?>(null) }
     LaunchedEffect(groupId) {
@@ -81,6 +83,11 @@ fun SubscriptionInfoBar(
     val announcement = current.announcement?.takeIf {
         showAnnouncement && it.isNotBlank()
     }
+    // The panel's links; the subscription URL answers with the panel's information
+    // page, so it is the fallback target of the page button.
+    val supportUrl = current.supportUrl?.takeIf { Utils.isSafeLink(it) }
+    val webPageUrl = current.webPageUrl?.takeIf { Utils.isSafeLink(it) }
+            ?: current.url.takeIf { Utils.isSafeLink(it) }
 
     Column(
         modifier = modifier
@@ -94,6 +101,8 @@ fun SubscriptionInfoBar(
         if (hasInfo) TrafficExpiryBar(current)
         SubscriptionActions(
             groupId = groupId,
+            supportUrl = supportUrl,
+            webPageUrl = webPageUrl,
             onEdit = onEditSubscription.takeUnless { isProtectedSubscription },
             onUpdate = onUpdateSubscription,
             onPing = onPingSubscription,
@@ -106,6 +115,8 @@ fun SubscriptionInfoBar(
 @Composable
 private fun SubscriptionActions(
     groupId: String,
+    supportUrl: String?,
+    webPageUrl: String?,
     onEdit: (() -> Unit)?,
     onUpdate: (() -> Unit)?,
     onPing: (() -> Unit)?,
@@ -113,6 +124,7 @@ private fun SubscriptionActions(
     onCopy: (() -> Unit)?
 ) {
     var deleteStage by remember(groupId) { mutableStateOf(0) }
+    val context = LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerLow),
@@ -129,6 +141,21 @@ private fun SubscriptionActions(
             )
         }
         onCopy?.let { SubBarAction(R.drawable.ic_copy, R.string.share_method_clipboard, onClick = it) }
+        // Remote links, so the sanitize check sits here too, not only at parse time.
+        supportUrl?.let { url ->
+            SubBarAction(
+                if (Utils.isTelegramLink(url)) R.drawable.ic_telegram_24dp else R.drawable.ic_feedback_24dp,
+                R.string.sub_info_open_support,
+                onClick = { Utils.openUri(context, url) },
+            )
+        }
+        webPageUrl?.let { url ->
+            SubBarAction(
+                R.drawable.ic_about_24dp,
+                R.string.sub_info_open_page,
+                onClick = { Utils.openUri(context, url) },
+            )
+        }
         onRemove?.let {
             SubBarAction(R.drawable.ic_delete_24dp, R.string.acc_delete,
                 tint = MaterialTheme.colorScheme.error, onClick = { deleteStage = 1 })

@@ -58,6 +58,9 @@ object AetherFmt : FmtBase() {
         config.aetherEch = queryParam["ech"] == "1"
         config.aetherEchDns = queryParam["ech_dns"]
         config.aetherEchDomain = queryParam["ech_domain"]
+        config.aetherApiAddress = queryParam["api_address"]
+        config.aetherApiSni = queryParam["api_sni"]
+        config.aetherApiHost = queryParam["api_host"]
         config.aetherMasqueSni = queryParam["masque_sni"]
         config.aetherDns = queryParam["dns"]
         config.aetherExitLoc = queryParam["exit_loc"]
@@ -125,6 +128,13 @@ object AetherFmt : FmtBase() {
             config.aetherMasqueSni?.takeIf { it.isNotBlank() }
                 ?.let { query["masque_sni"] = it }
         }
+        // The calls that register and renew the key go to the WARP API on every carrier.
+        config.aetherApiAddress?.takeIf { it.isNotBlank() }
+            ?.let { query["api_address"] = it }
+        config.aetherApiSni?.takeIf { it.isNotBlank() }
+            ?.let { query["api_sni"] = it }
+        config.aetherApiHost?.takeIf { it.isNotBlank() }
+            ?.let { query["api_host"] = it }
         if (protocol.twoHops) {
             AetherEndpoint.parse(config.aetherWiwOuter)?.let { query["outer"] = it.toString() }
             AetherEndpoint.parse(config.aetherWiwInner)?.let { query["inner"] = it.toString() }

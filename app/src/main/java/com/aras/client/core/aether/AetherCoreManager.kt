@@ -2,6 +2,7 @@ package com.aras.client.core.aether
 
 import android.content.Context
 import com.aras.client.AppConfig
+import com.aras.client.R
 import com.aras.client.dto.AetherEndpoint
 import com.aras.client.dto.AetherRange
 import com.aras.client.dto.entities.ProfileItem
@@ -24,11 +25,11 @@ import com.aras.client.util.LogUtil
 import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.Socket
 import java.util.Locale
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Owns the aether core process: one live session at a time, the command line a profile
@@ -57,6 +58,7 @@ object AetherCoreManager {
         process: Process,
         lines: LinkedBlockingQueue<String>,
         onOutput: (String) -> Unit,
+        onEnded: () -> Unit = {},
     ): Thread = Thread {
         try {
             process.inputStream.bufferedReader().forEachLine { line ->
@@ -68,6 +70,7 @@ object AetherCoreManager {
             // The core ended or the stream closed; the marker below still goes in.
         } finally {
             runCatching { lines.offer(EOF) }
+            runCatching { onEnded() }
         }
     }.apply {
         isDaemon = true
@@ -110,6 +113,21 @@ object AetherCoreManager {
     /** The option that names Tor's own listener. */
     const val TOR_BIND = "--tor-bind"
 
+    /**
+     * The options that name the HTTP proxies a command written by hand may open beside the SOCKS listeners: the core's
+     * own, Tor's and Psiphon's. The app names none of them, but the ports they name are the core's as well.
+     */
+    const val HTTP_PROXY = "--http-proxy"
+    const val TOR_HTTP = "--tor-http"
+    const val PSIPHON_HTTP = "--psiphon-http"
+
+    /**
+     * The ports the core's SOCKS listeners take where a command written by hand does not name them (aether cli.rs): its
+     * own 1819, Tor's 1820 and Psiphon's 1821. The HTTP proxies are off unless named, and the app's own commands name
+     * every listener they run.
+     */
+    internal val defaultListenerPorts = mapOf("--bind" to 1819, TOR_BIND to 1820, PSIPHON_BIND to 1821)
+
     /** The Psiphon client, run beside the core. */
     const val PSIPHON_BINARY_NAME = "libpsiphon-tunnel-core.so"
 
@@ -122,8 +140,33 @@ object AetherCoreManager {
     const val PSIPHON_CONFIG_ENV = "AETHER_PSIPHON_CONFIG"
     const val PSIPHON_DIR_ENV = "AETHER_PSIPHON_DIR"
 
-    private val psiphonReady = Regex("psiphon ready|proxy started: psiphon", RegexOption.IGNORE_CASE)
-    private val torReady = Regex("tor ready|proxy started: tor", RegexOption.IGNORE_CASE)
+    /**
+     * The core's word that Psiphon has a tunnel: "psiphon is ready". The start waits for it as well as for the
+     * greeting's answer where the app dials Psiphon: Psiphon's own listener answers the greeting before it has a
+     * tunnel. The core holds that listener itself and passes clients on to Psiphon only once it has said this word,
+     * so the answer comes with the word there.
+     */
+    private val psiphonReady = Regex("""psiphon is ready""")
+
+    /**
+     * The core's word that it did not start the session for want of an ECH key: ECH is on, and it had no key it
+     * could offer, so it stopped rather than send the server name in the clear.
+     */
+    private val noEchKey = Regex("""ECH is on but there is no ECH key to offer""")
+
+    /** The label an error of the core starts its words with, the kind it is of (aether error.rs, AetherError). */
+    private val errorLabel = Regex("""^(?:io|quic|h3|tls|ech|masque|capsule|api|other|identity refused): """)
+
+    /** The levels at which the core writes its info lines, the ready word among them. */
+    private val infoLevels = setOf("info", "debug", "trace")
+
+    private val logLevels = setOf("ERROR", "WARN", "INFO", "DEBUG", "TRACE")
+
+    /**
+     * The loopback SOCKS listeners are asked about their greeting over at most one connection
+     * per port at a time; see [SocksAnswers] for why a plain connect is not enough.
+     */
+    private val socksAnswers = SocksAnswers(PROBE_TIMEOUT_MS)
 
     /** The work directory, shared with [AetherIdentityManager]. */
     const val WORK_DIR = "aether"
@@ -137,8 +180,19 @@ object AetherCoreManager {
         return if (sessionPort + 1 in 1..65535) sessionPort + 1 else sessionPort - 1
     }
 
-    private val session = AtomicReference<AetherCore?>(null)
-    private var process: Process? = null
+    @Volatile
+    private var session: Session? = null
+
+    /** Whether the session core that ended on its own last stopped for want of an ECH key; see [stoppedMessage]. */
+    @Volatile
+    private var stoppedForEchKey = false
+
+    /**
+     * The core's words that Tor or Psiphon inside the tunnel had ended, when that is why the app ended the session
+     * core that ended last; see [chainEndWords] and [stoppedMessage].
+     */
+    @Volatile
+    private var stoppedChainEnd: String? = null
 
     val socksPort: Int get() = AppConfig.PORT_AETHER_SOCKS.toInt()
 
@@ -200,10 +254,9 @@ object AetherCoreManager {
                 .takeUnless { it == AetherObfuscation.AUTO }
                 ?.let { addAll(listOf("--noize", it.type)) }
             addAll(listOf("--ip", AetherIpVersion.fromString(profile.aetherIpVersion).type))
-            profile.aetherDns?.takeIf { it.isNotBlank() }?.let { addAll(listOf("--dns", it)) }
+            settingValue(profile.aetherDns)?.let { addAll(listOf("--dns", it)) }
             // A scan keeps the exit rule too, so it ends on an endpoint the session accepts.
-            profile.aetherExitLoc?.takeIf { it.isNotBlank() }
-                ?.let { addAll(listOf("--exit-loc", it)) }
+            settingValue(profile.aetherExitLoc)?.let { addAll(listOf("--exit-loc", it)) }
 
             // The exit node: the core's own dialer points at the exit-node
             // SOCKS inbound of the app's Xray config (CoreConfigManager's
@@ -237,15 +290,19 @@ object AetherCoreManager {
             // are configurable; an explicit key stays a job for the raw command.
             if (protocol.overMasque && profile.aetherEch == true) {
                 addAll(listOf("--ech", "auto"))
-                profile.aetherEchDns?.takeIf { it.isNotBlank() }
-                    ?.let { addAll(listOf("--ech-dns", it)) }
-                profile.aetherEchDomain?.takeIf { it.isNotBlank() }
-                    ?.let { addAll(listOf("--ech-domain", it)) }
+                settingValue(profile.aetherEchDns)?.let { addAll(listOf("--ech-dns", it)) }
+                settingValue(profile.aetherEchDomain)?.let { addAll(listOf("--ech-domain", it)) }
             }
             // aether 2.3: the name the MASQUE handshakes put in their ClientHello
             // (the :authority of the CONNECT stays cloudflareaccess.com).
-            profile.aetherMasqueSni?.takeIf { it.isNotBlank() && protocol.overMasque }
+            settingValue(profile.aetherMasqueSni)?.takeIf { protocol.overMasque }
                 ?.let { addAll(listOf("--masque-sni", it)) }
+            // aether 2.3.7: where the calls to the WARP API (register and renew)
+            // go, the server name of their ClientHello and their HTTP host; each
+            // left blank follows the next, as the core has them.
+            settingValue(profile.aetherApiAddress)?.let { addAll(listOf("--api-address", it)) }
+            settingValue(profile.aetherApiSni)?.let { addAll(listOf("--api-sni", it)) }
+            settingValue(profile.aetherApiHost)?.let { addAll(listOf("--api-host", it)) }
             // The ClientHello fingerprint (PattNG's four choices); the core's
             // own TLS 1.2 suites and GREASE behaviour follow the chosen client.
             if (protocol.overMasque) {
@@ -282,6 +339,7 @@ object AetherCoreManager {
                     AetherTorBridges.FIRST -> add("--tor-bridges")
                     AetherTorBridges.NEVER -> add("--no-tor-bridges")
                     AetherTorBridges.OWN -> AetherFmt.bridgeLines(profile.aetherTorBridgeLines)
+                        .mapNotNull(::settingValue)
                         .forEach { addAll(listOf("--tor-bridge", it)) }
                 }
                 if (AetherTorBridges.fromString(profile.aetherTorBridges) in
@@ -303,19 +361,21 @@ object AetherCoreManager {
             if (psiphon != AetherPsiphon.OFF) {
                 val shape = AetherPsiphonMode.fromString(profile.aetherPsiphonMode)
                 addAll(listOf("--psiphon-mode", shape.type))
-                // The CDN lists feed the fronted transports alone, which direct never uses.
-                val cdnIps = profile.aetherPsiphonCdnIps
-                    ?.takeIf { it.isNotBlank() && shape != AetherPsiphonMode.DIRECT }
+                // The CDN lists feed the fronted transports alone, which direct never uses; the
+                // server names count only beside an IP list of one's own, since the built-in list
+                // comes whole.
+                val cdnIps = settingValue(profile.aetherPsiphonCdnIps)?.takeIf { shape != AetherPsiphonMode.DIRECT }
                 cdnIps?.let { addAll(listOf("--psiphon-cdn-ips", it)) }
                 if (cdnIps != null) {
-                    profile.aetherPsiphonCdnSni?.takeIf { it.isNotBlank() }
-                        ?.let { addAll(listOf("--psiphon-cdn-sni", it)) }
+                    settingValue(profile.aetherPsiphonCdnSni)?.let { addAll(listOf("--psiphon-cdn-sni", it)) }
                 }
-                // aether 2.1 has no --psiphon-cdn-sets: which edge lists the client
-                // tries is decided by --psiphon-mode and its own list. The profile
-                // still carries the field so a link from a newer client round-trips.
-                profile.aetherPsiphonRegion?.takeIf { it.isNotBlank() }
-                    ?.let { addAll(listOf("--psiphon-region", it)) }
+                // aether 2.3.5 and later take the list again: which edge lists built into the
+                // Psiphon client the fronting scan tries, beside addresses of one's own.
+                if (shape != AetherPsiphonMode.DIRECT) {
+                    AetherPsiphonCdnSet.join(AetherPsiphonCdnSet.parse(profile.aetherPsiphonCdnSets))
+                        ?.let { addAll(listOf("--psiphon-cdn-sets", it)) }
+                }
+                settingValue(profile.aetherPsiphonRegion)?.let { addAll(listOf("--psiphon-region", it)) }
 
             }
             addAll(listOf("--log-level", logLevel))
@@ -331,8 +391,18 @@ object AetherCoreManager {
         else -> DEFAULT_LOG_LEVEL
     }
 
+    /**
+     * The text of a profile setting as the value of an option of the core: trimmed, and null when it is blank or starts
+     * with '-'. No value of these settings starts so, and one that did would read as an option of its own wherever the
+     * app looks options up word by word: a link carrying dns=--upstream would leave the core without the upstream the
+     * app gives it, so that it dialled out around Xray.
+     */
+    internal fun settingValue(value: String?): String? =
+        value?.trim()?.takeUnless { it.isEmpty() || it.startsWith('-') }
+
     // ------------------------------------------------------------- argv tools
 
+    /** [arguments] without every [option] and the value after it. */
     internal fun withoutOption(arguments: List<String>, option: String): List<String> {
         val out = mutableListOf<String>()
         var index = 0
@@ -347,23 +417,212 @@ object AetherCoreManager {
         return out
     }
 
-    internal fun withListener(arguments: List<String>, port: Int): List<String> {
-        val index = arguments.indexOf("--bind")
-        if (index < 0 || index + 1 >= arguments.size) return arguments
-        return arguments.toMutableList().apply { this[index + 1] = "${AppConfig.LOOPBACK}:$port" }
+    /** [arguments] with the listener the app dials on the loopback port [port], whatever they named there. */
+    internal fun withListener(arguments: List<String>, port: Int): List<String> =
+        withoutOption(arguments, "--bind") + listOf("--bind", "${AppConfig.LOOPBACK}:$port")
+
+    /** The value after the last [flag] in [arguments]; the last one is the one the core keeps. */
+    internal fun valueAfter(arguments: List<String>, flag: String): String? =
+        arguments.lastIndexOf(flag).takeIf { it >= 0 }?.let { arguments.getOrNull(it + 1) }
+
+    /** The port of the address after the listener option [flag], as the core reads it; null when there is none. */
+    internal fun portAfter(arguments: List<String>, flag: String): Int? =
+        listenerAddressAfter(arguments, flag)?.substringAfterLast(':', "")?.toIntOrNull()
+
+    /**
+     * The address after the listener option [flag] in [arguments], as the core reads it: its own listener's (--bind) as
+     * written, Tor's, Psiphon's and the HTTP proxies' trimmed (aether lib.rs, tor.rs and psiphon.rs); null when there is
+     * none. Every reader of a listener's address or port goes by it, so that the app and the core agree on it.
+     */
+    internal fun listenerAddressAfter(arguments: List<String>, flag: String): String? =
+        valueAfter(arguments, flag)?.let { if (flag == "--bind") it else it.trim(::isRustWhitespace) }
+
+    /** The address of the listener the app dials, see [listenerFlagOf], as the core reads it; null when none is named. */
+    internal fun listenerAddressOf(arguments: List<String>): String? = listenerAddressAfter(arguments, listenerFlagOf(arguments))
+
+    /** The port of the listener the app dials; null when [arguments] name no address for it. */
+    internal fun listenerPortOf(arguments: List<String>): Int? = listenerAddressOf(arguments)?.substringAfterLast(':', "")?.toIntOrNull()
+
+    /**
+     * The option naming the listener the app dials: Psiphon's when Psiphon runs inside the tunnel, Tor's when Tor does,
+     * the core's own otherwise. Both inside at once is refused by the editor; a command written that way is dialled on
+     * Psiphon's.
+     */
+    internal fun listenerFlagOf(arguments: List<String>): String = when {
+        // Alone, Tor or Psiphon serves the core's own listener, and the core starts nothing else (aether lib.rs).
+        aloneOf(arguments) != null -> "--bind"
+        psiphonModeOf(arguments) == AetherPsiphon.CHAIN -> PSIPHON_BIND
+        torModeOf(arguments) == AetherTor.CHAIN -> TOR_BIND
+        else -> "--bind"
     }
 
-    internal fun listenerPortOf(arguments: List<String>): Int? {
-        val index = arguments.indexOf("--bind")
-        if (index < 0 || index + 1 >= arguments.size) return null
-        return arguments[index + 1].substringAfterLast(':').toIntOrNull()
+    /**
+     * The carrier [arguments] runs alone, with no tunnel: Tor, before Psiphon when both are asked to, as the core starts
+     * them and [aloneOf] names them; null when neither runs alone. The core then starts nothing else.
+     */
+    internal fun aloneOf(arguments: List<String>): String? = when {
+        torModeOf(arguments) == AetherTor.ONLY -> TOR_NAME
+        psiphonModeOf(arguments) == AetherPsiphon.ONLY -> PSIPHON_NAME
+        else -> null
     }
 
-    internal fun protocolOf(arguments: List<String>): AetherProtocol {
-        val index = arguments.indexOf("--protocol")
-        if (index < 0 || index + 1 >= arguments.size) return AetherProtocol.WIREGUARD
-        return AetherProtocol.fromString(arguments[index + 1])
+    /** The carriers as the session messages name them, beside the names of [AetherProtocol]. */
+    private const val TOR_NAME = "TOR"
+    private const val PSIPHON_NAME = "PSIPHON"
+
+    /** Where Tor stands in the tunnel [arguments] run, read the way the core reads it: the last mode flag wins. */
+    internal fun torModeOf(arguments: List<String>): AetherTor = arguments.fold(AetherTor.OFF) { mode, word ->
+        when (word) {
+            "--tor" -> AetherTor.CHAIN
+            "--tor-reverse" -> AetherTor.REVERSE
+            "--tor-only" -> AetherTor.ONLY
+            else -> mode
+        }
     }
+
+    /** Where Psiphon stands in the tunnel [arguments] run, read the way the core reads it: the last mode flag wins. */
+    internal fun psiphonModeOf(arguments: List<String>): AetherPsiphon = arguments.fold(AetherPsiphon.OFF) { mode, word ->
+        when (word) {
+            "--psiphon" -> AetherPsiphon.CHAIN
+            "--psiphon-reverse" -> AetherPsiphon.REVERSE
+            "--psiphon-only" -> AetherPsiphon.ONLY
+            else -> mode
+        }
+    }
+
+    /** The protocol [arguments] select, read the way the core reads it: the last of --protocol wins. */
+    internal fun protocolOf(arguments: List<String>): AetherProtocol =
+        valueAfter(arguments, "--protocol")?.let { AetherProtocol.fromString(it) } ?: AetherProtocol.WIREGUARD
+
+    /**
+     * Whitespace as the core trims it, Rust's char::is_whitespace, the Unicode White_Space property. Kotlin's trim()
+     * takes U+001C to U+001F as well and leaves U+0085 out, so an address it trims could be one the core does not.
+     */
+    internal fun isRustWhitespace(c: Char): Boolean =
+        c in '\u0009'..'\u000D' || c == ' ' || c == '\u0085' || c == '\u00A0' || c == '\u1680' || c in '\u2000'..'\u200A' ||
+            c == '\u2028' || c == '\u2029' || c == '\u202F' || c == '\u205F' || c == '\u3000'
+
+    /**
+     * True when the core takes [address] for a listener, as Rust's SocketAddr reads it: an IPv4 address, or an IPv6 one
+     * in brackets, then a colon and a port from 0 to 65535, leading zeros allowed. A host name is no such address.
+     */
+    internal fun isSocketAddress(address: String): Boolean {
+        val colon = address.lastIndexOf(':')
+        if (colon <= 0 || !isDecimalUpTo(address.substring(colon + 1), 65_535)) return false
+        val host = address.substring(0, colon)
+        return if (host.startsWith('[') && host.endsWith(']')) isIpv6Literal(host.substring(1, host.length - 1)) else isIpv4Literal(host)
+    }
+
+    /** Four numbers from 0 to 255, joined by dots, none with a leading zero, as Rust reads an IPv4 address. */
+    internal fun isIpv4Literal(text: String): Boolean {
+        val parts = text.split('.')
+        return parts.size == 4 && parts.all { part ->
+            part.isNotEmpty() && part.length <= 3 && part.all { it in '0'..'9' } && (part == "0" || !part.startsWith('0')) &&
+                part.toInt() <= 255
+        }
+    }
+
+    /**
+     * An IPv6 address as Rust reads one: up to eight groups of one to four hex digits joined by colons, one "::" at most
+     * standing for one or more groups of zeros, an IPv4 address in place of the last two groups, and a scope after a "%",
+     * a number a u32 holds.
+     */
+    internal fun isIpv6Literal(text: String): Boolean {
+        val address = text.substringBefore('%')
+        if ('%' in text && !isDecimalUpTo(text.substringAfter('%'), 4_294_967_295)) return false
+        val halves = address.split("::")
+        if (halves.size > 2) return false
+        val head = if (halves[0].isEmpty()) emptyList() else halves[0].split(':')
+        val tail = if (halves.size < 2 || halves[1].isEmpty()) emptyList() else halves[1].split(':')
+        val groups = head + tail
+        var count = 0
+        for ((index, group) in groups.withIndex()) {
+            count += when {
+                '.' in group -> if (index == groups.lastIndex && isIpv4Literal(group) && (halves.size == 1 || tail.isNotEmpty())) 2 else return false
+                group.isNotEmpty() && group.length <= 4 && group.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' } -> 1
+                else -> return false
+            }
+        }
+        return if (halves.size == 2) count <= 7 else count == 8
+    }
+
+    /** One or more ASCII digits whose value, leading zeros and all, is at most [max], as Rust reads a port or a scope. */
+    private fun isDecimalUpTo(text: String, max: Long): Boolean {
+        if (text.isEmpty() || !text.all { it in '0'..'9' }) return false
+        val significant = text.trimStart('0')
+        return significant.length <= 10 && (significant.isEmpty() || significant.toLong() <= max)
+    }
+
+    /**
+     * Whether a listener bound on [host], an IPv4 address, or an IPv6 one in brackets, as [isSocketAddress] takes it,
+     * answers a connection to 127.0.0.1, where the app dials the core: 127.0.0.1 itself and every IPv4 address, 0.0.0.0;
+     * and, since Android, as Linux, opens an IPv6 socket to IPv4 as well unless told otherwise, which the core never
+     * does (tokio and mio set no IPV6_V6ONLY), every address of IPv6, ::, and the IPv4-mapped spellings of those two.
+     */
+    internal fun reachesLoopback(host: String): Boolean {
+        if (!host.startsWith('[')) return host == AppConfig.LOOPBACK || host == "0.0.0.0"
+        val groups = ipv6Groups(host.removePrefix("[").removeSuffix("]").substringBefore('%')) ?: return false
+        if (groups.all { it == 0 }) return true
+        val mapped = (0..4).all { groups[it] == 0 } && groups[5] == 0xFFFF
+        return mapped && ((groups[6] == 0x7F00 && groups[7] == 0x0001) || (groups[6] == 0 && groups[7] == 0))
+    }
+
+    /** The eight 16-bit groups of the IPv6 address [text], as [isIpv6Literal] takes it without a scope; null for none. */
+    internal fun ipv6Groups(text: String): IntArray? {
+        if ('%' in text || !isIpv6Literal(text)) return null
+        fun groupsOf(part: String): List<Int> = if (part.isEmpty()) emptyList() else part.split(':').flatMap { group ->
+            if ('.' in group) {
+                val octets = group.split('.').map { it.toInt() }
+                listOf((octets[0] shl 8) or octets[1], (octets[2] shl 8) or octets[3])
+            } else {
+                listOf(group.toInt(16))
+            }
+        }
+        val halves = text.split("::")
+        val head = groupsOf(halves[0])
+        val tail = if (halves.size == 2) groupsOf(halves[1]) else emptyList()
+        val zeros = if (halves.size == 2) 8 - head.size - tail.size else 0
+        return (head + List(zeros) { 0 } + tail).toIntArray()
+    }
+
+    // ------------------------------------------------------------- session ports
+
+    /** A loopback port a session takes as it starts, one of its core's listeners. */
+    internal data class SessionPort(val port: Int, val secondary: Boolean = false)
+
+    /** Why a start refuses its session on [core], in the words the caller reports; null when it may start. */
+    internal fun problemsOf(core: AetherCore, free: (SessionPort) -> Boolean = ::isFree): String? {
+        core.invalidListener?.let { return "The aether command gives $it an address the core does not take; write an IP address and a port, such as 127.0.0.1:20808" }
+        core.unreachableListener?.let { return "The aether command gives $it an address the app does not connect to: the app connects to the core on 127.0.0.1" }
+        core.sharedPort?.let { return "The aether command names port $it for two of the core's listeners; give each listener a port of its own" }
+        core.ports.firstOrNull { !free(SessionPort(it)) }?.let {
+            return "Port $it, which the aether core listens on, is in use by another app; change the listen port in the settings, or the ports of the command"
+        }
+        return null
+    }
+
+    /**
+     * True when [port] can be bound on the loopback address now, over TCP, the way the core's SOCKS
+     * listeners bind it. The probe reuses the address as the listeners of the core do, so a connection
+     * of the previous session still in TIME_WAIT does not count; a listener does.
+     */
+    internal fun isFree(port: SessionPort): Boolean = try {
+        if (port.port in 1..65535) {
+            ServerSocket().use { socket ->
+                socket.reuseAddress = true
+                socket.bind(InetSocketAddress(AppConfig.LOOPBACK, port.port))
+            }
+            true
+        } else {
+            false
+        }
+    } catch (_: IOException) {
+        false
+    }
+
+    /** The first of [ports], in their order, that [free] says cannot be bound; null when all can. */
+    internal fun firstTaken(ports: List<SessionPort>, free: (SessionPort) -> Boolean = ::isFree): SessionPort? =
+        ports.firstOrNull { !free(it) }
 
     // ------------------------------------------------------------- process
 
@@ -414,7 +673,7 @@ object AetherCoreManager {
         // between lines - so a core that says nothing would sit here long past it, with
         // the screen showing nothing at all.
         val lines = LinkedBlockingQueue<String>()
-        val reader = pumpOutput(process, lines) {}
+        val reader = pumpOutput(process, lines, {})
 
         return try {
             val deadline = System.currentTimeMillis() + timeoutMs
@@ -560,15 +819,22 @@ object AetherCoreManager {
         psiphonBinary(context).canExecute() && transportBinary(context).canExecute()
 
     /**
-     * Starts the core and waits for its listener to answer.
+     * Starts a core on [arguments]. It uses, or registers where there are none, the keys in the
+     * identity folder.
      *
+     * @param context the app's
+     * @param core the profile's core, whose listener the app dials
      * @param onOutput every line the core writes, already relayed into the app log
+     * @param onExit called once the core has ended on its own and nothing stopped it first;
+     *   the [String] carries the core's words that Tor or Psiphon inside the tunnel had ended,
+     *   where that is why, see [chainEndWords]
      * @return true when the listener came up within the wait
      */
     fun start(
         context: Context,
         core: AetherCore,
         onOutput: (String) -> Unit,
+        onExit: (String?) -> Unit = {},
     ): Boolean {
         stop()
         reapStale()
@@ -577,36 +843,163 @@ object AetherCoreManager {
             LogUtil.e(AppConfig.TAG, "AetherCore: ${exe.name} is not present or not executable")
             return false
         }
-        val builder = ProcessBuilder(listOf(exe.absolutePath) + core.arguments)
-            .directory(workDir(context))
-            .redirectErrorStream(true)
-        builder.environment().putAll(coreEnvironment(context, markSession = true))
+        stoppedForEchKey = false
+        stoppedChainEnd = null
         val started = try {
-            builder.start()
+            ProcessBuilder(listOf(exe.absolutePath) + core.arguments)
+                .directory(workDir(context))
+                .redirectErrorStream(true)
+                .apply { environment().putAll(coreEnvironment(context, markSession = true)) }
+                .start()
         } catch (e: IOException) {
             LogUtil.e(AppConfig.TAG, "AetherCore: failed to launch the core", e)
             return false
         }
-        process = started
-        session.set(core)
+        val next = Session(core.port, core.arguments, started)
+        session = next
 
         // The session core runs until it is stopped, so its output is drained in the
         // background; reading it here would block the start forever.
-        pumpOutput(started, LinkedBlockingQueue(), onOutput)
+        pumpOutput(started, LinkedBlockingQueue(), { line ->
+            onOutput(line)
+            watch(next, line)
+        }) { ended(next, onExit) }
 
-        val ready = awaitListener(core.port)
+        val ready = awaitListener(next)
         if (!ready) {
-            LogUtil.e(AppConfig.TAG, "AetherCore: listener on ${core.port} never came up")
+            LogUtil.e(AppConfig.TAG, "AetherCore: listener on ${next.port} never came up")
             stop()
         }
         return ready
     }
 
-    private fun awaitListener(port: Int): Boolean {
+    /**
+     * Reads, over the drain thread, the core's words that the listener the app dials is ready:
+     * the word that Psiphon has its tunnel where the app dials Psiphon, and that it stopped for
+     * want of an ECH key. And the core's words that Tor or Psiphon inside the tunnel had ended:
+     * the core ends itself on that line (aether lib.rs, watch_chain), and the session stops with
+     * it rather than wait for Xray to notice the dead listener.
+     */
+    private fun watch(target: Session, line: String) {
+        if (line.isBlank()) return
+        if (psiphonReady.containsMatchIn(line)) target.wordSeen = true
+        if (isNoEchKeyWord(line)) target.noEchKey = true
+        if (target.chainEnd == null && session === target) {
+            chainEndWords(line, target.arguments)?.let { words ->
+                target.chainEnd = words
+                LogUtil.w(AppConfig.TAG, "AetherCore: ending the session core, Tor or Psiphon inside the tunnel has ended: $words")
+                runCatching { target.process.destroy() }
+            }
+        }
+    }
+
+    /**
+     * Reports a session core that ended, calling [onExit] where the caller asked for it: a core
+     * the app stopped or a start that replaced it has no such report to make, look at [session].
+     */
+    private fun ended(target: Session, onExit: (String?) -> Unit) {
+        if (session !== target) return
+        stoppedForEchKey = target.noEchKey
+        stoppedChainEnd = target.chainEnd
+        if (target.chainEnd != null) {
+            LogUtil.e(AppConfig.TAG, "AetherCore: the session core was ended, Tor or Psiphon inside the tunnel had ended")
+        } else {
+            LogUtil.e(AppConfig.TAG, "AetherCore: the session core exited on its own")
+        }
+        runCatching { onExit(target.chainEnd) }
+    }
+
+    /**
+     * True when the listener the app dials is Psiphon's, inside the tunnel or alone: it answers the
+     * greeting before it carries anything, so readiness needs the core's word as well.
+     */
+    internal fun readyNeedsWord(arguments: List<String>): Boolean = when (aloneOf(arguments)) {
+        PSIPHON_NAME -> true
+        TOR_NAME -> false
+        else -> psiphonModeOf(arguments) == AetherPsiphon.CHAIN
+    }
+
+    /** True when [line] is the core's word that the listener the app dials carries traffic now. */
+    internal fun isReadyWord(line: String): Boolean = psiphonReady.containsMatchIn(line)
+
+    /** True when [line] is the core's word that it stopped for want of an ECH key; see [noEchKey]. */
+    internal fun isNoEchKeyWord(line: String): Boolean = noEchKey.containsMatchIn(line)
+
+    /**
+     * The core's words, as "tor: ..." or "psiphon: ...", when [line] says that Tor or Psiphon inside the tunnel, whose
+     * listener a session started with [arguments] is dialled on, has ended or could not start; null for any other line,
+     * and for a session dialled on the core's own listener. The core logs it and ends (aether lib.rs, watch_chain:
+     * "[-] {name}: {e}" at the error level under the target "aether"), and the session stops with these words. The
+     * label of the error's kind, "other: " or "io: ", is left out of the words.
+     */
+    internal fun chainEndWords(line: String, arguments: List<String>): String? {
+        val header = logHeader(line.trim()) ?: return null
+        if (header[1] != "ERROR" || header[2] != "aether") return null
+        val carrier = when (listenerFlagOf(arguments)) {
+            TOR_BIND -> "tor"
+            PSIPHON_BIND -> "psiphon"
+            else -> return null
+        }
+        val message = outputMessage(line)
+        val prefix = "[-] $carrier: "
+        if (!message.startsWith(prefix)) return null
+        return "$carrier: " + message.removePrefix(prefix).replaceFirst(errorLabel, "")
+    }
+
+    /** True when the SOCKS server on the loopback [port] answers the greeting; see [SocksAnswers]. */
+    internal fun answersSocks(port: Int): Boolean = socksAnswers.answers(port)
+
+    /** True when a core started with [arguments] writes its info lines, the ready word among them. */
+    internal fun showsInfo(arguments: List<String>): Boolean =
+        "--verbose" in arguments || (valueAfter(arguments, "--log-level") ?: DEFAULT_LOG_LEVEL) in infoLevels
+
+    /**
+     * What to tell the user of the session core that ended on its own last, with [noEchKey] when it ended for want of
+     * an ECH key, and [chainEndWords] words as [chainEnded] where Tor or Psiphon inside the tunnel had ended.
+     */
+    internal fun stoppedMessage(noEchKey: Boolean, chainEnded: Boolean): Int = when {
+        chainEnded -> R.string.aether_core_stopped_chain_ended
+        noEchKey -> R.string.aether_core_stopped_no_ech_key
+        else -> R.string.aether_core_stopped
+    }
+
+    /** What to tell the user of the session core that ended on its own last, in the words it ended with. */
+    fun stoppedMessage(context: Context): String =
+        context.getString(stoppedMessage(stoppedForEchKey, stoppedChainEnd != null)).let { message ->
+            val chainEnd = stoppedChainEnd
+            if (chainEnd != null) context.getString(R.string.aether_core_stopped_chain_ended, chainEnd) else message
+        }
+
+    /** The header a log line starts with: [time LEVEL target], read as its fields; null where the line carries none. */
+    private fun logHeader(line: String): List<String>? {
+        if (!line.startsWith('[')) return null
+        val headerEnd = line.indexOf(']').takeIf { it > 0 } ?: return null
+        return line.substring(1, headerEnd)
+            .split(' ')
+            .filter(String::isNotEmpty)
+            .takeIf { it.size >= 3 && it[1] in logLevels }
+    }
+
+    /** A log line without its header, the words of the core itself. */
+    private fun outputMessage(line: String): String {
+        val text = line.trim()
+        return if (logHeader(text) != null) text.substringAfter(']').trim() else text
+    }
+
+    private fun awaitListener(target: Session): Boolean {
         val deadline = System.currentTimeMillis() + MAX_READY_WAIT_MS
+        val needsWord = readyNeedsWord(target.arguments)
+        val wearsInfo = showsInfo(target.arguments)
         while (System.currentTimeMillis() < deadline) {
-            if (probe(port)) return true
-            if (process?.isAlive == false) return false
+            if (session !== target) return false
+            // A quieter core never writes the ready word; the listener alone decides then.
+            if (socksAnswers.answers(target.port) && (!needsWord || !wearsInfo || target.wordSeen)) return true
+            val alive = try {
+                target.process.isAlive
+            } catch (_: IllegalStateException) {
+                false
+            }
+            if (!alive) return false
             try {
                 Thread.sleep(READY_POLL_MS)
             } catch (e: InterruptedException) {
@@ -643,7 +1036,7 @@ object AetherCoreManager {
         val startedHere = running() == null
         if (startedHere) {
             val core = AetherCore.of(profile)
-            if (!start(context, core) { }) {
+            if (!start(context, core, onOutput = {})) {
                 stop()
                 error("The aether core did not start; the test cannot reach the tunnel")
             }
@@ -686,17 +1079,40 @@ object AetherCoreManager {
         }
     }
 
-    /** The core currently running, or null. */
-    fun running(): AetherCore? = session.get()?.takeIf { probe(it.port) }
+    /** The core of the running session, or null without one still alive. */
+    fun running(): AetherCore? =
+        session?.takeIf { try { it.process.isAlive } catch (_: IllegalStateException) { false } && probe(it.port) }?.core
 
     fun stop() {
-        process?.let { running ->
-            runCatching { running.destroy() }
-            if (!running.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                runCatching { running.destroyForcibly() }
+        val current = session
+        session = null
+        current?.let {
+            runCatching { it.process.destroy() }
+            try {
+                it.process.waitFor(2, TimeUnit.SECONDS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
             }
         }
-        process = null
-        session.set(null)
+    }
+
+    /**
+     * A session core: the core of it, the port the app dials, the process, and what the output
+     * drain has read that readiness and the way the session ended go by.
+     */
+    private class Session(val port: Int, val arguments: List<String>, val process: Process) {
+        /** Whether the core said that Psiphon has its tunnel, where the app dials Psiphon. */
+        @Volatile
+        var wordSeen: Boolean = false
+
+        /** Whether the core said it stopped for want of an ECH key. */
+        @Volatile
+        var noEchKey: Boolean = false
+
+        /** The core's words that Tor or Psiphon inside the tunnel had ended; see [chainEndWords]. */
+        @Volatile
+        var chainEnd: String? = null
+
+        val core: AetherCore = AetherCore(arguments)
     }
 }

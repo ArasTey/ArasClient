@@ -41,11 +41,16 @@ fun FirstRunSetupDialog(onDismiss: () -> Unit) {
     var autoScroll by remember {
         mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true))
     }
-    var showSubMessages by remember {
-        mutableStateOf(
-            MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true) ||
-                MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
-        )
+    var showSubInfo by remember {
+        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true))
+    }
+    var showSubAnnouncement by remember {
+        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, false))
+    }
+    // Asking here too: with this touched, the one-time question never shows
+    // separately after onboarding.
+    var showFreeSub by remember {
+        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_FREE_SUB, true))
     }
 
     AlertDialog(
@@ -93,12 +98,28 @@ fun FirstRunSetupDialog(onDismiss: () -> Unit) {
                     }
                 )
                 SetupToggle(
-                    label = stringResource(R.string.setup_show_sub_messages),
-                    checked = showSubMessages,
+                    label = stringResource(R.string.setup_show_sub_info),
+                    checked = showSubInfo,
                     onChange = {
-                        showSubMessages = it
+                        showSubInfo = it
                         MmkvManager.encodeSettings(AppConfig.PREF_SHOW_SUB_INFO, it)
+                    }
+                )
+                SetupToggle(
+                    label = stringResource(R.string.setup_show_sub_announcement),
+                    checked = showSubAnnouncement,
+                    onChange = {
+                        showSubAnnouncement = it
                         MmkvManager.encodeSettings(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, it)
+                    }
+                )
+                SetupToggle(
+                    label = stringResource(R.string.setup_show_free_sub),
+                    checked = showFreeSub,
+                    onChange = {
+                        showFreeSub = it
+                        MmkvManager.encodeSettings(AppConfig.PREF_SHOW_FREE_SUB, it)
+                        MmkvManager.encodeSettings(AppConfig.PREF_FREE_SUB_ASKED, true)
                     }
                 )
             }

@@ -21,6 +21,10 @@ object SettingsChangeManager {
         AppConfig.PREF_UI_MODE_NIGHT,
         AppConfig.PREF_DYNAMIC_COLOR,
         AppConfig.PREF_IS_BOOTED,
+        // What the subscription panels' headers render on screen: pure display.
+        AppConfig.PREF_SHOW_SUB_INFO,
+        AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT,
+        AppConfig.PREF_SHOW_FREE_SUB,
     )
 
     /**

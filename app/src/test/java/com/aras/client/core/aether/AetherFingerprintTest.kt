@@ -2,6 +2,8 @@ package com.aras.client.core.aether
 
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.AetherFingerprint
+import com.aras.client.enums.CHROME_EIGHT_SIGALGS
+import com.aras.client.enums.CHROME_TRUST_ANCHORS
 import com.aras.client.enums.EConfigType
 import com.aras.client.fmt.AetherFmt
 import org.junit.Assert.assertEquals
@@ -10,10 +12,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The TLS handshake fingerprint (PattNG's four choices): its TLS 1.2 suites reach
- * the core as --tls-ciphers, GREASE is left out where the captured client sends
- * none, and the value survives the aether:// link round trip the way PattNG's
- * links write it.
+ * The TLS handshake fingerprints, the clients PattNG captures: the whole ClientHello
+ * each names — suites, groups, key shares and signature algorithms in their order —
+ * reaches the core as aether 2.4's TLS options, the extensions each client sends or
+ * does not as --enable/--disable flags, and the value survives the aether:// link
+ * round trip the way PattNG's links write it.
  */
 class AetherFingerprintTest {
 
@@ -42,9 +45,61 @@ class AetherFingerprintTest {
             }
         // The wire names PattNG writes into links.
         assertEquals(
-            listOf("chrome", "firefox", "semi-python", "go"),
+            listOf("chrome", "chrome-120", "firefox", "semi-python", "go"),
             AetherFingerprint.entries.map { it.type },
         )
+    }
+
+    @Test
+    fun `chrome names its whole ClientHello for the core to send`() {
+        val args = AetherFingerprint.CHROME.arguments
+
+        assertEquals("X25519MLKEM768:X25519:P-256:P-384", args.valueOf("--tls-groups"))
+        assertTrue(args.valueOf("--tls-sigalgs")!!.startsWith("mldsa44:"))
+        assertTrue("--enable-grease-sigalgs" in args)
+        assertEquals("brotli", args.valueOf("--tls-cert-compression"))
+        assertEquals("new", args.valueOf("--tls-alps"))
+        assertEquals(CHROME_TRUST_ANCHORS, args.valueOf("--tls-trust-anchors"))
+        assertEquals("6000", args.valueOf("--tls-server-padding"))
+        assertEquals("--enable-ech-grease" in args, AetherFingerprint.CHROME.echGrease)
+        assertTrue("--disable-ocsp-stapling" !in args)
+    }
+
+    @Test
+    fun `chrome 120 is the older captured hello`() {
+        val args = AetherFingerprint.CHROME_120.arguments
+
+        assertEquals("X25519:P-256:P-384", args.valueOf("--tls-groups"))
+        assertEquals(CHROME_EIGHT_SIGALGS, args.valueOf("--tls-sigalgs"))
+        assertEquals("old", args.valueOf("--tls-alps"))
+        assertNull(args.valueOf("--tls-trust-anchors"))
+        assertNull(args.valueOf("--tls13-ciphers"))
+    }
+
+    @Test
+    fun `firefox orders tls thirteen as its own client does`() {
+        val args = AetherFingerprint.FIREFOX.arguments
+
+        assertEquals(
+            "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384",
+            args.valueOf("--tls13-ciphers"),
+        )
+        assertEquals("X25519MLKEM768:X25519:P-256", args.valueOf("--tls-key-shares"))
+        assertEquals("zlib:brotli:zstd", args.valueOf("--tls-cert-compression"))
+        assertTrue("--disable-session-ticket" in args)
+        assertTrue("--disable-extension-permutation" in args)
+    }
+
+    @Test
+    fun `semi python asks neither ocsp nor sct, and go neither more of tls 13`() {
+        val python = AetherFingerprint.SEMI_PYTHON.arguments
+        assertTrue("--disable-ocsp-stapling" in python)
+        assertTrue("--disable-sct" in python)
+
+        val go = AetherFingerprint.GO.arguments
+        assertTrue("--disable-session-ticket" in go)
+        assertTrue("--disable-extension-permutation" in go)
+        assertTrue("--disable-ocsp-stapling" !in go)
     }
 
     @Test

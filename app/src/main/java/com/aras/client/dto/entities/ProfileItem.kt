@@ -109,6 +109,12 @@ data class ProfileItem(
     var aetherEchDns: String? = null,
     /** The domain whose key --ech auto takes (aether 2.3, default cloudflare-ech.com). */
     var aetherEchDomain: String? = null,
+    /** The address the calls to the WARP API go to (aether 2.3.7, --api-address; blank = the API server name's). */
+    var aetherApiAddress: String? = null,
+    /** The server name of the WARP API calls' ClientHello (aether 2.3.7, --api-sni; blank = the API host's). */
+    var aetherApiSni: String? = null,
+    /** The HTTP host of the WARP API calls (aether 2.3.7, --api-host; blank = the core's own). */
+    var aetherApiHost: String? = null,
     /** The server name the MASQUE handshakes put in their ClientHello (aether 2.3). */
     var aetherMasqueSni: String? = null,
     var aetherDns: String? = null,

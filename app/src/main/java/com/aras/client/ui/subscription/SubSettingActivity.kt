@@ -314,7 +314,8 @@ fun SubSettingScreen(
         var autoSortAfterTest by rememberMmkvBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, true)
         var autoScrollToTop by rememberMmkvBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)
         var showSubInfo by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_INFO, true)
-        var showSubAnnouncement by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
+        var showSubAnnouncement by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, false)
+        var showFreeSub by rememberMmkvBool(AppConfig.PREF_SHOW_FREE_SUB, true)
 
         AlertDialog(
             onDismissRequest = { showUpdateDialog = false },
@@ -362,6 +363,12 @@ fun SubSettingScreen(
                         summary = stringResource(R.string.summary_pref_show_sub_announcement),
                         checked = showSubAnnouncement,
                         onCheckedChange = { showSubAnnouncement = it }
+                    )
+                    SettingsSwitchItem(
+                        title = stringResource(R.string.title_pref_show_free_sub),
+                        summary = stringResource(R.string.summary_pref_show_free_sub),
+                        checked = showFreeSub,
+                        onCheckedChange = { showFreeSub = it }
                     )
                 }
             },

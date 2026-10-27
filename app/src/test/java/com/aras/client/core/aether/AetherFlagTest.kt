@@ -5,23 +5,25 @@ import com.aras.client.enums.EConfigType
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The core refuses a command line it does not understand, and it refuses the whole
- * one rather than the flag it did not know: one unknown option and the process exits
- * with its help text instead of running.
- *
- * These are the flags aether 2.1.0 — the build that ships in the app — accepts. The
- * list was taken by running the real binary with each flag; two that an earlier
- * version of this app emitted, `--psiphon-server-entries` and `--psiphon-cdn-sets`,
- * are rejected by it and must not come back.
- */
-class AetherFlagTest {
+    /**
+     * The core refuses a command line it does not understand, and it refuses the whole
+     * one rather than the flag it did not know: one unknown option and the process exits
+     * with its help text instead of running.
+     *
+     * These are the flags the bundled aether accepts, taken from its source (aether cli.rs
+     * of v2.4.0) once instead of probes at every version: an `--api-*` flag is on the list
+     * only where the core of this release takes it.
+     */
+    class AetherFlagTest {
 
     /**
      * Verified against the real binaries, not taken from anyone's documentation:
      * the 2.1.0 set the app used to ship, and the two fingerprint flags below
      * re-probed against the bundled 2.3.0 (both accepted; the run reached tor
-     * bootstrap rather than a flag error).
+     * bootstrap rather than a flag error). The TLS extension flags took their
+     * place as aether grew them — --tls13-ciphers, --tls-key-shares and
+     * --enable-grease-sigalgs from 2.3.8 on, the rest from 2.3.10 on — and the
+     * bundled 2.4.0 accepts every one of them, per its release notes.
      */
     private val accepted = setOf(
         "--bind", "--http-proxy", "--upstream", "--mark", "--exit-loc", "--exit-loc-secs",
@@ -42,14 +44,18 @@ class AetherFlagTest {
         "--psiphon", "--psiphon-reverse", "--psiphon-only", "--psiphon-mode",
         "--psiphon-config", "--psiphon-cdn-ips", "--psiphon-cdn-sni", "--psiphon-bind",
         "--psiphon-http", "--psiphon-region", "--psiphon-dir", "--psiphon-bin",
+        "--psiphon-cdn-sets", "--psiphon-server-entries",
         "--team", "--access-id", "--access-secret", "--access-email", "--access-token",
         "--gateway", "--route-block", "--route-direct", "--routes",
         "--config", "--wg-config", "--masque-config",
-        "--tls-groups", "--tls-ciphers", "--disable-grease", "--perf", "--log-level", "--verbose",
+        "--tls-groups", "--tls-ciphers", "--disable-grease",
+        "--tls13-ciphers", "--tls-key-shares", "--tls-sigalgs",
+        "--enable-grease-sigalgs", "--tls-cert-compression", "--tls-alps",
+        "--tls-trust-anchors", "--tls-server-padding", "--enable-ech-grease",
+        "--disable-ocsp-stapling", "--disable-sct", "--disable-session-ticket",
+        "--disable-extension-permutation",
+        "--perf", "--log-level", "--verbose",
     )
-
-    /** Flags this app used to emit, which aether 2.1.0 rejects outright. */
-    private val rejected = setOf("--psiphon-server-entries", "--psiphon-cdn-sets")
 
     private fun profile(block: ProfileItem.() -> Unit = {}) =
         ProfileItem(configType = EConfigType.AETHER).apply(block)
@@ -58,10 +64,9 @@ class AetherFlagTest {
         val flags = arguments.filter { it.startsWith("-") }
         flags.forEach { flag ->
             assertTrue(
-                "aether 2.1.0 rejects '$flag' and refuses the whole command line with it",
+                "the bundled aether rejects '$flag' and refuses the whole command line with it",
                 flag in accepted,
             )
-            assertTrue("'$flag' is one this app was rejected for", flag !in rejected)
         }
     }
 
@@ -103,8 +108,8 @@ class AetherFlagTest {
 
     @Test
     fun `a psiphon profile emits only accepted flags`() {
-        // The one that used to break: the server list is no longer a flag, and the
-        // CDN edge lists have no flag at all in this core.
+        // The server list was once a flag and is one again; the CDN edge sets went away
+        // with the old core and came back with it.
         val arguments = AetherCoreManager.buildArguments(
             profile {
                 server = "198.51.100.9"
@@ -122,6 +127,8 @@ class AetherFlagTest {
         assertOnlyAcceptedFlags(arguments)
         assertTrue("--psiphon" in arguments)
         assertTrue("1.2.3.4" in arguments)
+        assertTrue("--psiphon-cdn-sets" in arguments)
+        assertTrue("cloudflare,github" in arguments)
     }
 
     @Test

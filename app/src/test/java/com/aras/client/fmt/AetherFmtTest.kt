@@ -95,6 +95,33 @@ class AetherFmtTest {
     }
 
     @Test
+    fun `round-trips the WARP API fields on a wg link`() {
+        val link = "aether://198.51.100.7:443?protocol=wg&scan=balanced&ip=v4" +
+            "&api_address=162.159.137.105&api_sni=api.cloudflareclient.com" +
+            "&api_host=api.devices.cloudflare.com#warp"
+
+        val config = AetherFmt.parse(link)
+        assertNotNull(config)
+        assertEquals("162.159.137.105", config!!.aetherApiAddress)
+        assertEquals("api.cloudflareclient.com", config.aetherApiSni)
+        assertEquals("api.devices.cloudflare.com", config.aetherApiHost)
+
+        assertEquals(link.removePrefix(SCHEME), AetherFmt.toUri(config))
+
+        // Blank ones leave the link without the parameters, and a config without
+        // any gains no api query at all.
+        assertEquals(
+            "198.51.100.7:443?protocol=wg&scan=balanced&ip=v4#Aether",
+            AetherFmt.toUri(
+                AetherFmt.parse("aether://198.51.100.7:443?protocol=wg&scan=balanced&ip=v4")!!.apply {
+                    aetherApiAddress = ""
+                    aetherApiHost = null
+                }
+            )
+        )
+    }
+
+    @Test
     fun `a hostname endpoint is rejected, as the core scans addresses only`() {
         assertNull(AetherEndpoint.of("example.org", "443"))
         assertNotNull(AetherEndpoint.of("198.51.100.7", "443"))

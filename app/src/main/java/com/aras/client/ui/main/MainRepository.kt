@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import com.aras.client.AngApplication
 import com.aras.client.AppConfig
+import com.aras.client.handler.FreeSubManager
 import com.aras.client.R
 import com.aras.client.dto.BatchImportResult
 import com.aras.client.dto.ConnectionTestResult
@@ -147,7 +148,16 @@ class MainRepository(
                 }
             )
         }
-        result += MmkvManager.decodeSubscriptions()
+        val subs = MmkvManager.decodeSubscriptions()
+        // Only the tab is hidden: the Free group stays synced in the background,
+        // so the choice never touches the profiles themselves.
+        result += if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_FREE_SUB, true)) {
+            subs
+        } else {
+            subs.filter {
+                !FreeSubManager.isFreeSubId(it.guid) && it.guid != AppConfig.FREE_SUB_GUID
+            }
+        }
         return result
     }
 

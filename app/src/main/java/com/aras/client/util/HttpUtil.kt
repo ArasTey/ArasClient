@@ -150,6 +150,7 @@ object HttpUtil {
         "subscription-userinfo",
         "profile-title",
         "profile-web-page-url",
+        "support-url",
         "announce",
         "announcement",
         "announce-url",
