@@ -21,8 +21,9 @@ object AnytlsFmt : FmtBase() {
         val config = ProfileItem.create(EConfigType.ANYTLS)
 
         val uri = URI(Utils.fixIllegalUrl(str))
-        if (uri.rawQuery.isNullOrEmpty()) return null
-        val queryParam = getQueryParam(uri)
+        // A bare anytls://password@host:port link is valid; the parameters are
+        // optional, so an absent query must not drop the profile.
+        val queryParam = if (uri.rawQuery.isNullOrEmpty()) emptyMap() else getQueryParam(uri)
 
         config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty()).let { it.ifEmpty { "none" } }
         config.server = uri.idnHost

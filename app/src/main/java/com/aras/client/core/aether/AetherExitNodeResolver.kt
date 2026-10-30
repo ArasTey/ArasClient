@@ -18,7 +18,7 @@ object AetherExitNodeResolver {
     ) {
         /** Exactly one selectable profile, and it is one the app can build an outbound for. */
         val ok: Boolean
-            get() = matches.size == 1 && matches[0].configType != EConfigType.AETHER
+            get() = matches.size == 1 && !matches[0].configType.isCarrierOnly && matches[0].configType != EConfigType.AETHER
 
         val single: ProfileItem? get() = if (ok) matches[0] else null
     }
@@ -30,7 +30,7 @@ object AetherExitNodeResolver {
             (listOf("") + MmkvManager.decodeSubsList()).forEach { subId ->
                 MmkvManager.decodeServerList(subId).forEach { guid ->
                     MmkvManager.decodeServerConfig(guid)
-                        ?.takeIf { it.configType != EConfigType.AETHER && it.remarks == wanted }
+                        ?.takeIf { !it.configType.isCarrierOnly && it.configType != EConfigType.AETHER && it.remarks == wanted }
                         ?.let(::add)
                 }
             }

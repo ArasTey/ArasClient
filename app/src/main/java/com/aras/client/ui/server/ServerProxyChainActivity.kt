@@ -1,7 +1,6 @@
 package com.aras.client.ui.server
 
 import android.os.Bundle
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -285,9 +284,8 @@ fun ProxyChainScreen(
             }
 
             itemsIndexed(items = members, key = { index, _ -> memberKeys[index] }) { index, member ->
-                ReorderableItem(reorderableState, key = memberKeys[index]) { isDragging ->
-                    val elevation by animateDpAsState(if (isDragging) 4.dp else 0.dp)
-                    Surface(shadowElevation = elevation) {
+                ReorderableItem(reorderableState, key = memberKeys[index]) { _ ->
+                    Surface {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

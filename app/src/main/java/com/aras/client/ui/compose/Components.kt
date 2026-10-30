@@ -1,7 +1,6 @@
 package com.aras.client.ui.compose
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
@@ -38,7 +37,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -266,12 +264,6 @@ fun VersionInfoBlock(
 }
 
 @Composable
-private fun reorderableElevation(isDragging: Boolean) = animateDpAsState(
-    targetValue = if (isDragging) 4.dp else 0.dp,
-    label = "ReorderableElevation"
-)
-
-@Composable
 fun ReorderableCollectionItemScope.reorderableDragHandle(): Modifier {
     val hapticFeedback = LocalHapticFeedback.current
     return Modifier.longPressDraggableHandle(
@@ -285,15 +277,12 @@ fun ReorderableCollectionItemScope.reorderableDragHandle(): Modifier {
 @Composable
 fun ReorderableListItem(
     scope: ReorderableCollectionItemScope,
-    isDragging: Boolean,
     content: @Composable RowScope.() -> Unit
 ) {
-    val elevation by reorderableElevation(isDragging)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = androidx.compose.ui.graphics.Color.Transparent,
-        shadowElevation = elevation
+        color = androidx.compose.ui.graphics.Color.Transparent
     ) {
         Row(
             modifier = Modifier
@@ -308,15 +297,14 @@ fun ReorderableListItem(
 @Composable
 fun ReorderableGridItem(
     scope: ReorderableCollectionItemScope,
-    isDragging: Boolean,
     content: @Composable () -> Unit
 ) {
-    val elevation by reorderableElevation(isDragging)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .then(with(scope) { reorderableDragHandle() }),
-        shadowElevation = elevation
+        shape = RoundedCornerShape(16.dp),
+        color = androidx.compose.ui.graphics.Color.Transparent
     ) {
         content()
     }

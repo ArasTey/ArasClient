@@ -14,7 +14,7 @@ class CountryResolverTest {
             server = "node.example"
         }
 
-        assertEquals("🇳🇱", CountryResolver.resolve(profile, geoIso = "NL", preferGeoIp = true))
+        assertEquals("NL", CountryResolver.resolveCardIso(profile, geoIso = "NL", testedCountry = null))
     }
 
     @Test
@@ -25,8 +25,8 @@ class CountryResolverTest {
         }
 
         assertEquals(
-            "🇩🇪",
-            CountryResolver.resolveCardCountry(
+            "DE",
+            CountryResolver.resolveCardIso(
                 profile = profile,
                 geoIso = "NL",
                 testedCountry = "DE",
@@ -41,7 +41,7 @@ class CountryResolverTest {
             server = "node.example"
         }
 
-        assertEquals("🇩🇪", CountryResolver.resolve(profile, geoIso = "", preferGeoIp = true))
+        assertEquals("DE", CountryResolver.resolveCardIso(profile, geoIso = "", testedCountry = null))
     }
 
     @Test
@@ -51,7 +51,7 @@ class CountryResolverTest {
             server = "node.example"
         }
 
-        assertEquals("🇺🇸", CountryResolver.resolve(profile, geoIso = "12", preferGeoIp = true))
+        assertEquals("US", CountryResolver.resolveCardIso(profile, geoIso = "12", testedCountry = null))
     }
 
     @Test
@@ -64,10 +64,10 @@ class CountryResolverTest {
 
     @Test
     fun `ping country accepts code name and existing flag`() {
-        assertEquals("🇩🇪", CountryResolver.flagForCountry("DE"))
-        assertEquals("🇩🇪", CountryResolver.flagForCountry("Germany"))
-        assertEquals("🇩🇪", CountryResolver.flagForCountry("🇩🇪"))
-        assertEquals("", CountryResolver.flagForCountry("12"))
+        assertEquals("DE", CountryResolver.isoForCountry("DE"))
+        assertEquals("DE", CountryResolver.isoForCountry("Germany"))
+        assertEquals("DE", CountryResolver.isoForCountry("🇩🇪"))
+        assertEquals(null, CountryResolver.isoForCountry("12"))
     }
 
     @Test

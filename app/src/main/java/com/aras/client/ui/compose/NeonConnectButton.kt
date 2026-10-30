@@ -1,12 +1,9 @@
 package com.aras.client.ui.compose
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -32,18 +29,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.aras.client.R
-import kotlinx.coroutines.launch
 
 /**
  * The connect button.
  *
  * Everything that glows is drawn *inside* the circle: the rotating sweep is inset to
- * the rim and clipped by the shape, and the breathing light is a radial gradient that
- * is transparent in the middle. Nothing spills past the edge, so the button keeps a
+ * the rim and clipped by the shape. Nothing spills past the edge, so the button keeps a
  * clean outline against whatever sits behind it.
  *
- * The two continuous animations run only while the tunnel is up — an idle button that
- * animates forever costs battery for nothing.
+ * The sweep runs only while the tunnel is up — an idle button that animates forever
+ * costs battery for nothing.
  */
 @Composable
 fun NeonConnectButton(
@@ -65,32 +60,19 @@ fun NeonConnectButton(
     val popScale = pop.value
 
     val sweepDegrees = remember { Animatable(0f) }
-    val glow = remember { Animatable(0f) }
     LaunchedEffect(isRunning) {
         if (!isRunning) {
             sweepDegrees.animateTo(0f, tween(260))
-            glow.animateTo(0f, tween(260))
             return@LaunchedEffect
         }
-        // A long, slow rotation and a slow breath: present, not busy.
-        launch {
-            sweepDegrees.animateTo(
-                targetValue = sweepDegrees.value + 360f,
-                animationSpec = infiniteRepeatable(
-                    tween(2800, easing = LinearEasing),
-                    RepeatMode.Restart,
-                ),
-            )
-        }
-        launch {
-            glow.animateTo(
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    tween(2800, easing = EaseInOut),
-                    RepeatMode.Reverse,
-                ),
-            )
-        }
+        // A long, slow rotation: present, not busy.
+        sweepDegrees.animateTo(
+            targetValue = sweepDegrees.value + 360f,
+            animationSpec = infiniteRepeatable(
+                tween(2800, easing = LinearEasing),
+                RepeatMode.Restart,
+            ),
+        )
     }
 
     Box(
@@ -98,17 +80,7 @@ fun NeonConnectButton(
             .size(58.dp)
             .scale(popScale)
             .clip(CircleShape)
-            .background(
-                if (isRunning) {
-                    Brush.radialGradient(
-                        colors = listOf(Color(0xFF0F2A1D), Color(0xFF07170F)),
-                        center = androidx.compose.ui.geometry.Offset(120f, 100f),
-                        radius = 620f,
-                    )
-                } else {
-                    Brush.verticalGradient(listOf(idleFill, idleFill))
-                }
-            )
+            .background(if (isRunning) Color(0xFF0C2117) else idleFill)
             .border(
                 width = if (isRunning) 2.dp else 1.5.dp,
                 color = if (isRunning) lit else idleEdge,
@@ -139,19 +111,6 @@ fun NeonConnectButton(
                             0.93f to lit.copy(alpha = 0.34f),
                             1f to lit.copy(alpha = 0.34f),
                         )
-                    )
-                )
-            }
-            // The breathing light, brightest at the rim and clear in the middle.
-            Canvas(Modifier.fillMaxSize()) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            lit.copy(alpha = 0.16f + 0.32f * glow.value),
-                        ),
-                        center = center,
-                        radius = size.minDimension / 2f,
                     )
                 )
             }

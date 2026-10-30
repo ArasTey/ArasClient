@@ -1,7 +1,6 @@
 package com.aras.client.ui.main
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -37,6 +37,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.stateDescription
@@ -44,6 +48,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.first
@@ -59,19 +64,17 @@ import com.aras.client.handler.AngConfigManager
 import com.aras.client.handler.FreeSubManager
 import com.aras.client.handler.ArasExportImportManager
 import com.aras.client.handler.MmkvManager
+import com.aras.client.ui.compose.FlagIcon
+import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.ReorderableGridItem
 import com.aras.client.ui.compose.ReorderableListItem
-import com.aras.client.ui.compose.colorConfigType
-import com.aras.client.ui.compose.colorPing
-import com.aras.client.ui.compose.colorPingRed
 import com.aras.client.ui.compose.verticalScrollbar
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import kotlin.math.abs
 
-private fun cardRemarks(profile: ProfileItem, country: String): String {
-    if (country.isBlank()) return profile.remarks
+private fun cardRemarks(profile: ProfileItem, countryIso: String?): String {
+    if (countryIso == null) return profile.remarks
     return com.aras.client.util.CountryResolver.withoutFlags(profile.remarks)
         .ifBlank {
             profile.server?.takeIf { it.isNotBlank() }
@@ -213,10 +216,9 @@ private fun ServerListPage(
                     ReorderableItem(
                         reorderableGridState,
                         key = serverCache.guid
-                    ) { isDragging ->
+                    ) { _ ->
                         ReorderableGridItem(
-                            scope = this,
-                            isDragging = isDragging
+                            scope = this
                         ) { content() }
                     }
                 } else {
@@ -250,10 +252,9 @@ private fun ServerListPage(
                     ReorderableItem(
                         reorderableState,
                         key = serverCache.guid
-                    ) { isDragging ->
+                    ) { _ ->
                         ReorderableListItem(
-                            scope = this,
-                            isDragging = isDragging
+                            scope = this
                         ) {
                             ServerItemRow(
                                 serverCache = serverCache,
@@ -383,7 +384,7 @@ private fun ServerItemRow(
         profile.remarks,
         profile.description,
     ) {
-        com.aras.client.util.CountryResolver.resolveCardCountry(
+        com.aras.client.util.CountryResolver.resolveCardIso(
             profile = profile,
             geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
             testedCountry = serverCache.testCountryCode,
@@ -392,28 +393,30 @@ private fun ServerItemRow(
     val displayRemarks = remember(serverCache.guid, profile.remarks, country) {
         cardRemarks(profile, country)
     }
-    ServerListItem(
-        country = country,
-        remarks = displayRemarks,
-        statistics = if (isProtected)
-            protectedDescription
-        else
-            profile.description.nullIfBlank()
-                ?: AngConfigManager.generateDescription(profile),
-        typeDescription = getProtocolDescription(profile),
-        configTypeName = profile.configType.name,
-        testDelayMillis = serverCache.testDelayMillis,
-        isSelected = serverCache.guid == selectedGuid,
-        subscriptionRemarks = subRemarks,
-        doubleColumnDisplay = false,
-        onClick = { onSelectServer(serverCache.guid) },
-        onShare = { onShareServer(serverCache.guid, profile) },
-        onEdit = { onEditServer(serverCache.guid, profile) },
-        onRemove = { onRemoveServer(serverCache.guid) },
-        onMore = { onMoreServer(serverCache.guid, profile) },
-        onTest = { onTestServer(serverCache.guid) },
-        isProtected = isProtected
-    )
+    CompactServerCard {
+        ServerListItem(
+            countryIso = country,
+            remarks = displayRemarks,
+            statistics = if (isProtected)
+                protectedDescription
+            else
+                profile.description.nullIfBlank()
+                    ?: AngConfigManager.generateDescription(profile),
+            typeDescription = getProtocolDescription(profile),
+            configTypeName = profile.configType.name,
+            testDelayMillis = serverCache.testDelayMillis,
+            isSelected = serverCache.guid == selectedGuid,
+            subscriptionRemarks = subRemarks,
+            doubleColumnDisplay = false,
+            onClick = { onSelectServer(serverCache.guid) },
+            onShare = { onShareServer(serverCache.guid, profile) },
+            onEdit = { onEditServer(serverCache.guid, profile) },
+            onRemove = { onRemoveServer(serverCache.guid) },
+            onMore = { onMoreServer(serverCache.guid, profile) },
+            onTest = { onTestServer(serverCache.guid) },
+            isProtected = isProtected
+        )
+    }
 }
 
 @Composable
@@ -452,7 +455,7 @@ private fun ServerItemColumn(
         profile.remarks,
         profile.description,
     ) {
-        com.aras.client.util.CountryResolver.resolveCardCountry(
+        com.aras.client.util.CountryResolver.resolveCardIso(
             profile = profile,
             geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
             testedCountry = serverCache.testCountryCode,
@@ -461,26 +464,42 @@ private fun ServerItemColumn(
     val displayRemarks = remember(serverCache.guid, profile.remarks, country) {
         cardRemarks(profile, country)
     }
-    ServerListItem(
-        country = country,
-        remarks = displayRemarks,
-        statistics = if (isProtected)
-            stringResource(R.string.protected_config_hidden)
-        else
-            profile.description.nullIfBlank() ?: AngConfigManager.generateDescription(profile),
-        typeDescription = getProtocolDescription(profile),
-        configTypeName = profile.configType.name,
-        testDelayMillis = serverCache.testDelayMillis,
-        isSelected = serverCache.guid == selectedGuid,
-        subscriptionRemarks = subRemarks,
-        doubleColumnDisplay = doubleColumnDisplay,
-        onClick = { onSelectServer(serverCache.guid) },
-        onEdit = { onEditServer(serverCache.guid, profile) },
-        onShare = { onShareServer(serverCache.guid, profile) },
-        onRemove = { onRemoveServer(serverCache.guid) },
-        onMore = { onMoreServer(serverCache.guid, profile) },
-        onTest = { onTestServer(serverCache.guid) },
-        isProtected = isProtected
+    CompactServerCard {
+        ServerListItem(
+            countryIso = country,
+            remarks = displayRemarks,
+            statistics = if (isProtected)
+                stringResource(R.string.protected_config_hidden)
+            else
+                profile.description.nullIfBlank() ?: AngConfigManager.generateDescription(profile),
+            typeDescription = getProtocolDescription(profile),
+            configTypeName = profile.configType.name,
+            testDelayMillis = serverCache.testDelayMillis,
+            isSelected = serverCache.guid == selectedGuid,
+            subscriptionRemarks = subRemarks,
+            doubleColumnDisplay = doubleColumnDisplay,
+            onClick = { onSelectServer(serverCache.guid) },
+            onEdit = { onEditServer(serverCache.guid, profile) },
+            onShare = { onShareServer(serverCache.guid, profile) },
+            onRemove = { onRemoveServer(serverCache.guid) },
+            onMore = { onMoreServer(serverCache.guid, profile) },
+            onTest = { onTestServer(serverCache.guid) },
+            isProtected = isProtected
+        )
+    }
+}
+
+// Stock server card drawn at ~85% (size 2 -> 1.7) so it sits a bit lighter
+// without diverging from the default layout.
+@Composable
+private fun CompactServerCard(content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    CompositionLocalProvider(
+        LocalDensity provides Density(
+            density = density.density * 0.85f,
+            fontScale = density.fontScale
+        ),
+        content = content
     )
 }
 
@@ -503,7 +522,7 @@ fun ServerListItem(
     modifier: Modifier = Modifier,
     dragModifier: Modifier = Modifier,
     isProtected: Boolean = false,
-    country: String = ""
+    countryIso: String? = null
 ) {
     val showDelayChips = remember {
         MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_DELAY_CHIPS, true)
@@ -518,10 +537,14 @@ fun ServerListItem(
     } else {
         null
     }
+    val palette = LocalGlassPalette.current
     val cardShape = RoundedCornerShape(16.dp)
-    val cardColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-    else MaterialTheme.colorScheme.surfaceContainerLow
-    val pingColor = if (testDelayMillis < 0L) colorPingRed else colorPing
+    val cardBrush = if (isSelected) {
+        SolidColor(palette.selectedTop)
+    } else {
+        SolidColor(MaterialTheme.colorScheme.surfaceContainerLow)
+    }
+    val pingColor = if (testDelayMillis < 0L) palette.pingBad else palette.pingGood
 
     Row(
         modifier = modifier
@@ -532,14 +555,8 @@ fun ServerListItem(
                 }
             }
             .clip(cardShape)
-            .background(cardColor)
-            .then(
-                if (isSelected) Modifier.border(
-                    1.5.dp,
-                    MaterialTheme.colorScheme.primary,
-                    cardShape
-                ) else Modifier
-            )
+            .background(cardBrush)
+            .then(if (isSelected) Modifier.border(1.dp, palette.selectedBorder, cardShape) else Modifier)
             .clickable(onClick = onClick)
             .then(dragModifier)
             .padding(start = 10.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
@@ -587,12 +604,12 @@ fun ServerListItem(
                     Text(
                         typeDescription,
                         style = MaterialTheme.typography.labelSmall,
-                        color = colorConfigType,
+                        color = palette.accent,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(colorConfigType.copy(alpha = 0.13f))
+                            .background(palette.accent.copy(alpha = 0.13f))
                             .padding(horizontal = 7.dp, vertical = 2.dp)
                     )
                     if (testResult.isNotBlank()) {
@@ -607,11 +624,9 @@ fun ServerListItem(
                                 .padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
-                    if (country.isNotBlank()) {
-                        Text(
-                            text = country,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
+                    if (countryIso != null) {
+                        FlagIcon(
+                            iso = countryIso,
                             modifier = Modifier.padding(start = 4.dp)
                         )
                     }
@@ -620,27 +635,22 @@ fun ServerListItem(
                 Text(
                     typeDescription,
                     style = MaterialTheme.typography.labelSmall,
-                    color = colorConfigType,
+                    color = palette.accent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .background(colorConfigType.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
+                        .background(palette.accent.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 )
-                if (country.isNotBlank() || testResult.isNotBlank()) {
+                if (countryIso != null || testResult.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (country.isNotBlank()) {
-                            Text(
-                                text = country,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                        if (countryIso != null) {
+                            FlagIcon(iso = countryIso)
                         }
                         if (testResult.isNotBlank()) {
                             Text(
@@ -682,7 +692,7 @@ fun ServerListItem(
                 R.drawable.ic_speedtest_24dp,
                 stringResource(R.string.title_test_single),
                 onTest,
-                tint = MaterialTheme.colorScheme.primary
+                tint = palette.accent
             )
         }
     }
@@ -728,18 +738,12 @@ private fun getProtocolDescription(profile: ProfileItem): String {
     return parts.joinToString(" / ")
 }
 
-internal suspend fun PagerState.navigateToPageOptimized(
-    targetPage: Int,
-    animateAdjacentPage: Boolean = true
-) {
+internal suspend fun PagerState.navigateToPageOptimized(targetPage: Int) {
     if (pageCount <= 0) return
     val target = targetPage.coerceIn(0, pageCount - 1)
-    val current = settledPage.coerceIn(0, pageCount - 1)
-    if (target == current) return
+    if (target == settledPage) return
 
-    if (abs(target - current) == 1 && animateAdjacentPage) {
-        animateScrollToPage(target)
-    } else {
-        scrollToPage(target)
-    }
+    // The rail pill carries the motion; the pager swaps instantly so content
+    // never scrolls through intermediate pages.
+    scrollToPage(target)
 }

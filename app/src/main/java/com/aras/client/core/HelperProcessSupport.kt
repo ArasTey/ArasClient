@@ -67,7 +67,7 @@ object HelperProcessSupport {
         synchronized(lock) {
             for (helper in helpers) {
                 when (helper.configType) {
-                    EConfigType.AETHER -> {
+                    EConfigType.AETHER, EConfigType.PSIPHON, EConfigType.TOR -> {
                         val key = helper.helperKey()
                         when {
                             aetherRefs == 0 -> {
@@ -115,7 +115,7 @@ object HelperProcessSupport {
         synchronized(lock) {
             acquired.profiles.forEach { helper ->
                 when (helper.configType) {
-                    EConfigType.AETHER -> {
+                    EConfigType.AETHER, EConfigType.PSIPHON, EConfigType.TOR -> {
                         aetherRefs = (aetherRefs - 1).coerceAtLeast(0)
                         if (aetherRefs == 0) {
                             aetherKey = null
@@ -185,11 +185,14 @@ object HelperProcessSupport {
     }
 
     private val ProfileItem.needsHelperProcess: Boolean
-        get() = configType == EConfigType.AETHER || configType == EConfigType.MIERU
+        get() = configType == EConfigType.AETHER || configType == EConfigType.MIERU ||
+            configType == EConfigType.PSIPHON || configType == EConfigType.TOR
 
     /** What identifies a running daemon: the profile plus the port it was told to bind. */
     private fun ProfileItem.helperKey(): String {
-        val port = if (configType == EConfigType.AETHER) {
+        val port = if (configType == EConfigType.AETHER || configType == EConfigType.PSIPHON ||
+            configType == EConfigType.TOR
+        ) {
             com.aras.client.core.aether.AetherCoreManager.listenPort(this)
         } else {
             AetherFmt.listenPortOf(mieruListenPort) ?: AppConfig.PORT_MIERU_SOCKS.toInt()

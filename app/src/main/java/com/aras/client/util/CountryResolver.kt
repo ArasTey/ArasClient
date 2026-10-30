@@ -4,16 +4,17 @@ import com.aras.client.dto.entities.ProfileItem
 import java.util.Locale
 
 /**
- * Best-effort country detection for a server profile, returning a flag
- * emoji (e.g. "🇩🇪") or an empty string when nothing matches.
+ * Best-effort country detection for a server profile, returning an ISO-3166-1
+ * alpha-2 code (e.g. "DE") or null when nothing matches. The UI renders the
+ * code with the bundled vector flag set.
  *
  * Strategy, in order:
- *  1. A flag emoji already present in the remarks is returned as-is.
- *  2. A standalone ISO-3166-1 alpha-2 token ("DE", "nl", "US"…) is converted
- *     to its flag. Only real ISO codes count, so random 2-letter words are
- *     never mistaken for countries.
+ *  1. A flag emoji already present in the remarks is converted to its ISO code.
+ *  2. A standalone ISO-3166-1 alpha-2 token ("DE", "nl", "US"…) is accepted.
+ *     Only real ISO codes count, so random 2-letter words are never mistaken
+ *     for countries.
  *  3. An English country name ("Germany", "Netherlands"…) from the complete
- *     ISO country list is converted to its flag.
+ *     ISO country list is mapped to its code.
  *  4. Well-known VPN city/region names ("Frankfurt", "Istanbul"…) map to
  *     their country.
  *
@@ -112,22 +113,19 @@ object CountryResolver {
         return ""
     }
 
-    private fun isoToFlag(iso: String): String {
-        val base = 0x1F1E6 - 'A'.code
-        return iso.uppercase(Locale.ROOT)
-            .take(2)
-            .map { ch -> Character.toChars(base + ch.code).joinToString("") }
-            .joinToString("")
+    /** Maps a flag emoji (two regional-indicator code points) back to its ISO-2 code. */
+    private fun isoFromFlag(flag: String): String? {
+        if (flag.length < 4) return null
+        val first = flag.codePointAt(0)
+        val second = flag.codePointAt(2)
+        if (first !in 0x1F1E6..0x1F1FF || second !in 0x1F1E6..0x1F1FF) return null
+        return buildString(2) {
+            append(('A'.code + (first - 0x1F1E6)).toChar())
+            append(('A'.code + (second - 0x1F1E6)).toChar())
+        }
     }
 
-    /**
-     * Returns the flag emoji for the profile's country, or "" when unknown.
-     *
-     * When [preferGeoIp] is true, a valid country resolved from the server IP
-     * wins over provider naming. This is the card policy: the displayed flag
-     * represents where the config endpoint is located. If GeoIP is unavailable,
-     * provider flag/ISO/country/city text is used as a safe fallback.
-     */
+    /** Removes flag emoji from provider-supplied remarks. */
     fun withoutFlags(value: String): String {
         val result = StringBuilder(value.length)
         var index = 0
@@ -147,56 +145,63 @@ object CountryResolver {
         return result.toString().replace(Regex("\\s+"), " ").trim()
     }
 
-    /** Converts an ISO code, English country name, known region, or existing flag to a flag. */
-    fun flagForCountry(country: String?): String {
+    /**
+     * Resolves any provider-provided country hint (ISO code, English country
+     * name, known city, or a flag emoji) to ISO-2. Returns null when unknown.
+     */
+    fun isoForCountry(country: String?): String? {
         val raw = country?.trim().orEmpty()
-        if (raw.isBlank()) return ""
-        findFlag(raw).takeIf { it.isNotBlank() }?.let { return it }
-        normalizeIso(raw)?.let { return isoToFlag(it) }
-        return resolveCountryText(raw)
+        if (raw.isBlank()) return null
+        findFlag(raw).takeIf { it.isNotBlank() }?.let { return isoFromFlag(it) }
+        normalizeIso(raw)?.let { return it }
+        return resolveCountryIso(raw)
     }
 
-    fun resolveCardCountry(
+    /**
+     * Card policy: the flag represents where the endpoint sits. A country
+     * measured by the connection test wins, then GeoIP, then provider naming.
+     */
+    fun resolveCardIso(
         profile: ProfileItem,
         geoIso: String,
         testedCountry: String?,
-    ): String = flagForCountry(testedCountry).ifBlank { resolve(profile, geoIso, preferGeoIp = true) }
+    ): String? = isoForCountry(testedCountry) ?: resolveIso(profile, geoIso, preferGeoIp = true)
 
     private fun normalizeIso(value: String): String? = value
         .trim()
         .uppercase(Locale.ROOT)
         .takeIf { it.length == 2 && it in isoCodes }
 
-    private fun resolveCountryText(raw: String): String {
+    private fun resolveCountryIso(raw: String): String? {
         val text = raw.lowercase(Locale.ROOT)
         isoTokenRegex.findAll(text).forEach { match ->
-            normalizeIso(match.groupValues[2])?.let { return isoToFlag(it) }
+            normalizeIso(match.groupValues[2])?.let { return it }
         }
         nameEntriesByLength
             .firstOrNull { (name, _) -> name in text }
-            ?.let { (_, iso) -> return isoToFlag(iso) }
+            ?.let { return it.value }
         cityEntriesByLength
             .firstOrNull { (city, _) -> city in text }
-            ?.let { (_, iso) -> return isoToFlag(iso) }
-        return ""
+            ?.let { return it.value }
+        return null
     }
 
-    fun resolve(
+    private fun resolveIso(
         profile: ProfileItem,
         geoIso: String = "",
         preferGeoIp: Boolean = false
-    ): String {
+    ): String? {
         val raw = "${profile.remarks} ${profile.description.orEmpty()}"
 
         // 0) Cards and the connected profile prefer the resolved server-IP country.
         val validGeoIso = normalizeIso(geoIso)
-        if (preferGeoIp && validGeoIso != null) return isoToFlag(validGeoIso)
+        if (preferGeoIp && validGeoIso != null) return validGeoIso
 
         // 1) Provider flag/country text remains the fallback when GeoIP is unavailable.
-        findFlag(raw).takeIf { it.isNotBlank() }?.let { return it }
-        resolveCountryText(raw).takeIf { it.isNotBlank() }?.let { return it }
+        findFlag(raw).takeIf { it.isNotBlank() }?.let { return isoFromFlag(it) }
+        resolveCountryIso(raw)?.let { return it }
 
         // 2) Server-IP lookup when the name carried no usable country hint.
-        return validGeoIso?.let(::isoToFlag).orEmpty()
+        return validGeoIso
     }
 }

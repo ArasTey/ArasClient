@@ -50,8 +50,8 @@ internal fun mainBarText(state: MainUiState, formattedStatus: String, connectedT
             if (state.statusMessageVisible) formattedStatus.replace('\n', ' ') else ""
         )
         is MainStatus.ConnectionTest -> MainBarText(
-            formattedStatus.lineSequence().first(),
-            if (state.statusMessageVisible) formattedStatus.lineSequence().drop(1).joinToString(" ") else ""
+            formattedStatus,
+            if (state.statusMessageVisible) state.status.result.ipAddress.orEmpty() else ""
         )
         else -> MainBarText(formattedStatus, "")
     }

@@ -285,10 +285,9 @@ fun RoutingSettingScreen(
                 items = rulesets,
                 key = { _, ruleset -> ruleset.id }
             ) { index, ruleset ->
-                ReorderableItem(reorderableState, key = ruleset.id) { isDragging ->
+                ReorderableItem(reorderableState, key = ruleset.id) { _ ->
                     ReorderableListItem(
-                        scope = this,
-                        isDragging = isDragging
+                        scope = this
                     ) {
                         RoutingRulesetItem(
                             ruleset = ruleset,

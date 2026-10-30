@@ -46,7 +46,7 @@ object CoreConfigContextBuilder {
         val routingResolvedOutbounds = resolveRoutingOutbounds()
         val resolvedOutbounds = listOf(primaryResolvedOutbound) + routingResolvedOutbounds
         val fallbackResolvedOutbounds = resolveFallbackOutbounds(resolvedOutbounds)
-        val routingDomainRules = collectRoutingDomainRulesForDns()
+        val routingDomainRules = collectRoutingDomainRulesForDns(context)
 
         return CoreConfigContext(
             context = context,
@@ -243,16 +243,23 @@ object CoreConfigContextBuilder {
      * Collect enabled routing domain rules in original order for DNS segmentation.
      *
      * outbounds are normalized into three tags only: proxy / direct / block.
+     * Rules naming geo tags the installed geosite.dat lacks are filtered out:
+     * the DNS side of a route must never mention a code the core cannot load.
      */
-    private fun collectRoutingDomainRulesForDns(): List<CoreConfigContext.RoutingDomainRule> {
+    private fun collectRoutingDomainRulesForDns(context: Context): List<CoreConfigContext.RoutingDomainRule> {
         val rulesetItems = MmkvManager.decodeRoutingRulesets() ?: return emptyList()
         val result = mutableListOf<CoreConfigContext.RoutingDomainRule>()
+        val availableGeositeCodes = GeoDataCodes.available(context, AppConfig.GEOSITE_DAT)
 
         rulesetItems
             .asSequence()
             .filter { it.enabled }
             .filter { !it.domain.isNullOrEmpty() }
             .forEach { rule ->
+                val domains = GeoDataCodes.keepAvailableGeosite(rule.domain, availableGeositeCodes)
+                if (domains.isNullOrEmpty()) {
+                    return@forEach
+                }
                 val normalizedOutboundTag = when (rule.outboundTag) {
                     AppConfig.TAG_DIRECT -> AppConfig.TAG_DIRECT
                     AppConfig.TAG_BLOCKED -> AppConfig.TAG_BLOCKED
@@ -260,7 +267,7 @@ object CoreConfigContextBuilder {
                 }
                 result.add(
                     CoreConfigContext.RoutingDomainRule(
-                        domain = rule.domain.orEmpty(),
+                        domain = domains,
                         outboundTag = normalizedOutboundTag
                     )
                 )

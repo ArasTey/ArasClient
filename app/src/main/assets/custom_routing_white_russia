@@ -13,6 +13,27 @@
     "network": "udp"
   },
   {
+    "remarks": "Block phishing and malware",
+    "outboundTag": "block",
+    "domain": [
+      "geosite:phishing",
+      "geosite:malware"
+    ]
+  },
+  {
+    "remarks": "Block WebRTC leak",
+    "outboundTag": "block",
+    "network": "udp",
+    "port": "3478-3479,5349-5350,19302-19309"
+  },
+  {
+    "remarks": "Proxy Google",
+    "outboundTag": "proxy",
+    "domain": [
+      "geosite:google"
+    ]
+  },
+  {
     "remarks": "Direct LAN IP",
     "outboundTag": "direct",
     "ip": [

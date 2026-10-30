@@ -3,7 +3,20 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- Gauge arc -->
+    <path
+        android:pathData="M5.2,17.16 A8.3,8.3 0 1 1 18.8,17.16"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round" />
+    <!-- Needle -->
+    <path
+        android:pathData="M12,12.4 L15.47,8.26"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round" />
+    <!-- Hub -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M12,4C6.48,4 2,8.48 2,14c0,1.85 0.51,3.58 1.39,5.06L5.2,18.02C4.44,16.85 4,15.48 4,14c0,-4.41 3.59,-8 8,-8s8,3.59 8,8c0,1.48 -0.44,2.85 -1.2,4.02l1.81,1.04C21.49,17.58 22,15.85 22,14C22,8.48 17.52,4 12,4zM13.41,14.59c-0.78,0.78 -2.05,0.78 -2.83,0c-0.78,-0.78 -0.78,-2.05 0,-2.83l3.54,-5.66l-5.66,3.54c-0.78,0.78 -0.78,2.05 0,2.83" />
+        android:pathData="M10.3,12.4 a1.7,1.7 0 1 0 3.4,0 a1.7,1.7 0 1 0 -3.4,0" />
 </vector>

@@ -179,6 +179,7 @@ object AetherFmt : FmtBase() {
         INVALID_DNS,
         INVALID_EXIT_LOC,
         INVALID_LISTEN_PORT,
+        INVALID_REGION,
         PSIPHON_NEEDS_MASQUE,
         TOR_NEEDS_MASQUE,
         TOR_PSIPHON_CONFLICT,
@@ -194,11 +195,40 @@ object AetherFmt : FmtBase() {
      * the tunnel and the other around it.
      */
     fun normalize(config: ProfileItem): Problem? =
-        normalizeListenPort(config)
+        normalizeCarrierOnly(config)
+            ?: normalizeListenPort(config)
             ?: normalizeDns(config)
             ?: normalizeExitLoc(config)
             ?: normalizePsiphon(config)
             ?: normalizeTor(config)
+
+    /**
+     * A Psiphon or Tor profile is the carrier alone: the core starts no tunnel, so the
+     * profile keeps its own carrier in only mode and carries nothing of the other.
+     */
+    private fun normalizeCarrierOnly(config: ProfileItem): Problem? {
+        when (config.configType) {
+            EConfigType.PSIPHON -> {
+                config.aetherPsiphon = AetherPsiphon.ONLY.type
+                config.aetherTor = null
+                config.aetherTorBridges = null
+                config.aetherTorBridgeLines = null
+                config.aetherTorRelays = null
+            }
+            EConfigType.TOR -> {
+                config.aetherTor = AetherTor.ONLY.type
+                config.aetherPsiphon = null
+                config.aetherPsiphonMode = null
+                config.aetherPsiphonCdnIps = null
+                config.aetherPsiphonCdnSni = null
+                config.aetherPsiphonCdnSets = null
+                config.aetherPsiphonRegion = null
+                config.aetherPsiphonBundledList = null
+            }
+            else -> Unit
+        }
+        return null
+    }
 
     /** The listen port, when the profile names one, has to name a port. */
     private fun normalizeListenPort(config: ProfileItem): Problem? {
@@ -223,6 +253,9 @@ object AetherFmt : FmtBase() {
     }
 
     private val exitRule = Regex("!?[A-Z]{2}(,[A-Z]{2})*")
+
+    /** The Psiphon region as the core takes it: an ISO country code, or a comma-separated list of them. */
+    private val regionRule = Regex("[A-Z]{2}(,[A-Z]{2})*")
 
     /** The exit rule as the core reads it: country codes to allow, or a leading ! to refuse. */
     private fun normalizeExitLoc(config: ProfileItem): Problem? {
@@ -258,8 +291,9 @@ object AetherFmt : FmtBase() {
         config.aetherPsiphonCdnSni = commaList(config.aetherPsiphonCdnSni)
         config.aetherPsiphonCdnSets =
             AetherPsiphonCdnSet.join(AetherPsiphonCdnSet.parse(config.aetherPsiphonCdnSets))
-        config.aetherPsiphonRegion =
-            config.aetherPsiphonRegion?.trim()?.uppercase()?.ifEmpty { null }
+        val region = config.aetherPsiphonRegion?.trim()?.uppercase()?.ifEmpty { null }
+        if (region != null && !regionRule.matches(region)) return Problem.INVALID_REGION
+        config.aetherPsiphonRegion = region
         // Stored only when it says no; yes is the default and needs no word.
         config.aetherPsiphonBundledList = config.aetherPsiphonBundledList?.takeUnless { it }
         return null

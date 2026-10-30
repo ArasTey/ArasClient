@@ -83,4 +83,71 @@ class SingboxFmtTest {
         assertTrue(com.aras.client.fmt.ClashYamlFmt.isClashYaml(clash))
         assertFalse(SingboxFmt.isSingboxJson(clash))
     }
+
+    @Test
+    fun `an xray config json is not mistaken for sing-box`() {
+        val xray = """
+            {"inbounds":[{"port":1080,"protocol":"socks"}],
+             "outbounds":[{"protocol":"vless","settings":{}}],
+             "routing":{"rules":[]}}
+        """.trimIndent()
+
+        assertFalse(SingboxFmt.isSingboxJson(xray))
+        assertTrue(SingboxFmt.isSingboxJson("""{"outbounds":[{"type":"direct","tag":"direct"}]}"""))
+    }
+
+    @Test
+    fun `hysteria2 obfs bandwidth and port hopping survive`() {
+        val json = """
+            {"outbounds":[{"type":"hysteria2","tag":"hy","server":"d.example.com","server_port":443,
+              "password":"pw","obfs":{"type":"salamander","password":"op"},
+              "up_mbps":100,"down_mbps":50,"server_ports":["2087:2127","9000"],
+              "tls":{"enabled":true,"server_name":"d.example.com"}}]}
+        """.trimIndent()
+        val link = SingboxFmt.toLinks(json).single()
+        assertTrue(link.contains("obfs=salamander"))
+        assertTrue(link.contains("obfs-password=op"))
+        assertTrue(link.contains("upmbps=100"))
+        assertTrue(link.contains("downmbps=50"))
+        assertTrue(link.contains("mport=2087-2127%2C9000") || link.contains("mport=2087-2127,9000"))
+        val profile = Hysteria2Fmt.parse(link)!!
+        assertEquals("op", profile.obfsPassword)
+        assertEquals("100", profile.bandwidthUp)
+        assertEquals("50", profile.bandwidthDown)
+        assertEquals("2087-2127,9000", profile.portHopping)
+    }
+
+    @Test
+    fun `anytls and socks outbounds import`() {
+        val json = """
+            {"outbounds":[
+              {"type":"anytls","tag":"at","server":"a.example.com","server_port":443,"password":"pw",
+               "tls":{"enabled":true,"server_name":"a.example.com","utls":{"enabled":true,"fingerprint":"chrome"}}},
+              {"type":"socks","tag":"so","server":"s.example.com","server_port":1080,"version":"5",
+               "username":"u","password":"p"}
+            ]}
+        """.trimIndent()
+        val links = SingboxFmt.toLinks(json)
+        val anytls = AnytlsFmt.parse(links.first { it.startsWith("anytls://") })!!
+        assertEquals("pw", anytls.password)
+        assertEquals("a.example.com", anytls.sni)
+        assertEquals("chrome", anytls.fingerPrint)
+        val socks = SocksFmt.parse(links.first { it.startsWith("socks://") })!!
+        assertEquals("s.example.com", socks.server)
+        assertEquals("u", socks.username)
+        assertEquals("p", socks.password)
+    }
+
+    @Test
+    fun `http transport maps to h2`() {
+        val json = """
+            {"outbounds":[{"type":"vless","tag":"h2node","server":"h.example.com","server_port":443,
+              "uuid":"abc","tls":{"enabled":true,"server_name":"h.example.com"},
+              "transport":{"type":"http","host":["h2.example.com"],"path":"/h2"}}]}
+        """.trimIndent()
+        val profile = VlessFmt.parse(SingboxFmt.toLinks(json).single())!!
+        assertEquals("http", profile.network)
+        assertEquals("h2.example.com", profile.host)
+        assertEquals("/h2", profile.path)
+    }
 }

@@ -9,6 +9,8 @@ import com.aras.client.AppConfig.REALITY
 import com.aras.client.AppConfig.WIREGUARD_LOCAL_ADDRESS_V4
 import com.aras.client.AppConfig.WIREGUARD_LOCAL_MTU
 import com.aras.client.dto.entities.ProfileItem
+import com.aras.client.enums.AetherPsiphon
+import com.aras.client.enums.AetherTor
 import com.aras.client.enums.EConfigType
 import com.aras.client.enums.NetworkType
 import com.aras.client.extension.nullIfBlank
@@ -223,12 +225,15 @@ class ServerUiState(
         val isWireguard = configType == EConfigType.WIREGUARD
         val isAmneziawg = configType == EConfigType.AMNEZIAWG
         val isHysteria2 = configType == EConfigType.HYSTERIA2
+        // A Psiphon or Tor profile is the carrier alone: it names no server of its
+        // own, and its carrier runs in only mode whatever the other fields say.
+        val isCarrierOnly = configType.isCarrierOnly
 
         return initialConfig.copy(
             configType = configType,
             remarks = remarks,
-            server = address,
-            serverPort = port,
+            server = if (isCarrierOnly) null else address,
+            serverPort = if (isCarrierOnly) null else port,
             password = password,
             method = when {
                 isVmess || isShadowsocks -> method
@@ -300,18 +305,39 @@ class ServerUiState(
             aetherListenPort = aetherListenPort.nullIfBlank(),
             aetherCommand = aetherCommand.nullIfBlank(),
             mieruListenPort = mieruListenPort.nullIfBlank(),
-            aetherPsiphon = aetherPsiphon.takeUnless { it == "off" },
-            aetherPsiphonMode = aetherPsiphonMode.takeUnless { aetherPsiphon == "off" },
-            aetherPsiphonCdnIps = aetherPsiphonCdnIps.nullIfBlank(),
-            aetherPsiphonCdnSni = aetherPsiphonCdnSni.nullIfBlank(),
-            aetherPsiphonCdnSets = aetherPsiphonCdnSets.nullIfBlank(),
-            aetherPsiphonRegion = aetherPsiphonRegion.nullIfBlank(),
+            aetherPsiphon = when {
+                configType == EConfigType.PSIPHON -> AetherPsiphon.ONLY.type
+                configType == EConfigType.TOR -> null
+                else -> aetherPsiphon.takeUnless { it == "off" }
+            },
+            aetherPsiphonMode = when {
+                configType == EConfigType.PSIPHON -> aetherPsiphonMode
+                configType == EConfigType.TOR -> null
+                else -> aetherPsiphonMode.takeUnless { aetherPsiphon == "off" }
+            },
+            aetherPsiphonCdnIps = if (configType == EConfigType.TOR) null else aetherPsiphonCdnIps.nullIfBlank(),
+            aetherPsiphonCdnSni = if (configType == EConfigType.TOR) null else aetherPsiphonCdnSni.nullIfBlank(),
+            aetherPsiphonCdnSets = if (configType == EConfigType.TOR) null else aetherPsiphonCdnSets.nullIfBlank(),
+            aetherPsiphonRegion = if (configType == EConfigType.TOR) null else aetherPsiphonRegion.nullIfBlank(),
             // Stored only when it says no; yes is the default and needs no word.
-            aetherPsiphonBundledList = aetherPsiphonBundledList.takeUnless { it },
-            aetherTor = aetherTor.takeUnless { it == "off" },
-            aetherTorBridges = aetherTorBridges.takeUnless { aetherTor == "off" },
-            aetherTorBridgeLines = aetherTorBridgeLines.nullIfBlank(),
-            aetherTorRelays = aetherTorRelays.takeUnless { it == "auto" || aetherTor == "off" },
+            aetherPsiphonBundledList = if (configType == EConfigType.TOR) null
+                else aetherPsiphonBundledList.takeUnless { it },
+            aetherTor = when {
+                configType == EConfigType.TOR -> AetherTor.ONLY.type
+                configType == EConfigType.PSIPHON -> null
+                else -> aetherTor.takeUnless { it == "off" }
+            },
+            aetherTorBridges = when {
+                configType == EConfigType.TOR -> aetherTorBridges
+                configType == EConfigType.PSIPHON -> null
+                else -> aetherTorBridges.takeUnless { aetherTor == "off" }
+            },
+            aetherTorBridgeLines = if (configType == EConfigType.PSIPHON) null else aetherTorBridgeLines.nullIfBlank(),
+            aetherTorRelays = when {
+                configType == EConfigType.TOR -> aetherTorRelays.takeUnless { it == "auto" }
+                configType == EConfigType.PSIPHON -> null
+                else -> aetherTorRelays.takeUnless { it == "auto" || aetherTor == "off" }
+            },
             finalMask = finalMask.nullIfBlank(),
             seed = seed.nullIfBlank(),
             kcpMtu = kcpMtu.toIntOrNull(),

@@ -6,6 +6,20 @@
     "network": "udp"
   },
   {
+    "remarks": "阻断钓鱼与恶意网站",
+    "outboundTag": "block",
+    "domain": [
+      "geosite:phishing",
+      "geosite:malware"
+    ]
+  },
+  {
+    "remarks": "阻断WebRTC与STUN泄漏",
+    "outboundTag": "block",
+    "network": "udp",
+    "port": "3478-3479,5349-5350,19302-19309"
+  },
+  {
     "remarks": "绕过局域网IP",
     "outboundTag": "direct",
     "ip": [

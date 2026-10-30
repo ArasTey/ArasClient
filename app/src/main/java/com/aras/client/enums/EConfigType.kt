@@ -27,6 +27,10 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
     AETHER(14, AppConfig.AETHER),
     // Mieru: a separate client process serving a local SOCKS, like Aether.
     MIERU(15, AppConfig.MIERU),
+    // Psiphon and Tor alone, without an Aether tunnel: the core runs the carrier on
+    // its own and serves it on its loopback listener, which the app dials.
+    PSIPHON(16, AppConfig.PSIPHON),
+    TOR(17, AppConfig.TOR),
     POLICYGROUP(101, AppConfig.CUSTOM),
     PROXYCHAIN(102, AppConfig.CUSTOM);
 
@@ -46,4 +50,7 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
 
     /** True when a dedicated server editor exists for this protocol. */
     val hasEditor: Boolean get() = this !in IMPORT_ONLY
+
+    /** True for a profile that is a carrier alone: no WARP tunnel, and no server address of its own. */
+    val isCarrierOnly: Boolean get() = this == PSIPHON || this == TOR
 }

@@ -2,10 +2,13 @@ package com.aras.client.ui.main
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -35,10 +37,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.dto.entities.SubscriptionItem
 import com.aras.client.handler.MmkvManager
+import com.aras.client.ui.compose.LocalGlassPalette
+import com.aras.client.ui.compose.glassPanel
 import com.aras.client.util.Utils
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -89,26 +94,64 @@ fun SubscriptionInfoBar(
     val webPageUrl = current.webPageUrl?.takeIf { Utils.isSafeLink(it) }
             ?: current.url.takeIf { Utils.isSafeLink(it) }
 
+    // A glass card with nothing but five icons in it reads as an empty box, so
+    // the panel only draws its chrome when it actually has information to show;
+    // otherwise the actions sit directly on the backdrop like a toolbar.
+    val framed = announcement != null || hasInfo
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 14.dp, vertical = 4.dp)
     ) {
-        AnimatedVisibility(visible = announcement != null) {
-            announcement?.let { text -> AnnouncementBanner(text, current.creatorMessage) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (framed) {
+                        Modifier.glassPanel(
+                            palette = LocalGlassPalette.current,
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(
+                    start = if (framed) 8.dp else 2.dp,
+                    end = if (framed) 8.dp else 2.dp,
+                    top = if (framed) 6.dp else 3.dp,
+                    bottom = if (framed) 4.dp else 1.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            AnimatedVisibility(visible = announcement != null) {
+                announcement?.let { text -> AnnouncementBanner(text, current.creatorMessage) }
+            }
+            if (hasInfo) TrafficExpiryBar(current)
+            if (announcement != null || hasInfo) {
+                Spacer(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(LocalGlassPalette.current.hairline)
+                )
+            }
+            SubscriptionActions(
+                groupId = groupId,
+                supportUrl = supportUrl,
+                webPageUrl = webPageUrl,
+                onEdit = onEditSubscription.takeUnless { isProtectedSubscription },
+                onUpdate = onUpdateSubscription,
+                onPing = onPingSubscription,
+                onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
+                onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription },
+                // Without traffic/announcement the actions are the whole panel, so
+                // they collapse into a compact pill instead of spreading across a
+                // full-width empty slab.
+                modifier = if (framed) Modifier else Modifier.align(Alignment.CenterHorizontally),
+                compact = !framed
+            )
         }
-        if (hasInfo) TrafficExpiryBar(current)
-        SubscriptionActions(
-            groupId = groupId,
-            supportUrl = supportUrl,
-            webPageUrl = webPageUrl,
-            onEdit = onEditSubscription.takeUnless { isProtectedSubscription },
-            onUpdate = onUpdateSubscription,
-            onPing = onPingSubscription,
-            onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
-            onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription }
-        )
     }
 }
 
@@ -121,31 +164,53 @@ private fun SubscriptionActions(
     onUpdate: (() -> Unit)?,
     onPing: (() -> Unit)?,
     onRemove: (() -> Unit)?,
-    onCopy: (() -> Unit)?
+    onCopy: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     var deleteStage by remember(groupId) { mutableStateOf(0) }
     val context = LocalContext.current
+    val palette = LocalGlassPalette.current
+    val editGreen = palette.pingGood
+    val pingAmber = palette.amber
+    // Deliberately bluer than the accent, so support never reads as the same
+    // action as its neighbours.
+    val supportBlue = if (palette.isDark) Color(0xFF7FA8FF) else Color(0xFF2F6FE4)
     Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        modifier = modifier
+            .then(
+                if (compact) {
+                    Modifier.glassPanel(
+                        palette = palette,
+                        shape = CircleShape,
+                        fill = if (palette.isDark) Color(0x1FCFE9F5) else Color(0xC9F7FCFF),
+                        borderColor = if (palette.isDark) Color(0x3DCFE9F5) else Color(0xE0FFFFFF)
+                    ).padding(horizontal = 4.dp, vertical = 1.dp)
+                } else {
+                    Modifier.fillMaxWidth()
+                }
+            ),
+        horizontalArrangement = if (compact) Arrangement.spacedBy(2.dp) else Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        onEdit?.let { SubBarAction(R.drawable.ic_edit_24dp, R.string.acc_edit, onClick = it) }
-        onUpdate?.let { SubBarAction(R.drawable.ic_check_update_24dp, R.string.sub_bar_update, onClick = it) }
-        onPing?.let {
-            SubBarAction(
-                R.drawable.ic_speedtest_24dp,
-                R.string.title_ping_selected_subscription,
-                onClick = it,
-            )
+        onEdit?.let {
+            SubBarAction(R.drawable.ic_edit_24dp, R.string.acc_edit, tint = editGreen, onClick = it)
         }
-        onCopy?.let { SubBarAction(R.drawable.ic_copy, R.string.share_method_clipboard, onClick = it) }
+        onUpdate?.let {
+            SubBarAction(R.drawable.ic_check_update_24dp, R.string.sub_bar_update, tint = palette.accent, onClick = it)
+        }
+        onPing?.let {
+            SubBarAction(R.drawable.ic_speedtest_24dp, R.string.title_ping_selected_subscription, tint = pingAmber, onClick = it)
+        }
+        onCopy?.let {
+            SubBarAction(R.drawable.ic_copy, R.string.share_method_clipboard, tint = palette.accent, onClick = it)
+        }
         // Remote links, so the sanitize check sits here too, not only at parse time.
         supportUrl?.let { url ->
             SubBarAction(
                 if (Utils.isTelegramLink(url)) R.drawable.ic_telegram_24dp else R.drawable.ic_feedback_24dp,
                 R.string.sub_info_open_support,
+                tint = supportBlue,
                 onClick = { Utils.openUri(context, url) },
             )
         }
@@ -153,12 +218,12 @@ private fun SubscriptionActions(
             SubBarAction(
                 R.drawable.ic_about_24dp,
                 R.string.sub_info_open_page,
+                tint = palette.accent,
                 onClick = { Utils.openUri(context, url) },
             )
         }
         onRemove?.let {
-            SubBarAction(R.drawable.ic_delete_24dp, R.string.acc_delete,
-                tint = MaterialTheme.colorScheme.error, onClick = { deleteStage = 1 })
+            SubBarAction(R.drawable.ic_delete_24dp, R.string.acc_delete, tint = palette.danger, onClick = { deleteStage = 1 })
         }
     }
     if (deleteStage > 0) {
@@ -184,24 +249,24 @@ private fun SubscriptionActions(
 
 @Composable
 private fun TrafficExpiryBar(sub: SubscriptionItem) {
+    val palette = LocalGlassPalette.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 2.dp, vertical = 1.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 painter = painterResource(R.drawable.ic_subscriptions_24dp),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(16.dp)
+                tint = palette.accent,
+                modifier = Modifier.size(14.dp)
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             Text(
                 text = trafficSummary(sub),
                 style = MaterialTheme.typography.labelMedium,
+                fontSize = 10.5.sp,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -211,11 +276,12 @@ private fun TrafficExpiryBar(sub: SubscriptionItem) {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = expirySummary(sub.expireAt),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
                     color = if (isExpiringSoon(sub.expireAt))
-                        MaterialTheme.colorScheme.error
+                        palette.danger
                     else
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        palette.faint
                 )
             }
         }
@@ -223,17 +289,21 @@ private fun TrafficExpiryBar(sub: SubscriptionItem) {
             Spacer(Modifier.height(6.dp))
             val ratio = (sub.trafficUsed.toDouble() / sub.trafficTotal)
                 .coerceIn(0.0, 1.0).toFloat()
-            LinearProgressIndicator(
-                progress = { ratio },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp),
-                color = if (ratio > 0.9f)
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.secondary,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(palette.hairline)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(ratio)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(if (ratio > 0.9f) palette.danger else palette.accent)
+                )
+            }
         }
     }
 }
@@ -242,46 +312,48 @@ private fun TrafficExpiryBar(sub: SubscriptionItem) {
 private fun SubBarAction(
     drawableRes: Int,
     contentDescRes: Int,
-    container: Color = Color.Transparent,
-    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    tint: Color,
     onClick: () -> Unit,
 ) {
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .size(48.dp)
+            .size(38.dp)
             .clip(CircleShape)
-            .background(container)
     ) {
         Icon(
             painter = painterResource(drawableRes),
             contentDescription = stringResource(contentDescRes),
             tint = tint,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(19.dp)
         )
     }
 }
 
 @Composable
 private fun AnnouncementBanner(text: String, creatorMessage: String?) {
+    val palette = LocalGlassPalette.current
+    val shape = RoundedCornerShape(10.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(shape)
+            .background(palette.accent.copy(alpha = if (palette.isDark) 0.13f else 0.08f))
+            .border(0.7.dp, palette.accent.copy(alpha = 0.20f), shape)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 painter = painterResource(R.drawable.ic_promotion_24dp),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(16.dp)
+                tint = palette.accent,
+                modifier = Modifier.size(14.dp)
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodySmall,
+                fontSize = 10.5.sp,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
@@ -292,7 +364,8 @@ private fun AnnouncementBanner(text: String, creatorMessage: String?) {
             Text(
                 text = it,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 9.sp,
+                color = palette.faint,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

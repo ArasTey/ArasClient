@@ -93,5 +93,8 @@ object FreeSubManager {
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "FreeSub protectAll failed", e)
         }
+        // Every path that re-imports Free profiles ends here, so keep the
+        // user's manual deletions intact after an update too.
+        FreeTrashManager.purgeResurrected()
     }
 }

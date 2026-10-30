@@ -129,6 +129,12 @@
     <string name="toast_success">موفقیت‌آمیز</string>
     <string name="free_sub_locked">گروه Free قفل است</string>
     <string name="free_sub_protected">این کانفیگ محافظت‌شده است</string>
+    <string name="menu_more_restore_free_configs">بازیابی کانفیگ‌های رایگان حذف‌شده</string>
+    <string name="toast_free_config_deleted">کانفیگ حذف شد</string>
+    <string name="action_undo">واگرد</string>
+    <string name="toast_free_restored">کانفیگ رایگان بازیابی شد</string>
+    <string name="toast_free_restore_count">کانفیگ‌های رایگان حذف‌شده بازیابی شدند</string>
+    <string name="toast_free_nothing_to_restore">چیزی برای بازیابی نیست</string>
     <string name="update_banner_available">به‌روزرسانی در دسترس است!</string>
     <string name="update_banner_tap_to_update">نسخه جدید آماده نصب است.</string>
     <string name="update_banner_dismiss">بی‌خیال</string>
@@ -662,6 +668,15 @@
     <string name="sub_info_open_support">باز کردن لینک پشتیبانی</string>
     <string name="sub_info_open_page">باز کردن صفحه اطلاعات اشتراک</string>
     <string name="server_lab_aether_note">دروازه WARP اغلب به پینگ معمولی پاسخ نمی‌دهد و نشانی خروجی‌اش ایرانی دیده می‌شود — هر دو طبیعی است. اتصال را بررسی کنید، نه پینگ را.</string>
+    <!-- Psiphon and Tor on their own, without an Aether tunnel -->
+    <string name="menu_item_import_config_manually_psiphon">افزودن دستی کانفیگ سایفون</string>
+    <string name="menu_item_import_config_manually_tor">افزودن دستی کانفیگ تور</string>
+    <string name="server_lab_carrier_region">منطقه</string>
+    <string name="server_lab_carrier_region_auto">خودکار</string>
+    <string name="server_lab_carrier_region_search">جست‌وجوی کشورها</string>
+    <string name="server_lab_carrier_region_bad">منطقه باید کد دوحرفی کشور باشد، مثل DE.</string>
+    <string name="server_lab_psiphon_note">سایفون را به‌تنهایی و بدون تونل Aether اجرا می‌کند. برنامه سایفون را به‌صورت محلی صدا می‌زند، پس نشانی سرور لازم نیست؛ منطقه، کشور خروج را تعیین می‌کند.</string>
+    <string name="server_lab_tor_note">تور را به‌تنهایی و بدون تونل Aether اجرا می‌کند. برنامه تور را به‌صورت محلی صدا می‌زند، پس نشانی سرور لازم نیست. هسته گزینه‌ای برای انتخاب کشور خروج تور ندارد؛ برای انتخاب کشور از سایفون استفاده کنید. پل‌ها جایی که تور مسدود است کمک می‌کنند.</string>
     <string name="server_lab_aether_psiphon">سایفون</string>
     <string name="server_lab_aether_psiphon_mode">حالت سایفون</string>
     <string name="server_lab_aether_psiphon_cdn_ips">نشانی‌های CDN سایفون</string>

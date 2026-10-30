@@ -266,6 +266,7 @@ object MmkvManager {
             return null
         }
         return JsonUtil.fromJsonSafe(json, ProfileItem::class.java)
+            ?.takeIf { it.configType != null }
     }
 
 
@@ -659,7 +660,7 @@ object MmkvManager {
 
     //region Subscriptions
 
-    private fun getSubscriptionId(subscriptionId: String?): String {
+    fun getSubscriptionId(subscriptionId: String?): String {
         return subscriptionId?.ifEmpty { DEFAULT_SUBSCRIPTION_ID } ?: DEFAULT_SUBSCRIPTION_ID
     }
 

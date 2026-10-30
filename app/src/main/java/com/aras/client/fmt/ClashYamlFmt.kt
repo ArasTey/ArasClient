@@ -14,6 +14,38 @@ object ClashYamlFmt {
     private val proxyKey = Regex("(?m)^\\s*(?:[\"']?proxies[\"']?)\\s*:")
     private val leadingProxyKey = Regex("^\\s*\\{\\s*[\"']?proxies[\"']?\\s*:\\s*\\[")
 
+    private val commonKeys = setOf("name", "type", "server", "port")
+
+    /**
+     * Keys that only tune a session (UDP relay, TCP fast open, multiplexing,
+     * outbound binding) or annotate the proxy. Xray dials the same endpoint
+     * without them, so they are accepted and ignored rather than rejecting a
+     * whole mihomo document over a field this app cannot express.
+     */
+    private val tuningKeys = setOf(
+        "udp", "tfo", "mptcp", "xudp", "packet-encoding", "smux", "smux-opts",
+        "ip-version", "interface-name", "routing-mark", "dialer-proxy",
+        "fingerprint", "global-client-fingerprint",
+        "idle-session-check-interval", "idle-session-timeout", "min-idle-session",
+    )
+
+    private val tlsKeys =
+        setOf("tls", "servername", "sni", "skip-cert-verify", "client-fingerprint", "alpn")
+
+    private val transportKeys = setOf("network", "ws-opts", "grpc-opts", "h2-opts")
+
+    private fun typeKeys(type: String): Set<String> = when (type) {
+        "ss" -> setOf("cipher", "password", "plugin", "plugin-opts")
+        "vmess" -> setOf("uuid", "alterId", "cipher")
+        "vless" -> setOf("uuid", "flow", "encryption", "reality-opts")
+        "trojan" -> setOf("password")
+        "hysteria2" -> setOf(
+            "password", "obfs", "obfs-password", "up", "down", "ports", "hop-interval"
+        )
+        "anytls" -> setOf("password")
+        else -> emptySet()
+    }
+
     fun isClashYaml(text: String): Boolean {
         val normalized = normalize(text)
         if (proxyKey.containsMatchIn(normalized) || leadingProxyKey.containsMatchIn(normalized)) {
@@ -51,23 +83,11 @@ object ClashYamlFmt {
     }
 
     private fun toLink(proxy: Map<*, *>): String {
-        val commonKeys = setOf("name", "type", "server", "port", "udp", "tfo", "ip-version")
         val type = proxy.string("type")
-        val typeKeys = when (type) {
-            "ss" -> setOf("cipher", "password")
-            "vmess" -> setOf("uuid", "alterId", "cipher")
-            "vless" -> setOf("uuid", "flow", "encryption")
-            "trojan" -> setOf("password")
-            else -> throw IllegalArgumentException("Unsupported proxy type")
+        require(type in setOf("ss", "vmess", "vless", "trojan", "hysteria2", "anytls")) {
+            "Unsupported proxy type"
         }
-        val transportKeys = setOf("tls", "servername", "sni", "skip-cert-verify", "client-fingerprint", "alpn", "network", "ws-opts", "grpc-opts", "reality-opts")
-        val allowedKeys = if (type == "ss") {
-            commonKeys + typeKeys + setOf("plugin", "plugin-opts", "client-fingerprint")
-        } else {
-            commonKeys + typeKeys + transportKeys
-        }
-        require(proxy.keys.all { it in allowedKeys })
-        require(proxy["ip-version"] == null || proxy["ip-version"] == "dual")
+        require(proxy.keys.all { it in commonKeys + typeKeys(type) + tlsKeys + transportKeys + tuningKeys })
         val host = proxy.string("server").removeSurrounding("[", "]")
         require(host.none { it.isWhitespace() || it in "/?#@" })
         val port = proxy.string("port").toIntOrNull()
@@ -75,19 +95,57 @@ object ClashYamlFmt {
         val address = if (':' in host) "[$host]:$port" else "$host:$port"
         val name = proxy.optional("name") ?: host
         val credential = proxy.string(if (type in setOf("vmess", "vless")) "uuid" else "password")
+
         if (type == "ss") {
             val cipher = proxy.string("cipher")
             val plugin = shadowsocksPlugin(proxy)
             val query = plugin?.let { "?plugin=${encode(it)}" }.orEmpty()
             return "ss://${base64("$cipher:$credential")}@$address$query#${encode(name)}"
         }
+        if (type == "hysteria2") {
+            val query = linkedMapOf("security" to "tls")
+            (proxy.optional("servername") ?: proxy.optional("sni"))?.let { query["sni"] = it }
+            if (proxy.boolean("skip-cert-verify", false)) query["insecure"] = "1"
+            proxy["alpn"]?.let { value ->
+                require(value is List<*> && value.all { it is String })
+                query["alpn"] = value.joinToString(",")
+            }
+            proxy.optional("obfs")?.let {
+                require(it.equals("salamander", ignoreCase = true)) {
+                    "Unsupported hysteria2 obfs type"
+                }
+                query["obfs"] = "salamander"
+            }
+            proxy.optional("obfs-password")?.let { query["obfs-password"] = it }
+            proxy.optional("ports")?.let { query["mport"] = it }
+            proxy.optional("hop-interval")?.let { query["hop-interval"] = it }
+            proxy.optional("up")?.let { bandwidth(it)?.let { v -> query["upmbps"] = v } }
+            proxy.optional("down")?.let { bandwidth(it)?.let { v -> query["downmbps"] = v } }
+            val q = "?" + query.entries.joinToString("&") { (k, v) -> "$k=${encode(v)}" }
+            return "hysteria2://${encode(credential)}@$address$q#${encode(name)}"
+        }
+        if (type == "anytls") {
+            val query = linkedMapOf<String, String>()
+            (proxy.optional("servername") ?: proxy.optional("sni"))?.let { query["sni"] = it }
+            if (proxy.boolean("skip-cert-verify", false)) query["insecure"] = "1"
+            proxy["alpn"]?.let { value ->
+                require(value is List<*> && value.all { it is String })
+                query["alpn"] = value.joinToString(",")
+            }
+            proxy.optional("client-fingerprint")?.let { query["fp"] = it }
+            val q = if (query.isEmpty()) "" else
+                "?" + query.entries.joinToString("&") { (k, v) -> "$k=${encode(v)}" }
+            return "anytls://${encode(credential)}@$address$q#${encode(name)}"
+        }
+
         val network = proxy.optional("network") ?: "tcp"
-        require(network in setOf("tcp", "ws", "grpc"))
+        require(network in setOf("tcp", "ws", "grpc", "h2", "http"))
         val tls = proxy.boolean("tls", type == "trojan")
         require(type != "trojan" || tls)
         val reality = proxy["reality-opts"] as? Map<*, *>
         require(proxy["reality-opts"] == null || (type == "vless" && reality != null && tls))
-        val query = linkedMapOf("type" to network, "security" to if (reality != null) "reality" else if (tls) "tls" else "none")
+        val query = linkedMapOf<String, String>()
+        query["security"] = if (reality != null) "reality" else if (tls) "tls" else "none"
         query["allowInsecure"] = if (proxy.boolean("skip-cert-verify", false)) "1" else "0"
         (proxy.optional("servername") ?: proxy.optional("sni"))?.let { query["sni"] = it }
         proxy.optional("client-fingerprint")?.let { query["fp"] = it }
@@ -96,19 +154,33 @@ object ClashYamlFmt {
             query["alpn"] = value.joinToString(",")
         }
         reality?.let {
-            require(it.keys.all { key -> key in setOf("public-key", "short-id") })
+            require(it.keys.all { key -> key in setOf("public-key", "short-id", "spider-x") })
             query["pbk"] = it.string("public-key")
             it.optional("short-id")?.let { id -> query["sid"] = id }
+            it.optional("spider-x")?.let { x -> query["spx"] = x }
         }
         require(proxy["ws-opts"] == null || network == "ws")
         require(proxy["grpc-opts"] == null || network == "grpc")
+        require(proxy["h2-opts"] == null || network in setOf("h2", "http"))
         proxy["ws-opts"]?.let { value ->
             val ws = value as? Map<*, *> ?: throw IllegalArgumentException()
-            require(ws.keys.all { it in setOf("path", "headers") })
+            require(
+                ws.keys.all {
+                    it in setOf(
+                        "path", "headers", "max-early-data", "early-data-header-name",
+                        "v2ray-http-upgrade", "v2ray-http-upgrade-fast-open",
+                    )
+                }
+            )
             ws.optional("path")?.let { query["path"] = it }
             ws["headers"]?.let { headers ->
-                require(headers is Map<*, *> && headers.keys.all { it.toString().equals("Host", true) })
-                headers.values.firstOrNull()?.let { require(it is String); query["host"] = it }
+                require(headers is Map<*, *>)
+                // Only the Host header affects the dial; other headers are
+                // decorations that Xray's WS transport in this app cannot carry.
+                headers.entries
+                    .firstOrNull { it.key.toString().equals("Host", ignoreCase = true) }
+                    ?.value
+                    ?.let { require(it is String); query["host"] = it }
             }
         }
         proxy["grpc-opts"]?.let { value ->
@@ -116,14 +188,35 @@ object ClashYamlFmt {
             require(grpc.keys.all { it == "grpc-service-name" })
             grpc.optional("grpc-service-name")?.let { query["serviceName"] = it }
         }
+        proxy["h2-opts"]?.let { value ->
+            val h2 = value as? Map<*, *> ?: throw IllegalArgumentException()
+            require(h2.keys.all { it in setOf("host", "path") })
+            when (val hosts = h2["host"]) {
+                is List<*> -> hosts.firstOrNull { it is String }?.let { query["host"] = it as String }
+                is String -> query["host"] = hosts
+                null -> {}
+                else -> throw IllegalArgumentException()
+            }
+            h2.optional("path")?.let { query["path"] = it }
+        }
+        query["type"] = when (network) {
+            "ws" -> if (proxy["ws-opts"].let { (it as? Map<*, *>)?.get("v2ray-http-upgrade") == true }) {
+                "httpupgrade"
+            } else {
+                "ws"
+            }
+            "h2", "http" -> "http"
+            else -> network
+        }
         if (type == "vmess") {
             require((proxy.optional("alterId") ?: "0").toIntOrNull() == 0)
             val json = linkedMapOf(
                 "v" to "2", "ps" to name, "add" to host, "port" to port.toString(),
                 "id" to credential, "aid" to "0", "scy" to (proxy.optional("cipher") ?: "auto"),
-                "net" to network, "type" to "none", "tls" to if (tls) "tls" else "",
+                "net" to query.getValue("type"), "type" to "none",
+                "tls" to if (tls) "tls" else "",
                 "host" to query["host"].orEmpty(),
-                "path" to (if (network == "grpc") query["serviceName"] else query["path"]).orEmpty(),
+                "path" to (if (query["type"] == "grpc") query["serviceName"] else query["path"]).orEmpty(),
                 "sni" to query["sni"].orEmpty(), "fp" to query["fp"].orEmpty(),
                 "alpn" to query["alpn"].orEmpty(), "insecure" to query.getValue("allowInsecure")
             )
@@ -142,12 +235,20 @@ object ClashYamlFmt {
             require(proxy["plugin-opts"] == null) { "Shadowsocks plugin-opts requires plugin" }
             return null
         }
-        require(plugin.equals("v2ray-plugin", ignoreCase = true)) {
-            "Unsupported Shadowsocks plugin"
-        }
         val options = proxy["plugin-opts"]?.let {
             it as? Map<*, *> ?: throw IllegalArgumentException("Invalid plugin-opts")
         } ?: emptyMap<Any, Any>()
+        if (plugin.equals("obfs", ignoreCase = true)) {
+            require(options.keys.all { it in setOf("mode", "host") })
+            val mode = options.optional("mode") ?: "http"
+            require(mode == "http") { "Unsupported Shadowsocks obfs mode" }
+            val parts = mutableListOf("obfs-local", "obfs=http")
+            options.optional("host")?.let { parts += "obfs-host=$it" }
+            return parts.joinToString(";")
+        }
+        require(plugin.equals("v2ray-plugin", ignoreCase = true)) {
+            "Unsupported Shadowsocks plugin"
+        }
         require(options.keys.all { it in setOf("mode", "host", "path", "tls") })
 
         val parts = mutableListOf("v2ray-plugin")
@@ -160,6 +261,9 @@ object ClashYamlFmt {
         proxy.optional("client-fingerprint")?.let { parts += "fp=$it" }
         return parts.joinToString(";")
     }
+
+    /** mihomo writes bandwidth as a number or "100 Mbps"; the app stores the number. */
+    private fun bandwidth(value: String): String? = Regex("\\d+").find(value)?.value
 
     private fun Map<*, *>.optional(key: String): String? = get(key)?.let {
         require(it is String || it is Number)

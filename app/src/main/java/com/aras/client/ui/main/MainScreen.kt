@@ -2,7 +2,6 @@ package com.aras.client.ui.main
 
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
-import com.aras.client.ui.subscription.SubEditActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +13,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -24,15 +24,19 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
-import com.aras.client.handler.MmkvManager
-import com.aras.client.ui.compose.LocalDarkTheme
+import com.aras.client.R
+import com.aras.client.ui.compose.LocalAppSnackbar
 import com.aras.client.ui.compose.QRCodeDialog
+import com.aras.client.ui.compose.ToastType
+import com.aras.client.ui.subscription.SubEditActivity
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -58,16 +62,15 @@ fun MainScreen(
         onPauseOrDispose { mainViewModel.setMainScreenActive(false) }
     }
     val selectedGuid = uiState.selectedGuid
-    // Ping-aware bottom bar: green only for a successful positive delay.
-    val hasPing = if (isRunning && selectedGuid != null) {
-        (MmkvManager.decodeServerAffiliationInfo(selectedGuid)?.testDelayMillis ?: -1L) > 0L
-    } else false
     val doubleColumnDisplay = uiState.doubleColumnDisplay
     val confirmRemove = uiState.confirmRemove
     val shareQRCodeBitmap = uiState.shareQRCodeBitmap
     val scrollToTopTick = uiState.scrollToTopTick
 
-    val isDarkTheme = LocalDarkTheme.current
+    val testFlagIso = if (uiState.statusMessageVisible) {
+        (uiState.status as? MainStatus.ConnectionTest)?.result?.country
+            ?.let { com.aras.client.util.CountryResolver.isoForCountry(it) }
+    } else null
     var showMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var showSearch by remember { mutableStateOf(false) }
@@ -76,9 +79,6 @@ fun MainScreen(
     var showDelDuplicateConfirm by remember { mutableStateOf(false) }
     var showDelInvalidConfirm by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf<String?>(null) }
-    var autoScrollEnabled by remember {
-        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true))
-    }
 
     var shareTarget by remember { mutableStateOf<Triple<String, ProfileItem, Boolean>?>(null) }
     val removeServer: (String) -> Unit = { guid ->
@@ -140,6 +140,19 @@ fun MainScreen(
         onConfirmRemove = { guid -> showRemoveConfirm = null; onAction(MainAction.RemoveServer(guid)) }
     )
 
+    // Free configs support a manual delete; offer an immediate Undo and a
+    // persistent restore entry in the ⋮ menu.
+    val snackbar = LocalAppSnackbar.current
+    val deletedMsg = stringResource(R.string.toast_free_config_deleted)
+    val undoLabel = stringResource(R.string.action_undo)
+    LaunchedEffect(snackbar) {
+        mainViewModel.lastRemovedFree.collect {
+            snackbar.show(deletedMsg, ToastType.NORMAL, true, undoLabel) {
+                scope.launch { mainViewModel.undoRemoveFree() }
+            }
+        }
+    }
+
     if (shareTarget != null) {
         val (guid, profile, more) = shareTarget!!
         ShareMethodDialog(
@@ -168,11 +181,6 @@ fun MainScreen(
                     isLoading = isLoading,
                     showSearch = showSearch,
                     searchQuery = searchQuery,
-                    autoScrollEnabled = autoScrollEnabled,
-                    onToggleAutoScroll = { enabled ->
-                        autoScrollEnabled = enabled
-                        MmkvManager.encodeSettings(AppConfig.PREF_AUTO_SCROLL_TO_TOP, enabled)
-                    },
                     onSearchQueryChange = { query: String ->
                         searchQuery = query
                         onAction(MainAction.Search(query))
@@ -195,28 +203,29 @@ fun MainScreen(
                             MainMoreMenuAction.ExportSubTxt -> onAction(MainAction.ExportGroupTxt)
                             MainMoreMenuAction.LocateSelected -> onAction(MainAction.LocateSelectedServer)
                             MainMoreMenuAction.SortByTestResults -> onAction(MainAction.SortByTestResults)
-                            MainMoreMenuAction.PingSelectedSubscription -> onAction(MainAction.PingSelectedSubscription)
                             MainMoreMenuAction.TestAll -> onAction(MainAction.TestAllServers)
                             MainMoreMenuAction.TestAllRealPing -> onAction(MainAction.TestRealAllServers)
                             MainMoreMenuAction.UpdateSubscriptions -> onAction(MainAction.UpdateSubscriptions)
+                            MainMoreMenuAction.RestoreFreeConfigs -> {
+                                scope.launch { mainViewModel.restoreAllFreeConfigs() }
+                            }
                         }
                     }
                 )
             },
             bottomBar = {
-                Column {
-                    if (isRunning) {
-                        com.aras.client.ui.compose.ConnectionMiniStats(
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                    }
+                // The connect panel keeps a fixed type scale: a big system font
+                // would otherwise wrap the config name and squeeze the stats.
+                val density = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density = density.density, fontScale = 1f)
+                ) {
                     MainBottomBar(
                         displayText = barText.title,
                         subtitleOverride = if (uiState.status == MainStatus.Disconnected) null else barText.subtitle,
+                        subtitleFlagIso = testFlagIso,
                         isRunning = isRunning,
-                        isDarkTheme = isDarkTheme,
-                        onAction = onAction,
-                        hasPing = hasPing
+                        onAction = onAction
                     )
                 }
             },
@@ -246,10 +255,7 @@ fun MainScreen(
                             mainViewModel = mainViewModel,
                             onTabClick = { targetIndex ->
                                 scope.launch {
-                                    pagerState.navigateToPageOptimized(
-                                        targetPage = targetIndex,
-                                        animateAdjacentPage = true
-                                    )
+                                    pagerState.navigateToPageOptimized(targetIndex)
                                 }
                             }
                         )
@@ -301,7 +307,7 @@ fun MainScreen(
                                 start = 12.dp,
                                 top = 4.dp,
                                 end = 12.dp,
-                                bottom = 88.dp
+                                bottom = 120.dp
                             )
                         )
                     }

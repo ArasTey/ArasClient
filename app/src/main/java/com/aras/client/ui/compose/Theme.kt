@@ -25,7 +25,9 @@ import androidx.compose.ui.text.font.Font
 import com.aras.client.R
 import androidx.compose.material3.Typography
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
 import com.aras.client.AppConfig
 import com.aras.client.handler.MmkvManager
@@ -116,7 +118,7 @@ val colorFabInactiveLight = Color(0xFFB9AC9C) // Warm Gray
 val colorFabInactiveDark = Color(0xFF4A4A52) // Dark Gray
 val dividerColorLight = Color(0xFFE2D7C9) // Light Sand
 val dividerColorDark = Color(0xFF3A3A40) // Dark Gray
-val colorSelectedGlow = Color(0xFF7C5CFF) // Violet glow for selected card
+val colorSelectedGlow = Color(0xFF54C3F2) // Accent glow for selected card
 
 // Toast Colors 70%
 val toastNormalBgLight = Color(0xB3353A3E) // Dark Gray
@@ -212,6 +214,18 @@ fun AppTheme(
     }
     val snackbarController = rememberAppSnackbarController()
 
+    val baseDensity = LocalDensity.current
+    // Cap the system font scale: oversized user fonts break fixed-height
+    // chrome (the 50dp top-bar wordmark, sheet tiles) instead of just making
+    // text bigger. A mild cap keeps accessibility without breaking layout.
+    val cappedDensity = Density(
+        density = baseDensity.density,
+        fontScale = baseDensity.fontScale.coerceIn(1f, 1.15f)
+    )
+    // The top bar and the group rail keep the glass treatment even though the
+    // rest of the app is back on the stock surface theme.
+    val glassPalette = if (darkTheme) DarkGlassPalette else LightGlassPalette
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -226,7 +240,9 @@ fun AppTheme(
 
     CompositionLocalProvider(
         LocalDarkTheme provides darkTheme,
-        LocalAppSnackbar provides snackbarController
+        LocalGlassPalette provides glassPalette,
+        LocalAppSnackbar provides snackbarController,
+        LocalDensity provides cappedDensity
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

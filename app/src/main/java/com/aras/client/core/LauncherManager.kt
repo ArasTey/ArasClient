@@ -88,6 +88,7 @@ object LauncherManager {
             }
 
         if (!config.configType.isComplexType()
+            && !config.configType.isCarrierOnly
             && !Utils.isValidUrl(config.server)
             && !Utils.isPureIpAddress(config.server.orEmpty())
         ) {

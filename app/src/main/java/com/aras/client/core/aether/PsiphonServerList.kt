@@ -55,14 +55,24 @@ object PsiphonServerList {
     fun entriesFile(assetDir: File, workDir: File): File? {
         val source = File(assetDir, ASSET_NAME)
         if (!source.isFile) return null
+        val stamp = "${source.length()}:${source.lastModified()}"
+        return entriesFile(runCatching { source.readBytes() }.getOrNull(), stamp, workDir)
+    }
+
+    /**
+     * The entries file for a list that came as [packed] bytes, from a file of the
+     * user's or from the APK's own assets; [stamp] names that source, so a list that
+     * changed is unpacked again.
+     */
+    fun entriesFile(packed: ByteArray?, stamp: String, workDir: File): File? {
+        if (packed == null) return null
         val entries = File(workDir, ENTRIES_FILE)
         val mark = File(workDir, SOURCE_MARK)
-        val stamp = "${source.length()}:${source.lastModified()}"
         if (entries.isFile && mark.isFile && runCatching { mark.readText() }.getOrNull() == stamp) {
             return entries
         }
         return try {
-            val text = unpack(source.readBytes(), SIGNING_KEY)
+            val text = unpack(packed, SIGNING_KEY)
             // A daemon and an editor may both unpack a new list; each writes under a name
             // of its own, so a second writer cannot see a half-written file.
             val fresh = File(workDir, "$ENTRIES_FILE.${System.nanoTime()}.new")

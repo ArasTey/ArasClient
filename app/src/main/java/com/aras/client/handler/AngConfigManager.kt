@@ -23,6 +23,7 @@ import com.aras.client.fmt.ArasFmt
 import com.aras.client.fmt.AmneziawgFmt
 import com.aras.client.fmt.AnytlsFmt
 import com.aras.client.fmt.AetherFmt
+import com.aras.client.fmt.CarrierFmt
 import com.aras.client.fmt.MieruFmt
 import com.aras.client.fmt.MasqueFmt
 import com.aras.client.fmt.VlessFmt
@@ -74,6 +75,8 @@ object AngConfigManager {
             EConfigType.MASQUE.protocolScheme to MasqueFmt::parse,
             EConfigType.AETHER.protocolScheme to AetherFmt::parse,
             EConfigType.MIERU.protocolScheme to MieruFmt::parse,
+            EConfigType.PSIPHON.protocolScheme to CarrierFmt::parse,
+            EConfigType.TOR.protocolScheme to CarrierFmt::parse,
             EConfigType.AMNEZIAWG.protocolScheme to AmneziawgFmt::parse,
             AppConfig.ARASFMTS to ArasFmt::parse
         )
@@ -227,6 +230,7 @@ object AngConfigManager {
                 EConfigType.MASQUE -> MasqueFmt.toUri(config)
                 EConfigType.AETHER -> AetherFmt.toUri(config)
                 EConfigType.MIERU -> MieruFmt.toUri(config)
+                EConfigType.PSIPHON, EConfigType.TOR -> CarrierFmt.toUri(config)
                 EConfigType.AMNEZIAWG -> AmneziawgFmt.toUri(config)
                 else -> {}
             }
@@ -260,6 +264,11 @@ object AngConfigManager {
             var count = parseBatchConfig(Utils.decode(server), subid, append)
             if (count <= 0) {
                 count = parseBatchConfig(server, subid, append)
+            }
+            if (count <= 0) {
+                // Subscriptions routinely base64-wrap their payload; the raw text
+                // was already tried, so the decoded copy gets the custom-config pass.
+                count = parseCustomConfigServer(Utils.decode(server), subid, append)
             }
             if (count <= 0) {
                 count = parseCustomConfigServer(server, subid, append)

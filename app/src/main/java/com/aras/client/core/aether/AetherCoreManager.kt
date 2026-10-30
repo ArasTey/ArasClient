@@ -18,8 +18,8 @@ import com.aras.client.enums.AetherTorRelays
 import com.aras.client.enums.AetherProtocol
 import com.aras.client.enums.AetherScanMode
 import com.aras.client.enums.AetherTransport
+import com.aras.client.enums.EConfigType
 import com.aras.client.fmt.AetherFmt
-import com.aras.client.handler.SettingsManager
 import com.aras.client.util.Utils
 import com.aras.client.util.LogUtil
 import java.io.File
@@ -137,8 +137,14 @@ object AetherCoreManager {
     const val PSIPHON_BIN_ENV = "AETHER_PSIPHON_BIN"
     const val TOR_PT_ENV = "AETHER_TOR_PT"
     const val CERT_DIR_ENV = "SSL_CERT_DIR"
-    const val PSIPHON_CONFIG_ENV = "AETHER_PSIPHON_CONFIG"
     const val PSIPHON_DIR_ENV = "AETHER_PSIPHON_DIR"
+
+    /**
+     * The server entries Psiphon starts from. Its own list download resolves names with
+     * the system resolver, which a Linux-built program cannot read on Android, so without
+     * these a fresh session has no server to dial.
+     */
+    const val PSIPHON_ENTRIES_ENV = "AETHER_PSIPHON_SERVER_ENTRIES"
 
     /**
      * The core's word that Psiphon has a tunnel: "psiphon is ready". The start waits for it as well as for the
@@ -219,10 +225,18 @@ object AetherCoreManager {
         val protocol = AetherProtocol.fromString(profile.aetherProtocol)
         // A scan looks for WARP endpoints from where the session will look: a carrier
         // around the tunnel stays, one inside it has no part in a scan.
-        val tor = AetherTor.fromString(profile.aetherTor).takeUnless { scan && it != AetherTor.REVERSE }
-            ?: AetherTor.OFF
-        val psiphon = AetherPsiphon.fromString(profile.aetherPsiphon)
-            .takeUnless { scan && it != AetherPsiphon.REVERSE } ?: AetherPsiphon.OFF
+        // A Psiphon or Tor profile is the carrier alone, so it never scans: there is
+        // no WARP endpoint to find.
+        val tor = when (profile.configType) {
+            EConfigType.TOR -> AetherTor.ONLY
+            else -> AetherTor.fromString(profile.aetherTor).takeUnless { scan && it != AetherTor.REVERSE }
+                ?: AetherTor.OFF
+        }
+        val psiphon = when (profile.configType) {
+            EConfigType.PSIPHON -> AetherPsiphon.ONLY
+            else -> AetherPsiphon.fromString(profile.aetherPsiphon)
+                .takeUnless { scan && it != AetherPsiphon.REVERSE } ?: AetherPsiphon.OFF
+        }
         // The listener the app dials takes [port]: Psiphon's or Tor's when one of them
         // runs inside the tunnel and is what the app reaches, the tunnel's own
         // otherwise. Every other listener takes a port after it, in the order the
@@ -734,7 +748,7 @@ object AetherCoreManager {
             // since Android 14 and on the system image before that. Without this neither
             // can verify a certificate, the Psiphon server list first of all.
             certificateDirectories { File(it).isDirectory }?.let { put(CERT_DIR_ENV, it) }
-            psiphonOverlay(context)?.let { put(PSIPHON_CONFIG_ENV, it.absolutePath) }
+            psiphonEntriesFile(context)?.let { put(PSIPHON_ENTRIES_ENV, it.absolutePath) }
             put(
                 PSIPHON_DIR_ENV,
                 File(if (markSession) context.filesDir else context.cacheDir, "aether-psiphon")
@@ -765,54 +779,32 @@ object AetherCoreManager {
         File(context.applicationInfo.nativeLibraryDir, TRANSPORT_BINARY_NAME)
 
     /**
-     * The settings file laid over Psiphon's built-in configuration.
-     *
-     * Android has no resolver configuration a Linux-built program could read, so
-     * Psiphon is given resolvers of its own for the names it looks up itself.
+     * The server entries Psiphon starts with: the list the asset section brought, when
+     * there is one, else the signed list shipped in the APK, so a fresh install has
+     * servers before it can reach a list on its own.
      */
-    /**
-     * The settings laid over the core's own Psiphon configuration.
-     *
-     * Two things go in it. The resolvers, because Android has no resolver
-     * configuration a Linux-built program could read, and Psiphon looks names up
-     * itself, alone or around the tunnel. And the server list, unpacked from the
-     * bundled one, so a fresh install has servers before it can reach a list on its
-     * own: aether 2.1 takes the list here rather than by a flag of its own.
-     */
-    private fun psiphonOverlay(context: Context): File? {
-        val dir = File(context.filesDir, "aether-psiphon").apply { mkdirs() }
-        val file = File(dir, "config.json")
-        val resolvers = SettingsManager.getRemoteDnsServers()
-            .filter { com.aras.client.util.Utils.isPureIpAddress(it) }
-            .joinToString(",")
-            .ifBlank { DEFAULT_RESOLVERS }
-        val entries = PsiphonServerList.entriesFile(
-            assetDir = File(Utils.userAssetPath(context)),
-            workDir = workDir(context),
-        )?.let { entriesFile ->
-            runCatching {
-                entriesFile.readLines().filter { it.isNotBlank() }
-            }.getOrNull()
-        }
-        return runCatching {
-            val parts = mutableListOf<String>()
-            parts += """"RemoteDnsAddresses":[""" +
-                resolvers.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                    .joinToString(",") { com.aras.client.util.JsonUtil.toJson(it) } + "]"
-            if (!entries.isNullOrEmpty()) {
-                LogUtil.i(
-                    AppConfig.TAG,
-                    "AetherCore: Psiphon starts with ${entries.size} servers from the bundled list",
-                )
-                parts += """"ServerEntryList":[""" +
-                    entries.joinToString(",") { com.aras.client.util.JsonUtil.toJson(it) } + "]"
+    private fun psiphonEntriesFile(context: Context): File? {
+        val work = workDir(context)
+        val userList = File(Utils.userAssetPath(context), PsiphonServerList.ASSET_NAME)
+        if (userList.isFile) {
+            PsiphonServerList.entriesFile(
+                packed = runCatching { userList.readBytes() }.getOrNull(),
+                stamp = "user:${userList.length()}:${userList.lastModified()}",
+                workDir = work,
+            )?.let { entries ->
+                LogUtil.i(AppConfig.TAG, "AetherCore: Psiphon starts from the asset section's server list")
+                return entries
             }
-            file.writeText("{" + parts.joinToString(",") + "}")
-            file
-        }.getOrNull()
+        }
+        val packaged = runCatching {
+            context.assets.open(PsiphonServerList.ASSET_NAME).use { it.readBytes() }
+        }.getOrNull() ?: return null
+        return PsiphonServerList.entriesFile(
+            packed = packaged,
+            stamp = "apk:${packaged.size}:${packaged.contentHashCode()}",
+            workDir = work,
+        )
     }
-
-    private const val DEFAULT_RESOLVERS = "1.1.1.1,8.8.8.8"
 
     /** Whether this build carries the helper processes a Psiphon or Tor profile needs. */
     fun carriersAvailable(context: Context): Boolean =

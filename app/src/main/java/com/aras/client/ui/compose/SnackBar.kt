@@ -4,14 +4,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarVisuals
@@ -24,7 +29,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,6 +91,16 @@ class AppSnackbarController(
     private var currentShowTime = 0L
 
     fun show(message: CharSequence, type: ToastType = ToastType.NORMAL, long: Boolean = false) {
+        show(message, type, long, null, null)
+    }
+
+    fun show(
+        message: CharSequence,
+        type: ToastType,
+        long: Boolean,
+        actionLabel: String?,
+        onAction: (() -> Unit)?,
+    ) {
         val id = ++currentId
         scope.launch {
             if (currentShowTime != 0L) {
@@ -95,13 +113,17 @@ class AppSnackbarController(
             hostState.currentSnackbarData?.dismiss()
 
             launch {
-                hostState.showSnackbar(
+                val result = hostState.showSnackbar(
                     AppSnackbarVisuals(
                         message = message.toString(),
                         type = type,
-                        duration = if (long) SnackbarDuration.Long else SnackbarDuration.Short
+                        duration = if (long) SnackbarDuration.Long else SnackbarDuration.Short,
+                        actionLabel = actionLabel
                     )
                 )
+                if (result == SnackbarResult.ActionPerformed) {
+                    onAction?.invoke()
+                }
                 if (id == currentId) {
                     currentShowTime = 0L
                 }
@@ -214,6 +236,25 @@ fun AppSnackbarHost(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.wrapContentWidth()
                         )
+                        data.visuals.actionLabel
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { label ->
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = label,
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(ToastCornerRadius))
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = { data.performAction() }
+                                        )
+                                        .padding(horizontal = 4.dp)
+                                )
+                            }
                     }
                 }
             }

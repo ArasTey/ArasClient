@@ -111,6 +111,8 @@ object AppConfig {
     const val PREF_GEOIP_LAST_REFRESH = "pref_geoip_last_refresh"
     const val PREF_SHOW_FREE_SUB = "pref_show_free_sub"
     const val PREF_FREE_SUB_ASKED = "pref_free_sub_asked"
+    const val PREF_FREE_TRASH_ITEMS = "pref_free_trash_items"
+    const val PREF_FREE_TRASH_IDS = "pref_free_trash_ids"
 
     /** Reserved guid of the built-in Free group — cannot be edited or deleted. */
     const val FREE_SUB_GUID = "aras_free_sub_builtin"
@@ -256,6 +258,11 @@ object AppConfig {
     const val MASQUE = "masque://"
     const val AETHER = "aether://"
     const val MIERU = "mieru://"
+    // Psiphon and Tor on their own, no Aether tunnel around them: the bundled core
+    // runs the carrier alone (--psiphon-only, --tor-only) and the app dials its
+    // loopback listener.
+    const val PSIPHON = "psiphon://"
+    const val TOR = "tor://"
     const val ARASFMTS = "xrayn://"
 
     /** Where the aether core is published; the app fetches its own Android build from here. */
@@ -391,9 +398,20 @@ object AppConfig {
     )
 
     val GEO_FILES_SOURCES = arrayListOf(
-        "Chocolate4U/Iran-xray-rules",
-        "Loyalsoldier/xray-rules-dat",
-        "runetfreedom/russia-xray-rules-dat"
+        "Chocolate4U/Iran-v2ray-rules",
+        "Loyalsoldier/v2ray-rules-dat",
+        "runetfreedom/russia-v2ray-rules-dat"
+    )
+
+    /**
+     * The names the sources had before their repos were renamed. A saved selection
+     * is carried over, or the Asset screen would keep downloading from a repo that
+     * is no longer there and never fetch a new geo file.
+     */
+    val LEGACY_GEO_FILES_SOURCES = mapOf(
+        "Chocolate4U/Iran-xray-rules" to "Chocolate4U/Iran-v2ray-rules",
+        "Loyalsoldier/xray-rules-dat" to "Loyalsoldier/v2ray-rules-dat",
+        "runetfreedom/russia-xray-rules-dat" to "runetfreedom/russia-v2ray-rules-dat"
     )
 
     val BUILTIN_OUTBOUND_TAGS = setOf(

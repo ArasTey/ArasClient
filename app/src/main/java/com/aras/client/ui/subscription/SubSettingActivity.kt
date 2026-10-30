@@ -181,10 +181,9 @@ fun SubSettingScreen(
                 items = subscriptions,
                 key = { _, item -> item.guid }
             ) { _, subCache ->
-                ReorderableItem(reorderableState, key = subCache.guid) { isDragging ->
+                ReorderableItem(reorderableState, key = subCache.guid) { _ ->
                     ReorderableListItem(
-                        scope = this,
-                        isDragging = isDragging
+                        scope = this
                     ) {
                         Row(
                             modifier = Modifier

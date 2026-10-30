@@ -124,14 +124,15 @@ class UserAssetViewModel(application: Application) : BaseViewModel(application) 
                         proxyPassword = proxyPassword
                     ),
                     targetTemp
-                )
+                ) && targetTemp.renameTo(target)
             ) {
-                targetTemp.renameTo(target)
                 return true
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to download geo file: ${item.remarks}", e)
         }
+        // A half-written file from a failed run must not stay in the asset folder.
+        targetTemp.delete()
         return false
     }
 

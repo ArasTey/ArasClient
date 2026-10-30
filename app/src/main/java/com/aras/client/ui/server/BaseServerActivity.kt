@@ -38,6 +38,7 @@ import com.aras.client.enums.EConfigType
 import com.aras.client.enums.NetworkType
 import com.aras.client.extension.toast
 import com.aras.client.extension.toastSuccess
+import com.aras.client.fmt.AetherFmt
 import com.aras.client.handler.AngConfigManager
 import com.aras.client.handler.CertificateFingerprintManager
 import com.aras.client.handler.MmkvManager
@@ -403,6 +404,9 @@ abstract class BaseServerActivity : BaseComponentActivity() {
             toast(R.string.server_lab_remarks)
             return false
         }
+        // A Psiphon or Tor profile carries its endpoint in the core's own carrier:
+        // there is no server address or port to ask for.
+        if (state.configType.isCarrierOnly) return true
         if (state.address.isBlank()) {
             toast(R.string.server_lab_address)
             return false
@@ -418,6 +422,21 @@ abstract class BaseServerActivity : BaseComponentActivity() {
     }
 
     protected open fun validateProtocolConfig(config: ProfileItem): Boolean = true
+
+    /**
+     * Refuses a Psiphon or Tor profile the core would not take. The carrier runs
+     * alone, so only its own carrier settings can be wrong.
+     */
+    protected fun validateCarrierConfig(config: ProfileItem): Boolean {
+        when (AetherFmt.normalize(config)) {
+            null -> return true
+            AetherFmt.Problem.INVALID_REGION -> toast(R.string.server_lab_carrier_region_bad)
+            AetherFmt.Problem.INVALID_LISTEN_PORT -> toast(R.string.server_lab_aether_listen_port_bad)
+            AetherFmt.Problem.TOR_BRIDGES_MISSING -> toast(R.string.server_lab_aether_tor_bridges_missing)
+            else -> toast(R.string.toast_config_file_invalid)
+        }
+        return false
+    }
 
     protected open fun validateCommonConfig(config: ProfileItem): Boolean {
 

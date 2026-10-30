@@ -46,6 +46,7 @@ object CoreOutboundBuilder {
             EConfigType.ANYTLS -> toOutboundAnytls(profileItem)
             EConfigType.MASQUE -> toOutboundMasque(profileItem)
             EConfigType.AETHER -> toOutboundAether(profileItem)
+            EConfigType.PSIPHON, EConfigType.TOR -> toOutboundAether(profileItem)
             EConfigType.MIERU -> toOutboundMieru(profileItem)
             else -> null
         }

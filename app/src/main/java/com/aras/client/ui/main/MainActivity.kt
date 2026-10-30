@@ -54,8 +54,10 @@ import com.aras.client.ui.server.ServerGroupActivity
 import com.aras.client.ui.server.ServerHttpActivity
 import com.aras.client.ui.server.ServerHysteria2Activity
 import com.aras.client.ui.server.ServerProxyChainActivity
+import com.aras.client.ui.server.ServerPsiphonActivity
 import com.aras.client.ui.server.ServerShadowsocksActivity
 import com.aras.client.ui.server.ServerSocksActivity
+import com.aras.client.ui.server.ServerTorActivity
 import com.aras.client.ui.server.ServerTrojanActivity
 import com.aras.client.ui.server.ServerVlessActivity
 import com.aras.client.ui.server.ServerVmessActivity
@@ -464,6 +466,8 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.AMNEZIAWG.value -> Intent(this, ServerAmneziawgActivity::class.java)
             EConfigType.AETHER.value -> Intent(this, ServerAetherActivity::class.java)
             EConfigType.MIERU.value -> Intent(this, ServerMieruActivity::class.java)
+            EConfigType.PSIPHON.value -> Intent(this, ServerPsiphonActivity::class.java)
+            EConfigType.TOR.value -> Intent(this, ServerTorActivity::class.java)
             else -> Intent(this, ServerHttpActivity::class.java).apply {
                 putExtra("createConfigType", createConfigType)
             }
@@ -632,6 +636,8 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.AMNEZIAWG -> ServerAmneziawgActivity::class.java
             EConfigType.AETHER -> ServerAetherActivity::class.java
             EConfigType.MIERU -> ServerMieruActivity::class.java
+            EConfigType.PSIPHON -> ServerPsiphonActivity::class.java
+            EConfigType.TOR -> ServerTorActivity::class.java
             else -> ServerHttpActivity::class.java
         }
         val intent = Intent(this, activityClass).apply {

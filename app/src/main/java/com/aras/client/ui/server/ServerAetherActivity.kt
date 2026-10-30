@@ -305,6 +305,11 @@ class ServerAetherActivity : BaseServerActivity() {
                 toastError(R.string.server_lab_aether_listen_port_bad)
                 return false
             }
+
+            AetherFmt.Problem.INVALID_REGION -> {
+                toastError(R.string.server_lab_carrier_region_bad)
+                return false
+            }
         }
         return true
     }

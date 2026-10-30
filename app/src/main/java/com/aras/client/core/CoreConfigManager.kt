@@ -413,8 +413,8 @@ object CoreConfigManager {
         // An Aether hop reaches only the aether core on loopback, so it can carry the
         // hops before it but must itself be the one that dials the internet: nothing
         // can be dialed through it, and it cannot be dialed through anything. That is
-        // the last hop of the chain.
-        val aetherAt = hopPairs.indexOfLast { it.second.configType == EConfigType.AETHER }
+        // the last hop of the chain. A Psiphon or Tor hop is the same kind of hop.
+        val aetherAt = hopPairs.indexOfLast { it.second.configType.isCarrierOnly || it.second.configType == EConfigType.AETHER }
         if (aetherAt >= 0 && aetherAt != chainOutbounds.lastIndex) {
             LogUtil.w(
                 AppConfig.TAG,
@@ -1280,6 +1280,22 @@ object CoreConfigManager {
         }
 
         val rule = JsonUtil.fromJson(JsonUtil.toJson(item), XrayConfig.RoutingBean.RulesBean::class.java) ?: return
+
+        // A geo tag the installed data does not carry makes the core refuse to start.
+        rule.domain = GeoDataCodes.keepAvailableGeosite(
+            rule.domain,
+            GeoDataCodes.available(context, AppConfig.GEOSITE_DAT)
+        )
+        rule.ip = GeoDataCodes.keepAvailableGeoip(
+            rule.ip,
+            GeoDataCodes.available(context, AppConfig.GEOIP_DAT)
+        )
+        if (rule.domain == null && rule.ip == null && rule.port == null && rule.network == null
+            && rule.protocol == null && rule.process == null && rule.inboundTag == null
+        ) {
+            LogUtil.w(AppConfig.TAG, "Ruleset '${item.remarks}' only matches absent geo data, skipping")
+            return
+        }
 
         // Replace specific geoip rules with ext versions
         rule.ip?.let { ipList ->

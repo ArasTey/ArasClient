@@ -21,6 +21,7 @@ import com.aras.client.dto.entities.SubscriptionCache
 import com.aras.client.extension.isComplexType
 import com.aras.client.extension.matchesPattern
 import com.aras.client.extension.moveItem
+import com.aras.client.handler.FreeTrashManager
 import com.aras.client.ui.base.BaseViewModel
 import com.aras.client.util.LogUtil
 import com.aras.client.util.Utils
@@ -33,6 +34,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import com.aras.client.extension.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import com.aras.client.dto.CheckUpdateResult
 import com.aras.client.dto.QuickConnectFailure
 import com.aras.client.dto.QuickConnectResult
@@ -40,6 +42,7 @@ import com.aras.client.dto.SubscriptionUpdateResult
 import com.aras.client.handler.UpdateCheckerManager
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -47,9 +50,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.PatternSyntaxException
-
-internal fun pingCountryLabel(country: String?, fallback: String): String =
-    com.aras.client.util.CountryResolver.flagForCountry(country).ifBlank { country ?: fallback }
 
 class MainViewModel(
     application: Application,
@@ -271,8 +271,8 @@ class MainViewModel(
         is MainStatus.ConnectionTest -> formatConnectionTestResult(status.result)
     }
 
-    private fun formatConnectionTestResult(result: ConnectionTestResult): String {
-        val status = if (result.delayMillis >= 0) {
+    private fun formatConnectionTestResult(result: ConnectionTestResult): String =
+        if (result.delayMillis >= 0) {
             val delay = dataSource.getString(R.string.server_test_delay_value, result.delayMillis)
             dataSource.getString(R.string.connection_test_available, delay)
         } else {
@@ -281,15 +281,6 @@ class MainViewModel(
             }
             dataSource.getString(R.string.connection_test_error, detail)
         }
-
-        if (result.delayMillis < 0 || (result.country == null && result.ipAddress == null)) {
-            return status
-        }
-
-        val unknown = dataSource.getString(R.string.value_unknown)
-        val country = pingCountryLabel(result.country, unknown)
-        return "$status\n($country) ${result.ipAddress ?: unknown}"
-    }
 
     // ---------- Public state accessors ----------
     fun serversForGroup(groupId: String): StateFlow<List<ServersCache>> =
@@ -962,9 +953,39 @@ class MainViewModel(
             return
         }
         viewModelScope.launch(ioDispatcher) {
+            val wasFree = FreeTrashManager.trashFreeConfig(guid)
             dataSource.removeServer(guid)
             cacheMutex.withLock { groupDataCache.clear() }
             setupGroupTab(forceRefresh = true).join()
+            if (wasFree) {
+                _lastRemovedFree.tryEmit(Unit)
+            }
+        }
+    }
+
+    /** Emitted after a Free config was trashed; consumed for the Undo snackbar. */
+    private val _lastRemovedFree = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 8)
+    val lastRemovedFree = _lastRemovedFree.asSharedFlow()
+
+    suspend fun undoRemoveFree() {
+        val restored = FreeTrashManager.undoTrash()
+        if (restored) {
+            cacheMutex.withLock { groupDataCache.clear() }
+            setupGroupTab(forceRefresh = true).join()
+            toastSuccess(R.string.toast_free_restored)
+        } else {
+            toast(R.string.toast_failure)
+        }
+    }
+
+    suspend fun restoreAllFreeConfigs() {
+        val restored = FreeTrashManager.restoreAll()
+        if (restored > 0) {
+            cacheMutex.withLock { groupDataCache.clear() }
+            setupGroupTab(forceRefresh = true).join()
+            toastSuccess(R.string.toast_free_restore_count)
+        } else {
+            toast(R.string.toast_free_nothing_to_restore)
         }
     }
 

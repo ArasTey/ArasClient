@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,8 +30,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
@@ -43,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.extension.ltrIsolated
+import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.util.Utils
 
 enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRes: Int) {
@@ -74,42 +79,39 @@ private data class MenuSection(
 
 @Composable
 private fun menuSections(): List<MenuSection> {
-    val sky = MaterialTheme.colorScheme.secondary
-    val teal = MaterialTheme.colorScheme.primary
-    val amber = MaterialTheme.colorScheme.tertiary
-    val rose = Color(0xFFE11D48)
-    val violet = Color(0xFF7C3AED)
-    val blue = Color(0xFF2563EB)
-    val green = Color(0xFF059669)
-    val slate = MaterialTheme.colorScheme.onSurfaceVariant
+    // Keep the hub in the app's blue/grey family: one accent for actions and a
+    // neutral ink for utilities, instead of a different hue per tile.
+    val palette = LocalGlassPalette.current
+    val accent = palette.accent
+    val neutral = palette.faint
 
-    fun item(destination: MainDestination, accent: Color, subtitleRes: Int) =
-        MenuTileStyle(destination, accent, subtitleRes)
+    fun item(destination: MainDestination, tint: Color, subtitleRes: Int) =
+        MenuTileStyle(destination, tint, subtitleRes)
 
     return listOf(
         MenuSection(
             R.string.menu_section_manage,
             listOf(
-                item(MainDestination.Subscriptions, sky, R.string.menu_sub_subscriptions),
-                item(MainDestination.PerAppProxy, violet, R.string.menu_sub_per_app),
-                item(MainDestination.Routing, teal, R.string.menu_sub_routing),
+                item(MainDestination.Subscriptions, accent, R.string.menu_sub_subscriptions),
+                item(MainDestination.PerAppProxy, accent, R.string.menu_sub_per_app),
+                item(MainDestination.Routing, accent, R.string.menu_sub_routing),
             ),
             prominent = true
         ),
         MenuSection(
             R.string.menu_section_files_tools,
             listOf(
-                item(MainDestination.UserAssets, amber, R.string.menu_sub_assets),
-                item(MainDestination.Export, blue, R.string.menu_sub_export),
-                item(MainDestination.Settings, slate, R.string.menu_sub_settings),
+                item(MainDestination.UserAssets, accent, R.string.menu_sub_assets),
+                item(MainDestination.Export, accent, R.string.menu_sub_export),
+                item(MainDestination.Settings, neutral, R.string.menu_sub_settings),
             )
         ),
         MenuSection(
             R.string.menu_section_system,
             listOf(
-                item(MainDestination.Logcat, green, R.string.menu_sub_logcat),
-                item(MainDestination.CheckUpdate, blue, R.string.menu_sub_check_update),
-                item(MainDestination.BackupRestore, rose, R.string.menu_sub_backup),
+                item(MainDestination.Logcat, neutral, R.string.menu_sub_logcat),
+                item(MainDestination.CheckUpdate, accent, R.string.menu_sub_check_update),
+                item(MainDestination.BackupRestore, accent, R.string.menu_sub_backup),
             )
         ),
     )
@@ -128,6 +130,13 @@ fun MainMenuSheet(
 ) {
     if (!show) return
     val context = LocalContext.current
+    // Dialog windows reset Density from the window configuration, so the
+    // app-wide font cap in AppTheme does not reach this composition; re-apply it.
+    val base = LocalDensity.current
+    val density = Density(
+        density = base.density,
+        fontScale = base.fontScale.coerceIn(1f, 1.15f)
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -140,6 +149,7 @@ fun MainMenuSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
+        CompositionLocalProvider(LocalDensity provides density) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -152,8 +162,9 @@ fun MainMenuSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(18.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                    .border(0.7.dp, LocalGlassPalette.current.hairline, RoundedCornerShape(18.dp))
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -230,6 +241,7 @@ fun MainMenuSheet(
                 )
             }
         }
+        }
     }
 }
 
@@ -263,10 +275,14 @@ private fun MenuTileCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val palette = LocalGlassPalette.current
+    val tileFill = if (palette.isDark) Color(0x14FFFFFF) else Color(0xF2FFFFFF)
+    val tileShape = RoundedCornerShape(18.dp)
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clip(tileShape)
+            .background(tileFill)
+            .border(0.7.dp, palette.hairline, tileShape)
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -310,103 +326,19 @@ private fun MenuTileCard(
 }
 
 @Composable
-private fun MenuRow(
-    @DrawableRes iconRes: Int,
-    label: String,
-    subtitle: String,
-    accent: Color,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(accent.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        Spacer(Modifier.size(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Spacer(Modifier.size(8.dp))
-        Text(
-            text = "›",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun MenuTile(
-    tile: MenuTileStyle,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(tile.accent.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp, horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            painter = painterResource(tile.destination.iconRes),
-            contentDescription = null,
-            tint = tile.accent,
-            modifier = Modifier.size(26.dp)
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(tile.destination.labelRes),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
 private fun ContactChip(
     @DrawableRes iconRes: Int,
     label: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val palette = LocalGlassPalette.current
+    val chipFill = if (palette.isDark) Color(0x14FFFFFF) else Color(0xF2FFFFFF)
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(chipFill)
+            .border(0.7.dp, palette.hairline, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

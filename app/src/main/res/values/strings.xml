@@ -50,6 +50,12 @@
     <string name="menu_item_import_config_clipboard">Import from Clipboard</string>
     <string name="menu_item_import_config_local">Import from a local file</string>
     <string name="protected_config_hidden">Protected config</string>
+    <string name="menu_more_restore_free_configs">Restore deleted Free configs</string>
+    <string name="toast_free_config_deleted">Config deleted</string>
+    <string name="action_undo">Undo</string>
+    <string name="toast_free_restored">Free config restored</string>
+    <string name="toast_free_restore_count">Deleted Free configs restored</string>
+    <string name="toast_free_nothing_to_restore">Nothing to restore</string>
     <string name="server_lab_aether_protocol">Aether protocol</string>
     <string name="server_lab_aether_scan_mode">Scan mode</string>
     <string name="server_lab_aether_transport">Transport</string>
@@ -122,6 +128,15 @@
     <string name="server_lab_mieru_no_host">An endpoint is needed: the address or name the mieru server answers on.</string>
     <string name="server_lab_mieru_bad_host">That is not an address or a name.</string>
     <string name="server_lab_mieru_bad_port">The mieru port must be between 1 and 65535.</string>
+    <!-- Psiphon and Tor on their own, without an Aether tunnel -->
+    <string name="menu_item_import_config_manually_psiphon">Add Psiphon config manually</string>
+    <string name="menu_item_import_config_manually_tor">Add Tor config manually</string>
+    <string name="server_lab_carrier_region">Region</string>
+    <string name="server_lab_carrier_region_auto">Automatic</string>
+    <string name="server_lab_carrier_region_search">Search countries</string>
+    <string name="server_lab_carrier_region_bad">The region must be a two-letter country code, e.g. DE.</string>
+    <string name="server_lab_psiphon_note">Runs Psiphon on its own, without the Aether tunnel. The app dials Psiphon locally, so no server address is needed; the region sets the country it exits from.</string>
+    <string name="server_lab_tor_note">Runs Tor on its own, without the Aether tunnel. The app dials Tor locally, so no server address is needed. The core has no option to pick Tor\'s exit country; Psiphon is the one for choosing a country. Bridges help where Tor is blocked.</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
     <string name="sub_setting_announcement">Announcement</string>
     <string name="sub_setting_creator_message">Creator message</string>

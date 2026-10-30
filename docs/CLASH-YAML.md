@@ -12,12 +12,24 @@ No filename extension change is needed: the existing file chooser accepts all MI
 
 ## Supported proxy definitions
 
-- Shadowsocks (`ss`), without plugins.
+- Shadowsocks (`ss`), without plugins, with `v2ray-plugin` (`mode: websocket`),
+  or with the SIP003 `obfs` plugin in `mode: http`.
 - VMess (`vmess`), with `alterId: 0`.
 - VLESS (`vless`), with `encryption: none`, including TLS and Reality.
 - Trojan (`trojan`) with TLS.
-- TCP, WebSocket (`ws-opts.path` and `headers.Host`), and gRPC (`grpc-opts.grpc-service-name`) for applicable protocols.
+- Hysteria2 (`hysteria2`), with `obfs: salamander`, `up`/`down` bandwidth,
+  `ports` + `hop-interval` port hopping, and `skip-cert-verify`.
+- AnyTLS (`anytls`), with SNI, ALPN and client fingerprint.
+- TCP, WebSocket (`ws-opts.path` and `headers.Host`), HTTP/2 (`h2-opts`),
+  HTTP Upgrade (`ws-opts.v2ray-http-upgrade`), and gRPC
+  (`grpc-opts.grpc-service-name`) for applicable protocols.
 - SNI/servername, ALPN, client fingerprint, and explicit `skip-cert-verify`.
+
+Session-tuning keys that do not change what the dial connects to — `udp`,
+`tfo`, `smux`, `ip-version`, `interface-name`, `routing-mark`, `dialer-proxy`
+and similar — are accepted and ignored. A `dialer-proxy` chain hint is not
+reproduced; the profile dials its endpoint directly. Extra `ws-opts.headers`
+entries beyond `Host` are ignored because the WS transport only carries Host.
 
 Certificate verification remains enabled unless the YAML explicitly disables it.
 

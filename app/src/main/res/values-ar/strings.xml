@@ -9,6 +9,12 @@
     <string name="migration_success">نجحت عملية ترحيل البيانات!</string>
     <string name="action_stop_service">إيقاف الخدمة</string>
     <string name="action_ok">موافق</string>
+    <string name="menu_more_restore_free_configs">استعادة إعدادات فري المحذوفة</string>
+    <string name="toast_free_config_deleted">تم حذف الإعداد</string>
+    <string name="action_undo">تراجع</string>
+    <string name="toast_free_restored">تمت استعادة الإعداد</string>
+    <string name="toast_free_restore_count">تمت استعادة إعدادات فري المحذوفة</string>
+    <string name="toast_free_nothing_to_restore">لا يوجد شيء لاستعادته</string>
     <string name="action_cancel">إلغاء</string>
     <string name="migration_fail">فشلت عملية ترحيل البيانات!</string>
     <string name="pull_down_to_refresh">اسحب لأسفل للتحديث!</string>
@@ -401,7 +407,24 @@
     <string name="connection_test_error_status_code">رمز الخطأ: #%d</string>
     <string name="connection_connected">متصل. اضغط للتحقق من الاتصال.</string>
     <string name="connection_not_connected">غير متصل</string>
+    <string name="bar_tap_to_connect">اضغط للاتصال</string>
+    <string name="title_smart_connect">الاتصال بأسرع خادم</string>
     <string name="connection_running_task_left">الاختبارات قيد التشغيل: %s</string>
+
+    <string name="menu_section_manage">إدارة</string>
+    <string name="menu_section_files_tools">ملفات وأدوات</string>
+    <string name="menu_section_system">النظام</string>
+    <string name="menu_sub_subscriptions">إدارة اشتراكاتك</string>
+    <string name="menu_sub_per_app">قواعد التطبيقات</string>
+    <string name="menu_sub_routing">توجيه الشبكة</string>
+    <string name="menu_sub_export">تصدير ومشاركة</string>
+    <string name="title_export">تصدير</string>
+    <string name="menu_sub_assets">إدارة الملفات</string>
+    <string name="menu_sub_settings">تفضيلات التطبيق</string>
+    <string name="menu_sub_check_update">إصدار جديد</string>
+    <string name="menu_sub_backup">نسخ احتياطي</string>
+    <string name="menu_sub_logcat">عرض السجلات</string>
+    <string name="menu_sub_about">حول ArasClient</string>
 
     <string name="import_subscription_success">تم استيراد الاشتراك بنجاح</string>
     <string name="import_subscription_failure">فشل استيراد الاشتراك</string>

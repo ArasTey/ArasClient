@@ -126,7 +126,14 @@ class UserAssetActivity : HelperBaseComponentActivity() {
     }
 
     private fun getGeoFilesSources(): String {
-        return MmkvManager.decodeSettingsString(AppConfig.PREF_GEO_FILES_SOURCES) ?: AppConfig.GEO_FILES_SOURCES.first()
+        val saved = MmkvManager.decodeSettingsString(AppConfig.PREF_GEO_FILES_SOURCES).orEmpty()
+        val source = AppConfig.GEO_FILES_SOURCES.firstOrNull { it == saved }
+            ?: AppConfig.LEGACY_GEO_FILES_SOURCES[saved]
+            ?: AppConfig.GEO_FILES_SOURCES.first()
+        if (source != saved) {
+            MmkvManager.encodeSettings(AppConfig.PREF_GEO_FILES_SOURCES, source)
+        }
+        return source
     }
 
     private fun showFileChooser() {

@@ -28,10 +28,15 @@ object SingboxFmt {
         if (!trimmed.startsWith("{")) return false
         return runCatching {
             val root = JsonParser.parseString(trimmed)
-            root.isJsonObject &&
-                root.asJsonObject.get("outbounds")?.isJsonArray == true &&
-                // A sing-box document never has a clash-style proxies list.
-                root.asJsonObject.get("proxies") == null
+            if (!root.isJsonObject) return@runCatching false
+            val obj = root.asJsonObject
+            // A sing-box document never has a clash-style proxies list.
+            if (obj.get("proxies") != null) return@runCatching false
+            val outbounds = obj.get("outbounds")?.takeIf { it.isJsonArray }?.asJsonArray
+                ?: return@runCatching false
+            // An Xray config.json also has an outbounds array, but its entries
+            // carry "protocol", never sing-box's "type".
+            outbounds.any { it.isJsonObject && it.asJsonObject.get("type") != null }
         }.getOrDefault(false)
     }
 
@@ -103,6 +108,19 @@ object SingboxFmt {
                 } else if (network == "grpc") {
                     query["type"] = "grpc"
                     transport.string("service_name")?.let { query["serviceName"] = it }
+                } else if (network == "http") {
+                    // sing-box "http" transport is HTTP/2, which this app dials as h2.
+                    query["type"] = "http"
+                    val hosts = transport.get("host")?.takeIf { it.isJsonArray }?.asJsonArray
+                        ?: transport.obj("headers")?.get("host")?.takeIf { it.isJsonArray }?.asJsonArray
+                    hosts?.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString }
+                        ?.joinToString(",")?.takeIf { it.isNotEmpty() }
+                        ?.let { query["host"] = it }
+                    transport.string("path")?.takeIf { it.isNotBlank() }?.let { query["path"] = it }
+                } else if (network == "httpupgrade") {
+                    query["type"] = "httpupgrade"
+                    transport.string("host")?.takeIf { it.isNotBlank() }?.let { query["host"] = it }
+                    transport.string("path")?.takeIf { it.isNotBlank() }?.let { query["path"] = it }
                 }
                 if (flow.isNotBlank()) query["flow"] = flow
                 val q = "?" + query.entries.joinToString("&") { (k, v) -> "$k=${Utils.encodeURIComponent(v)}" }
@@ -118,16 +136,25 @@ object SingboxFmt {
                     addProperty("port", port)
                     addProperty("id", outbound.string("uuid").orEmpty())
                     addProperty("aid", outbound.intOrNull("alter_id") ?: 0)
-                    addProperty("net", if (network == "grpc") "grpc" else network)
-                    addProperty("scy", outbound.string("method").orEmpty())
+                    addProperty("net", if (network == "http") "h2" else network)
+                    addProperty("scy", outbound.string("security").orEmpty().ifBlank { "auto" })
                     if (tlsEnabled) {
                         addProperty("tls", "tls")
                         tls.string("server_name")?.let { addProperty("sni", it) }
                         alpnOf(tls)?.let { addProperty("alpn", it) }
-                        tls.string("fingerprint")?.let { addProperty("fp", it) }
+                        tls.obj("utls")?.string("fingerprint")?.let { addProperty("fp", it) }
+                        addProperty("insecure", if (tls.bool("insecure") == true) "1" else "0")
                     }
                     transport.string("path")?.let { addProperty("path", it) }
-                    transport.obj("headers")?.string("Host")?.let { addProperty("host", it) }
+                    if (network == "http") {
+                        val hosts = transport.get("host")?.takeIf { it.isJsonArray }?.asJsonArray
+                            ?: transport.obj("headers")?.get("host")?.takeIf { it.isJsonArray }?.asJsonArray
+                        hosts?.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString }
+                            ?.joinToString(",")?.takeIf { it.isNotEmpty() }
+                            ?.let { addProperty("host", it) }
+                    } else {
+                        transport.obj("headers")?.string("Host")?.let { addProperty("host", it) }
+                    }
                     transport.string("service_name")?.let { addProperty("path", it) }
                 }
                 "vmess://" + base64Of(qr.toString())
@@ -135,17 +162,30 @@ object SingboxFmt {
 
             "trojan" -> {
                 val query = linkedMapOf<String, String>()
-                if (tlsEnabled) tls.string("server_name")?.let { query["sni"] = it }
+                if (tlsEnabled) {
+                    tls.string("server_name")?.let { query["sni"] = it }
+                    tls.obj("utls")?.string("fingerprint")?.let { query["fp"] = it }
+                    alpnOf(tls)?.let { query["alpn"] = it }
+                    if (tls.bool("insecure") == true) query["insecure"] = "1"
+                }
                 if (network == "grpc") {
                     query["type"] = "grpc"
                     transport.string("service_name")?.let { query["serviceName"] = it }
                 } else if (network == "ws") {
                     query["type"] = "ws"
                     transport.string("path")?.let { query["path"] = it }
+                    transport.obj("headers")?.string("Host")?.let { query["host"] = it }
+                } else if (network == "http") {
+                    query["type"] = "http"
+                    transport.string("path")?.let { query["path"] = it }
+                } else if (network == "httpupgrade") {
+                    query["type"] = "httpupgrade"
+                    transport.string("host")?.let { query["host"] = it }
+                    transport.string("path")?.let { query["path"] = it }
                 }
                 val q = if (query.isEmpty()) "" else
                     "?" + query.entries.joinToString("&") { (k, v) -> "$k=${Utils.encodeURIComponent(v)}" }
-                "trojan://${outbound.string("password")}@$address$q#$name"
+                "trojan://${Utils.encodeURIComponent(outbound.string("password").orEmpty())}@$address$q#$name"
             }
 
             "shadowsocks" -> {
@@ -162,9 +202,47 @@ object SingboxFmt {
                     tls.string("server_name")?.let { query["sni"] = it }
                     if (tls.bool("insecure") == true) query["insecure"] = "1"
                 }
+                outbound.obj("obfs")?.let { obfs ->
+                    require(obfs.string("type") == "salamander") {
+                        "Unsupported hysteria2 obfs type"
+                    }
+                    query["obfs"] = "salamander"
+                    obfs.string("password")?.let { query["obfs-password"] = it }
+                }
+                outbound.intOrNull("up_mbps")?.let { query["upmbps"] = it.toString() }
+                outbound.intOrNull("down_mbps")?.let { query["downmbps"] = it.toString() }
+                // sing-box writes ranges as "2087:2127"; Xray reads "2087-2127".
+                outbound.get("server_ports")?.takeIf { it.isJsonArray }?.asJsonArray
+                    ?.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString }
+                    ?.joinToString(",") { it.replace(':', '-') }
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { query["mport"] = it }
                 val q = if (query.isEmpty()) "" else
                     "?" + query.entries.joinToString("&") { (k, v) -> "$k=${Utils.encodeURIComponent(v)}" }
-                "hysteria2://${outbound.string("password")}@$address$q#$name"
+                "hysteria2://${Utils.encodeURIComponent(outbound.string("password").orEmpty())}@$address$q#$name"
+            }
+
+            "anytls" -> {
+                require(tlsEnabled) { "anytls requires enabled tls" }
+                val query = linkedMapOf<String, String>()
+                tls.string("server_name")?.let { query["sni"] = it }
+                if (tls.bool("insecure") == true) query["insecure"] = "1"
+                alpnOf(tls)?.let { query["alpn"] = it }
+                tls.obj("utls")?.string("fingerprint")?.let { query["fp"] = it }
+                val q = if (query.isEmpty()) "" else
+                    "?" + query.entries.joinToString("&") { (k, v) -> "$k=${Utils.encodeURIComponent(v)}" }
+                "anytls://${Utils.encodeURIComponent(outbound.string("password").orEmpty())}@$address$q#$name"
+            }
+
+            "socks" -> {
+                val user = outbound.string("username")
+                val pass = outbound.string("password")
+                val userInfo = if (!user.isNullOrEmpty()) {
+                    "${Utils.encodeURIComponent(user)}:${Utils.encodeURIComponent(pass.orEmpty())}@"
+                } else {
+                    ""
+                }
+                "socks://$userInfo$address#$name"
             }
 
             else -> throw IllegalArgumentException("Unsupported sing-box outbound type")

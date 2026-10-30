@@ -1,6 +1,8 @@
 package com.aras.client.ui.main
 
+import android.os.SystemClock
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,48 +24,57 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aras.client.R
+import com.aras.client.ui.compose.FlagIcon
+import com.aras.client.ui.compose.GlassPalette
+import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.NeonConnectButton
-import com.aras.client.ui.compose.colorFabActive
-import com.aras.client.ui.compose.colorFabInactiveDark
-import com.aras.client.ui.compose.colorFabInactiveLight
+import com.aras.client.ui.compose.formatBytes
+import com.aras.client.ui.compose.formatDuration
+import com.aras.client.ui.compose.glassPanel
+import com.aras.client.util.ConnectionStatsManager
+import kotlinx.coroutines.delay
 
 /**
- * Floating connect bar matching the ArasClient design:
- * status + "Tap to connect" on the left, Test pill, Smart Connect bolt
- * and a large round connect button on the right.
+ * Floating connect panel: session time / throughput and connection status share
+ * one glass card, so the traffic strip and the status message never stack into
+ * two separate floating boxes.
  */
 @Composable
 fun MainBottomBar(
     displayText: String,
     isRunning: Boolean,
-    isDarkTheme: Boolean,
     onAction: (MainAction) -> Unit,
     subtitleOverride: String? = null,
-    hasPing: Boolean = false
+    subtitleFlagIso: String? = null
 ) {
-    val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    // Ping-aware colors: green when connected and ping is measured OK,
-    // red when connected but no valid ping.
-    val okColor = Color(0xFF2E7D32)
-    val badColor = Color(0xFFC62828)
-    val pingColor = when {
-        isRunning && hasPing -> okColor
-        isRunning -> badColor
-        else -> null
-    }
+    val palette = LocalGlassPalette.current
+    val dotColor = if (isRunning) palette.pingGood else MaterialTheme.colorScheme.outline
+    // The bar carries its own type scale: a larger system font must not break
+    // the one-line layout of the name, address and traffic figures.
+    var titleSize by remember(displayText) { mutableStateOf(12.sp) }
 
     Box(
         modifier = Modifier
@@ -71,86 +82,197 @@ fun MainBottomBar(
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .shadow(elevation = 8.dp, shape = RoundedCornerShape(32.dp))
-                .clip(RoundedCornerShape(32.dp))
-                .background(barColor)
+                .glassPanel(
+                    palette = palette,
+                    shape = RoundedCornerShape(28.dp),
+                    fill = if (palette.isDark) Color(0xFA171F27) else Color(0xFDFEFFFF),
+                    borderColor = if (palette.isDark) Color(0x42FFFFFF) else Color(0xF2FFFFFF)
+                )
                 .clickable(onClick = { onAction(MainAction.TestCurrentServer) })
-                .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status
-            Box(
+            if (isRunning) {
+                SessionStatsRow(palette)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .height(0.7.dp)
+                        .background(palette.hairline)
+                )
+            }
+
+            Row(
                 modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp)
+                    .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
+                        .size(24.dp)
                         .clip(CircleShape)
-                        .background(
-                            pingColor
-                                ?: if (isRunning) colorFabActive
-                                else MaterialTheme.colorScheme.outline
-                        )
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = displayText,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { contentDescription = displayText }
-                )
-                // Null requests the disconnected hint; empty explicitly hides the subtitle.
-                val subtitle = subtitleOverride ?: if (isRunning) ""
-                    else stringResource(R.string.bar_tap_to_connect)
-                if (subtitle.isNotEmpty()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        .background(palette.hairline),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(11.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
                     )
                 }
-            }
-            Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = displayText,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontSize = titleSize,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { layout ->
+                            if (layout.didOverflowWidth && titleSize.value > 9f) {
+                                titleSize = (titleSize.value - 0.5f).sp
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = displayText }
+                    )
+                    // Null requests the disconnected hint; empty explicitly hides the subtitle.
+                    val subtitle = subtitleOverride ?: if (isRunning) ""
+                        else stringResource(R.string.bar_tap_to_connect)
+                    if (subtitle.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (subtitleFlagIso != null) {
+                                FlagIcon(
+                                    iso = subtitleFlagIso,
+                                    width = 17.dp,
+                                    height = 12.5.dp,
+                                    modifier = Modifier.padding(end = 5.dp)
+                                )
+                            }
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
 
-            // Smart Connect bolt
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f))
-                    .clickable(onClick = { onAction(MainAction.SmartConnect) }),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_flash_on_24dp),
-                    contentDescription = stringResource(R.string.title_smart_connect),
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(20.dp)
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(palette.chipFill)
+                        .border(0.8.dp, palette.accent.copy(alpha = 0.20f), CircleShape)
+                        .clickable(onClick = { onAction(MainAction.SmartConnect) }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_smart_connect_24dp),
+                        contentDescription = stringResource(R.string.title_smart_connect),
+                        tint = palette.accent,
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+
+                NeonConnectButton(
+                    isRunning = isRunning,
+                    onClick = { onAction(MainAction.ToggleService) },
                 )
             }
-            Spacer(Modifier.width(8.dp))
+        }
+    }
+}
 
-            // Main connect button. The light it gives off stays inside the circle, so
-            // it never hazes what sits behind it.
-            NeonConnectButton(
-                isRunning = isRunning,
-                onClick = { onAction(MainAction.ToggleService) },
+/** Time and live rates for the running session, folded into the connect panel. */
+@Composable
+private fun SessionStatsRow(palette: GlassPalette) {
+    var snapshot by remember { mutableStateOf(ConnectionStatsManager.snapshot()) }
+    var downRate by remember { mutableFloatStateOf(0f) }
+    var upRate by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        var lastDown = snapshot.sessionDown
+        var lastUp = snapshot.sessionUp
+        var lastAt = SystemClock.elapsedRealtime()
+        while (true) {
+            delay(1000)
+            val next = ConnectionStatsManager.snapshot()
+            val now = SystemClock.elapsedRealtime()
+            val seconds = ((now - lastAt) / 1000f).coerceAtLeast(0.5f)
+            val instantDown = (next.sessionDown - lastDown).coerceAtLeast(0L) / seconds
+            val instantUp = (next.sessionUp - lastUp).coerceAtLeast(0L) / seconds
+            // The manager samples every 2 s while this row polls every 1 s, so ease
+            // the per-second delta instead of flashing 0 B/s on the in-between ticks.
+            downRate = if (downRate == 0f) instantDown else downRate * 0.55f + instantDown * 0.45f
+            upRate = if (upRate == 0f) instantUp else upRate * 0.55f + instantUp * 0.45f
+            lastDown = next.sessionDown
+            lastUp = next.sessionUp
+            lastAt = now
+            snapshot = next
+        }
+    }
+
+    // Traffic numbers are language-neutral; pin the strip to LTR so "351 B/s"
+    // and its arrow never get bidi-reordered inside the RTL UI.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SessionStat(
+                iconRes = R.drawable.ic_timer_24dp,
+                value = formatDuration(snapshot.sessionMillis),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            SessionStat(
+                iconRes = R.drawable.ic_arrow_down_24dp,
+                value = formatBytes(downRate.toLong()) + "/s",
+                tint = palette.accent
+            )
+            SessionStat(
+                iconRes = R.drawable.ic_arrow_up_24dp,
+                value = formatBytes(upRate.toLong()) + "/s",
+                tint = palette.periwinkle
             )
         }
+    }
+}
+
+@Composable
+private fun SessionStat(iconRes: Int, value: String, tint: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(13.dp)
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = value,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }

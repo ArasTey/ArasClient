@@ -1,6 +1,7 @@
 package com.aras.client.ui.main
 
 import com.aras.client.dto.ConnectionTestResult
+import com.aras.client.util.CountryResolver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,19 +45,21 @@ class MainStatusMessageTest {
     fun hiddenPingDetailsDoNotEraseResultOrRestoreConnectedFallback() {
         val result = ConnectionTestResult(42, country = "Test", ipAddress = "192.0.2.1")
         val state = MainUiState(isRunning = true, status = MainStatus.ConnectionTest(result), statusMessageVisible = true)
-        val formatted = "Connection succeeded in 42 ms\n(Test) 192.0.2.1"
-        assertEquals(MainBarText("Connection succeeded in 42 ms", "(Test) 192.0.2.1"), mainBarText(state, formatted, "Server"))
+        // formatStatus emits the delay only; the IP is the bar subtitle and the
+        // country is drawn as a flag chip by MainScreen.
+        val formatted = "Connection succeeded in 42 ms"
+        assertEquals(MainBarText(formatted, "192.0.2.1"), mainBarText(state, formatted, "Server"))
         val hidden = state.copy(statusMessageVisible = false)
-        assertEquals(MainBarText("Connection succeeded in 42 ms", ""), mainBarText(hidden, formatted, "Server"))
+        assertEquals(MainBarText(formatted, ""), mainBarText(hidden, formatted, "Server"))
         assertEquals(state.status, hidden.status)
         assertTrue(hidden.isRunning)
     }
 
     @Test
-    fun pingCountryCodeIsRenderedAsFlag() {
-        assertEquals("🇩🇪", pingCountryLabel("DE", "Unknown"))
-        assertEquals("🇳🇱", pingCountryLabel("Netherlands", "Unknown"))
-        assertEquals("Raw", pingCountryLabel("Raw", "Unknown"))
+    fun pingCountryCodeIsResolvedToIso() {
+        assertEquals("DE", CountryResolver.isoForCountry("DE"))
+        assertEquals("NL", CountryResolver.isoForCountry("Netherlands"))
+        assertEquals(null, CountryResolver.isoForCountry("Raw"))
     }
 
     @Test
