@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.drawable.Icon
+import android.os.Handler
+import android.os.Looper
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.core.content.ContextCompat
@@ -76,8 +78,8 @@ class QSTileService : TileService() {
      * Called when the tile stops listening.
      */
     override fun onStopListening() {
-        if (receiverRegistered) {
-            try {
+        handler.removeCallbacksAndMessages(null)
+        if (receiverRegistered) {            try {
                 applicationContext.unregisterReceiver(mMsgReceive)
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "Failed to unregister receiver", e)
@@ -97,12 +99,36 @@ class QSTileService : TileService() {
         if (CoreServiceManager.isRunning()) {
             setState(Tile.STATE_INACTIVE)
             LauncherManager.stopService(this)
+            // Stopping is asynchronous; if it did not take, put the tile back in step
+            // with the daemon instead of leaving it dark over a running tunnel.
+            scheduleStateCheck(2_500L)
         } else if (LauncherManager.startServiceFromToggle(this)) {
             setState(Tile.STATE_ACTIVE)
+            // The tile only lit because a start was requested. VPN setup or the core can
+            // still fail without a broadcast (no consent, bad config), and the tile then
+            // stayed active over a stopped app; re-read the daemon's state afterwards.
+            scheduleStateCheck(3_000L, 10_000L)
         } else {
             setState(Tile.STATE_INACTIVE)
         }
     }
+
+    private fun scheduleStateCheck(vararg delaysMs: Long) {
+        handler.removeCallbacksAndMessages(null)
+        delaysMs.forEach { delayMs ->
+            handler.postDelayed(
+                {
+                    setState(
+                        if (CoreServiceManager.isRunning()) Tile.STATE_ACTIVE
+                        else Tile.STATE_INACTIVE
+                    )
+                },
+                delayMs
+            )
+        }
+    }
+
+    private val handler = Handler(Looper.getMainLooper())
 
     private var receiverRegistered = false
     private var mMsgReceive: BroadcastReceiver? = null

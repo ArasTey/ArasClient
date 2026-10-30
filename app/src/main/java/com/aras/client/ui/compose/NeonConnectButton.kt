@@ -37,39 +37,51 @@ import com.aras.client.R
  * the rim and clipped by the shape. Nothing spills past the edge, so the button keeps a
  * clean outline against whatever sits behind it.
  *
- * The sweep runs only while the tunnel is up — an idle button that animates forever
- * costs battery for nothing.
+ * Three states: idle, connecting (amber, sweep runs faster) and connected (green).
+ * The sweep runs only while something is happening — an idle button that animates
+ * forever costs battery for nothing.
  */
 @Composable
 fun NeonConnectButton(
     isRunning: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isConnecting: Boolean = false,
 ) {
+    val palette = LocalGlassPalette.current
     val lit = Color(0xFF30E08A)
+    val pending = palette.amber
+    val active = isRunning || isConnecting
+    val activeColor = if (isRunning) lit else pending
     val idleFill = MaterialTheme.colorScheme.surfaceVariant
     val idleEdge = MaterialTheme.colorScheme.outlineVariant
+    val activeFill = when {
+        isRunning -> Color(0xFF0C2117)
+        palette.isDark -> Color(0xFF2A2210)
+        else -> Color(0xFFFFF4DC)
+    }
 
-    // The entry spring: a small overshoot on the way to connected.
+    // The entry spring: a small overshoot on the way to an active state.
     val pop = remember { Animatable(1f) }
-    LaunchedEffect(isRunning) {
-        if (!isRunning) return@LaunchedEffect
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
         pop.snapTo(0.88f)
         pop.animateTo(1f, tween(420))
     }
     val popScale = pop.value
 
     val sweepDegrees = remember { Animatable(0f) }
-    LaunchedEffect(isRunning) {
-        if (!isRunning) {
+    LaunchedEffect(active, isConnecting) {
+        if (!active) {
             sweepDegrees.animateTo(0f, tween(260))
             return@LaunchedEffect
         }
-        // A long, slow rotation: present, not busy.
+        // A long, slow rotation when connected: present, not busy. While connecting
+        // it turns faster, because here it *is* the progress cue.
         sweepDegrees.animateTo(
             targetValue = sweepDegrees.value + 360f,
             animationSpec = infiniteRepeatable(
-                tween(2800, easing = LinearEasing),
+                tween(if (isConnecting) 1400 else 2800, easing = LinearEasing),
                 RepeatMode.Restart,
             ),
         )
@@ -80,10 +92,10 @@ fun NeonConnectButton(
             .size(58.dp)
             .scale(popScale)
             .clip(CircleShape)
-            .background(if (isRunning) Color(0xFF0C2117) else idleFill)
+            .background(if (active) activeFill else idleFill)
             .border(
-                width = if (isRunning) 2.dp else 1.5.dp,
-                color = if (isRunning) lit else idleEdge,
+                width = if (active) 2.dp else 1.5.dp,
+                color = if (active) activeColor else idleEdge,
                 shape = CircleShape,
             )
             .clickable(
@@ -93,7 +105,7 @@ fun NeonConnectButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        if (isRunning) {
+        if (active) {
             // The sweep, clipped to the circle by the parent's shape. One bright arc
             // trailing around, not a gradient across the whole circle: a symmetric
             // sweepGradient would read as two lobes spinning, which is busier than
@@ -108,8 +120,8 @@ fun NeonConnectButton(
                         colorStops = arrayOf(
                             0f to Color.Transparent,
                             0.84f to Color.Transparent,
-                            0.93f to lit.copy(alpha = 0.34f),
-                            1f to lit.copy(alpha = 0.34f),
+                            0.93f to activeColor.copy(alpha = if (palette.isDark) 0.34f else 0.42f),
+                            1f to activeColor.copy(alpha = if (palette.isDark) 0.34f else 0.42f),
                         )
                     )
                 )
@@ -118,12 +130,12 @@ fun NeonConnectButton(
 
         androidx.compose.material3.Icon(
             painter = painterResource(
-                if (isRunning) R.drawable.ic_stop_24dp else R.drawable.ic_play_24dp
+                if (active) R.drawable.ic_stop_24dp else R.drawable.ic_play_24dp
             ),
             contentDescription = stringResource(
-                if (isRunning) R.string.acc_stop else R.string.acc_start
+                if (active) R.string.acc_stop else R.string.acc_start
             ),
-            tint = if (isRunning) lit else MaterialTheme.colorScheme.onSurface,
+            tint = if (active) activeColor else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(25.dp),
         )
     }

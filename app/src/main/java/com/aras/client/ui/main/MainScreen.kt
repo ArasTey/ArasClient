@@ -52,6 +52,13 @@ fun MainScreen(
     val groups = uiState.groups
     val isLoading by mainViewModel.isLoading.collectAsStateWithLifecycle()
     val isRunning = uiState.isRunning
+    val isConnecting = uiState.isConnecting
+    // The name is only needed while connecting; read it once per selection, not per
+    // recomposition tick of the stats row.
+    val connectingServerName = remember(uiState.selectedGuid, isConnecting) {
+        if (isConnecting) mainViewModel.connectedServerTitle() else ""
+    }
+    val connectingTitle = stringResource(R.string.connection_connecting)
     val barText = mainBarText(
         uiState,
         mainViewModel.formatStatus(uiState.status),
@@ -221,10 +228,15 @@ fun MainScreen(
                     LocalDensity provides Density(density = density.density, fontScale = 1f)
                 ) {
                     MainBottomBar(
-                        displayText = barText.title,
-                        subtitleOverride = if (uiState.status == MainStatus.Disconnected) null else barText.subtitle,
-                        subtitleFlagIso = testFlagIso,
+                        displayText = if (isConnecting) connectingTitle else barText.title,
+                        subtitleOverride = when {
+                            isConnecting -> connectingServerName
+                            uiState.status == MainStatus.Disconnected -> null
+                            else -> barText.subtitle
+                        },
+                        subtitleFlagIso = if (isConnecting) null else testFlagIso,
                         isRunning = isRunning,
+                        isConnecting = isConnecting,
                         onAction = onAction
                     )
                 }

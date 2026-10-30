@@ -21,6 +21,10 @@ data class MainUiState(
     val selectedGroupId: String = "",
     val selectedGuid: String? = null,
     val isRunning: Boolean = false,
+    // A start was requested and the daemon has not reported success or failure yet.
+    // Long tunnels (Tor) need this: without a visible sign of work the app reads as
+    // hung, and tapping again was the only feedback the user could get.
+    val isConnecting: Boolean = false,
     val isTesting: Boolean = false,
     val status: MainStatus = MainStatus.Disconnected,
     // Presentation only: hiding a message must not change connection or test state.

@@ -112,6 +112,48 @@ class MainViewModel(
         uiState.value.selectedGuid?.let { dataSource.decodeServerConfig(it)?.remarks }
             ?.takeIf { it.isNotBlank() } ?: dataSource.getString(R.string.app_name)
 
+    // ---------- Connecting state ----------
+    private var connectTimeoutJob: Job? = null
+
+    /**
+     * A stop was asked for while the start was still in flight but the daemon had not
+     * created its service yet, so the broadcast went nowhere. If the session comes up
+     * anyway, it is taken down at that point instead of connecting against the user.
+     */
+    private var cancelRequested = false
+
+    /** The UI asked for a start; stay "connecting" until the daemon reports how it went. */
+    fun onConnectRequested() {
+        connectTimeoutJob?.cancel()
+        cancelRequested = false
+        _uiState.update { it.copy(isConnecting = true) }
+        // Safety net only: success, failure and an explicit stop all clear the flag long
+        // before this fires. It covers a broadcast that never arrives at all.
+        connectTimeoutJob = viewModelScope.launch {
+            delay(CONNECT_INDICATOR_TIMEOUT_MS)
+            _uiState.update { it.copy(isConnecting = false) }
+        }
+    }
+
+    /** The user cancelled the start before the daemon finished bringing it up. */
+    fun onConnectCancelled() {
+        connectTimeoutJob?.cancel()
+        cancelRequested = true
+        _uiState.update { it.copy(isConnecting = false) }
+    }
+
+    /**
+     * True when the session that just came up was cancelled before it got there. The
+     * stop is re-sent now that a service exists to hear it, and the UI never enters the
+     * connected state.
+     */
+    private fun retryCancelledStart(): Boolean {
+        if (!cancelRequested) return false
+        cancelRequested = false
+        dataSource.sendMsg2Service(AppConfig.MSG_STATE_STOP, "")
+        return true
+    }
+
     // ---------- Keyword filtering ----------
     @Volatile
     private var keywordFilter: String = ""
@@ -153,14 +195,18 @@ class MainViewModel(
 
     private fun handleServiceEvent(event: MainServiceEvent) {
         when (event) {
-            MainServiceEvent.StateRunning -> updateRunningState(true, clearTestingText = false)
+            MainServiceEvent.StateRunning -> {
+                if (!retryCancelledStart()) updateRunningState(true, clearTestingText = false)
+            }
             MainServiceEvent.StateNotRunning -> updateRunningState(false, clearTestingText = false)
             MainServiceEvent.StateStartSuccess -> {
+                if (retryCancelledStart()) return
                 toastSuccess(R.string.toast_services_success)
                 updateRunningState(true)
             }
 
             is MainServiceEvent.StateStartFailure -> {
+                cancelRequested = false
                 // The core rejects an invalid config with a specific reason; showing it
                 // beats a generic "failed to start". Kept short for a toast — the full
                 // text and the generated config are written to the log on failure.
@@ -173,7 +219,13 @@ class MainViewModel(
                 updateRunningState(false)
             }
 
-            MainServiceEvent.StateStopSuccess -> updateRunningState(false)
+            MainServiceEvent.StateStopSuccess -> {
+                cancelRequested = false
+                // A stop during a ping round must also end the round, or its finish
+                // would re-post a "Testing" result over a stopped session.
+                if (uiState.value.isTesting) cancelAllPing()
+                updateRunningState(false)
+            }
             is MainServiceEvent.MeasureDelayResult -> {
                 // The daemon may send a second, delayed GeoIP enrichment. Neither it nor
                 // a result from a previous screen visit may resurrect a dismissed message.
@@ -1281,10 +1333,14 @@ class MainViewModel(
         val connectionChanged = uiState.value.isRunning != running
         // Registration/state snapshots must not replay guidance or replace a ping result.
         if (!connectionChanged && !clearTestingText) return
+        // Any definitive word from the daemon ends the connecting indicator, including a
+        // start failure where isRunning was already false.
+        connectTimeoutJob?.cancel()
         clearStatusMessage()
         _uiState.update { state ->
             state.copy(
                 isRunning = running,
+                isConnecting = false,
                 status = if (!clearTestingText && state.isTesting) state.status
                 else if (running) MainStatus.Connected else MainStatus.Disconnected
             )
@@ -1294,6 +1350,7 @@ class MainViewModel(
 
     override fun onCleared() {
         statusMessageJob?.cancel()
+        connectTimeoutJob?.cancel()
         setupGroupJob?.cancel()
         preloadJob?.cancel()
         selectedGroupLoadJob?.cancel()
@@ -1315,3 +1372,9 @@ class MainViewModel(
         }
     }
 }
+
+/**
+ * Upper bound for showing "connecting" when no service event ever arrives. Real outcomes
+ * (success, failure, stop) clear the indicator long before this.
+ */
+private const val CONNECT_INDICATOR_TIMEOUT_MS = 180_000L

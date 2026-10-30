@@ -51,7 +51,7 @@ private val RailShape = RoundedCornerShape(999.dp)
 
 /**
  * Segmented glass rail: one frosted capsule holding equal-width pills, the
- * selected one lit ivory. Long group lists scroll horizontally.
+ * selected one lit blue. Long group lists scroll horizontally.
  */
 @Composable
 fun GroupTabBar(

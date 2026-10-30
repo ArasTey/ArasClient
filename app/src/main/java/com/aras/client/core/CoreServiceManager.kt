@@ -56,6 +56,14 @@ object CoreServiceManager {
     @Volatile
     private var isReloading = false
 
+    /**
+     * A stop landed while the tunnel was still coming up. The start then aborts with an
+     * error of its own, but that end was requested — reporting it as a failure would
+     * toast an error for a cancel the user just asked for.
+     */
+    @Volatile
+    private var stopDuringStart = false
+
     private fun notifyTileState(service: Service, what: Int, content: String = "") {
         MessageHelper.sendMsg2UI(service, what, content)
         QSTileService.requestStateRefresh(service)
@@ -69,11 +77,39 @@ object CoreServiceManager {
             field = value
             val service = value?.get()?.getService()
             CoreNativeManager.initCoreEnv(service)
+            if (service != null) ensureMessageReceiver(service)
             if (service != null && processFinder == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 processFinder = XrayProcessFinder(service)
                 coreController.registerProcessFinder(processFinder)
             }
         }
+
+    private var receiverRegistered = false
+
+    /**
+     * Listens for service messages from the moment the service exists, not only once the
+     * core loop starts: a stop that arrives while the VPN interface is still being set up
+     * must be able to end the session instead of being dropped on the floor.
+     */
+    private fun ensureMessageReceiver(service: Service) {
+        if (receiverRegistered) return
+        val filter = IntentFilter(AppConfig.BROADCAST_ACTION_SERVICE)
+        filter.addAction(Intent.ACTION_SCREEN_ON)
+        filter.addAction(Intent.ACTION_SCREEN_OFF)
+        filter.addAction(Intent.ACTION_USER_PRESENT)
+        ContextCompat.registerReceiver(service, mMsgReceive, filter, Utils.receiverFlags())
+        receiverRegistered = true
+    }
+
+    private fun unregisterMessageReceiver(service: Service) {
+        if (!receiverRegistered) return
+        receiverRegistered = false
+        try {
+            service.unregisterReceiver(mMsgReceive)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+        }
+    }
 
     /**
      * Checks if the Xray service is running.
@@ -104,11 +140,17 @@ object CoreServiceManager {
             return false
         }
 
+        stopDuringStart = false
         try {
             doStartCoreLoop(service, vpnInterface)
             return true
         } catch (e: Exception) {
             val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
+            if (stopDuringStart) {
+                LogUtil.i(AppConfig.TAG, "StartCore-Manager: Start cancelled by a stop request")
+                NotificationManager.cancelNotification()
+                return false
+            }
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message", e)
             notifyTileState(service, AppConfig.MSG_STATE_START_FAILURE, message)
             NotificationManager.cancelNotification()
@@ -118,11 +160,7 @@ object CoreServiceManager {
 
     @Throws(Exception::class)
     private fun doStartCoreLoop(service: Service, vpnInterface: ParcelFileDescriptor?) {
-        val mFilter = IntentFilter(AppConfig.BROADCAST_ACTION_SERVICE)
-        mFilter.addAction(Intent.ACTION_SCREEN_ON)
-        mFilter.addAction(Intent.ACTION_SCREEN_OFF)
-        mFilter.addAction(Intent.ACTION_USER_PRESENT)
-        ContextCompat.registerReceiver(service, mMsgReceive, mFilter, Utils.receiverFlags())
+        ensureMessageReceiver(service)
 
         currentVpnInterface = vpnInterface
         launchCore(service, vpnInterface)
@@ -154,7 +192,11 @@ object CoreServiceManager {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message (reason: $reason)")
             CoroutineScope(Dispatchers.Main).launch {
                 notifyTileState(service, AppConfig.MSG_STATE_START_FAILURE, message)
-                stopCoreLoop()
+                // End the whole session, not just the core loop: a core that died on its
+                // own would otherwise leave the VPN interface established and the start
+                // lock held, so the UI could neither stop nor reconnect without a restart.
+                val control = serviceControl?.get()
+                if (control != null) control.stopService() else stopCoreLoop()
             }
         }
         helpers.error?.let { reason ->
@@ -236,6 +278,10 @@ object CoreServiceManager {
         networkMonitor = null
         currentVpnInterface = null
 
+        // A start still waiting for the aether listener holds HelperProcessSupport's lock;
+        // cancel it first so the teardown below cannot sit behind the readiness timeout.
+        AetherCoreManager.cancelStart()
+
         // The aether core and the mieru client are child processes; stopping them here
         // keeps them from outliving the session they were started for. reset() also
         // clears the refcounts HelperProcessSupport keeps for concurrent chain tests.
@@ -247,6 +293,10 @@ object CoreServiceManager {
                     coreController.stopLoop()
                 } catch (e: Exception) {
                     LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop Xray loop", e)
+                } finally {
+                    // The tile must be told once the core has actually stopped: refreshing
+                    // right after this call raced the async stop and left it lit.
+                    QSTileService.requestStateRefresh(service.applicationContext)
                 }
             }
         }
@@ -262,11 +312,7 @@ object CoreServiceManager {
         notifyTileState(service, AppConfig.MSG_STATE_STOP_SUCCESS)
         NotificationManager.cancelNotification()
 
-        try {
-            service.unregisterReceiver(mMsgReceive)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
-        }
+        unregisterMessageReceiver(service)
 
         return true
     }
@@ -526,6 +572,7 @@ object CoreServiceManager {
 
                 AppConfig.MSG_STATE_STOP -> {
                     LogUtil.i(AppConfig.TAG, "StartCore-Manager: Stop service")
+                    stopDuringStart = true
                     serviceControl.stopService()
                 }
 

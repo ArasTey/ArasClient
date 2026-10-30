@@ -37,9 +37,13 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -556,7 +560,28 @@ fun ServerListItem(
             }
             .clip(cardShape)
             .background(cardBrush)
-            .then(if (isSelected) Modifier.border(1.dp, palette.selectedBorder, cardShape) else Modifier)
+            .then(
+                if (isSelected) {
+                    // The stroke is inset by half its width: a stroke centered on the
+                    // clipped edge loses its outer half, and along the arc that half is
+                    // all the antialiasing leaves visible, so the corners read as cut.
+                    // The radius shrinks to stay concentric with the card's 16dp clip.
+                    Modifier.drawWithContent {
+                        drawContent()
+                        val stroke = 1.dp.toPx()
+                        val inset = stroke / 2f
+                        drawRoundRect(
+                            color = palette.selectedBorder,
+                            topLeft = Offset(inset, inset),
+                            size = Size(size.width - stroke, size.height - stroke),
+                            cornerRadius = CornerRadius(16.dp.toPx() - inset),
+                            style = Stroke(width = stroke)
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            )
             .clickable(onClick = onClick)
             .then(dragModifier)
             .padding(start = 10.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),

@@ -36,6 +36,10 @@ class CoreVpnService : VpnService(), ServiceControl {
     private var tun2SocksService: Tun2SocksControl? = null
     private val isStartingLock = AtomicBoolean(false)
 
+    /** Set when a stop arrives mid-start; the setup thread finishes the teardown. */
+    @Volatile
+    private var stopRequested = false
+
     override fun onCreate() {
         super.onCreate()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service created")
@@ -70,6 +74,11 @@ class CoreVpnService : VpnService(), ServiceControl {
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to close interface in onDestroy", e)
             }
+            // Destroyed without stopAllService(): the core and its aether/Tor helpers must
+            // end here too, or they keep their listeners and the next connect finds the
+            // daemon "running" with nothing able to stop it.
+            isRunning = false
+            CoreServiceManager.stopCoreLoop()
         }
 
         unlockStart()
@@ -91,6 +100,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: Start already in progress")
             return START_NOT_STICKY
         }
+        stopRequested = false
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service command received, systemVpnStart=$isSystemVpnStart")
         // Setup resolves server DNS and initializes the native core, which can
         // block for seconds on unreachable hosts; keep it off the main thread
@@ -99,6 +109,21 @@ class CoreVpnService : VpnService(), ServiceControl {
             if (!setupVpnService()) {
                 unlockStart()
                 // Stop service if setup fails to avoid infinite restart loops (START_STICKY)
+                stopSelf()
+                return@Thread
+            }
+            if (stopRequested) {
+                // The stop arrived while the interface was being set up. Close what the
+                // setup just created instead of starting a core for a cancelled session,
+                // or the interface would outlive the stop.
+                LogUtil.i(AppConfig.TAG, "StartCore-VPN: Stop requested during setup")
+                isRunning = false
+                try {
+                    if (::mInterface.isInitialized) mInterface.close()
+                } catch (e: Exception) {
+                    LogUtil.w(AppConfig.TAG, "StartCore-VPN: Failed to close interface after stop", e)
+                }
+                unlockStart()
                 stopSelf()
                 return@Thread
             }
@@ -355,6 +380,7 @@ class CoreVpnService : VpnService(), ServiceControl {
     }
 
     private fun stopAllService(isForced: Boolean = true) {
+        stopRequested = true
 //        val configName = defaultDPreference.getPrefString(PREF_CURR_CONFIG_GUID, "")
 //        val emptyInfo = VpnNetworkInfo()
 //        val info = loadVpnNetworkInfo(configName, emptyInfo)!! + (lastNetworkInfo ?: emptyInfo)

@@ -1,6 +1,12 @@
 package com.aras.client.ui.main
 
 import android.os.SystemClock
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -68,10 +74,27 @@ fun MainBottomBar(
     isRunning: Boolean,
     onAction: (MainAction) -> Unit,
     subtitleOverride: String? = null,
-    subtitleFlagIso: String? = null
+    subtitleFlagIso: String? = null,
+    isConnecting: Boolean = false
 ) {
     val palette = LocalGlassPalette.current
-    val dotColor = if (isRunning) palette.pingGood else MaterialTheme.colorScheme.outline
+    val dotColor = when {
+        isRunning -> palette.pingGood
+        isConnecting -> palette.amber
+        else -> MaterialTheme.colorScheme.outline
+    }
+    // A still dot on an idle-looking card was the whole complaint: a tunnel that takes
+    // a minute to come up read as a hung app. The pulse says work is still happening.
+    val pulse = rememberInfiniteTransition(label = "connectPulse")
+    val connectingAlpha by pulse.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(
+            tween(850, easing = FastOutSlowInEasing),
+            RepeatMode.Reverse
+        ),
+        label = "connectPulseAlpha"
+    )
     // The bar carries its own type scale: a larger system font must not break
     // the one-line layout of the name, address and traffic figures.
     var titleSize by remember(displayText) { mutableStateOf(12.sp) }
@@ -122,7 +145,9 @@ fun MainBottomBar(
                         modifier = Modifier
                             .size(11.dp)
                             .clip(CircleShape)
-                            .background(dotColor)
+                            .background(
+                                dotColor.copy(alpha = if (isConnecting) connectingAlpha else 1f)
+                            )
                     )
                 }
                 Spacer(Modifier.width(10.dp))
@@ -190,6 +215,7 @@ fun MainBottomBar(
 
                 NeonConnectButton(
                     isRunning = isRunning,
+                    isConnecting = isConnecting,
                     onClick = { onAction(MainAction.ToggleService) },
                 )
             }

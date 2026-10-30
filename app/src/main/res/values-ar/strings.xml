@@ -407,6 +407,7 @@
     <string name="connection_test_error_status_code">رمز الخطأ: #%d</string>
     <string name="connection_connected">متصل. اضغط للتحقق من الاتصال.</string>
     <string name="connection_not_connected">غير متصل</string>
+    <string name="connection_connecting">جارٍ الاتصال…</string>
     <string name="bar_tap_to_connect">اضغط للاتصال</string>
     <string name="title_smart_connect">الاتصال بأسرع خادم</string>
     <string name="connection_running_task_left">الاختبارات قيد التشغيل: %s</string>

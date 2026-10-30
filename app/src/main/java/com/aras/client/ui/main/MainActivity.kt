@@ -413,7 +413,10 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun handleFabAction() {
-        if (mainViewModel.uiState.value.isRunning) {
+        // A start that has not landed yet stays cancellable: while the daemon is still
+        // bringing the tunnel up, the button means "cancel" rather than "start again".
+        if (mainViewModel.uiState.value.isRunning || mainViewModel.uiState.value.isConnecting) {
+            mainViewModel.onConnectCancelled()
             LauncherManager.stopService(this)
         } else {
             requestServiceStart()
@@ -447,7 +450,7 @@ class MainActivity : HelperBaseComponentActivity() {
         ) {
             checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) {}
         }
-        LauncherManager.startService(this)
+        if (LauncherManager.startService(this)) mainViewModel.onConnectRequested()
     }
 
     private fun importManually(createConfigType: Int) {

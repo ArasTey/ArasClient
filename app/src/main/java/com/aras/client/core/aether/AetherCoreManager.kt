@@ -189,6 +189,19 @@ object AetherCoreManager {
     @Volatile
     private var session: Session? = null
 
+    /**
+     * Set by [cancelStart] so a [start] still waiting for its listener gives up at once.
+     * The start runs while HelperProcessSupport holds its lock, so a stop that had to wait
+     * for the full readiness timeout would leave the app unable to disconnect.
+     */
+    @Volatile
+    private var startCancelled = false
+
+    /** Aborts [start] while it is still waiting for the listener; see [startCancelled]. */
+    fun cancelStart() {
+        startCancelled = true
+    }
+
     /** Whether the session core that ended on its own last stopped for want of an ECH key; see [stoppedMessage]. */
     @Volatile
     private var stoppedForEchKey = false
@@ -762,7 +775,7 @@ object AetherCoreManager {
      * One binary speaks all of them, so the same path is offered for each.
      */
 
-    internal val torTransports = listOf("obfs4", "obfs4proxy", "snowflake", "conjure", "meek")
+    internal val torTransports = listOf("obfs4", "obfs4proxy", "snowflake", "conjure", "meek", "webtunnel")
 
     /** The certificate directories of this device that exist, joined the way Go reads them. */
     internal fun certificateDirectories(exists: (String) -> Boolean): String? =
@@ -837,6 +850,7 @@ object AetherCoreManager {
         }
         stoppedForEchKey = false
         stoppedChainEnd = null
+        startCancelled = false
         val started = try {
             ProcessBuilder(listOf(exe.absolutePath) + core.arguments)
                 .directory(workDir(context))
@@ -983,7 +997,7 @@ object AetherCoreManager {
         val needsWord = readyNeedsWord(target.arguments)
         val wearsInfo = showsInfo(target.arguments)
         while (System.currentTimeMillis() < deadline) {
-            if (session !== target) return false
+            if (startCancelled || session !== target) return false
             // A quieter core never writes the ready word; the listener alone decides then.
             if (socksAnswers.answers(target.port) && (!needsWord || !wearsInfo || target.wordSeen)) return true
             val alive = try {
@@ -1086,6 +1100,10 @@ object AetherCoreManager {
                 Thread.currentThread().interrupt()
             }
         }
+        // A killed core leaves its own children (Psiphon, Lyrebird) behind. They carry
+        // OWNER_ENV like the core did, so a stopped session takes them with it instead of
+        // leaving a tunnel running in the background after the user disconnected.
+        reapStale()
     }
 
     /**
