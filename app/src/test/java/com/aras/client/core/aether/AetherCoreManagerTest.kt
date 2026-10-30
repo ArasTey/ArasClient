@@ -12,6 +12,7 @@ import java.io.DataInputStream
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
@@ -369,11 +370,16 @@ class AetherCoreManagerTest {
 
     @Test
     fun `questions about a port asked together share one answer`() {
-        // A listener that says nothing: whoever asks while the first question waits takes its
-        // answer, so the connections a long warm-up queues are not one per question.
+        // A listener that says nothing: the question that asks first holds its connection open
+        // while it waits, and whoever asks meanwhile takes its answer, so the connections a long
+        // warm-up queues are not one per question. The question waits long here, and the others
+        // are let go only once the port has accepted the first connection, so "meanwhile" does
+        // not rest on three threads being scheduled together on a loaded machine.
         ServerSocket(0, 8, InetAddress.getLoopbackAddress()).use { silent ->
             var accepts = 0
             val lock = Any()
+            val accepted = mutableListOf<Socket>()
+            val firstConnected = CountDownLatch(1)
             val accepter = thread(isDaemon = true) {
                 while (true) {
                     val client = try {
@@ -382,23 +388,24 @@ class AetherCoreManagerTest {
                         return@thread
                     }
                     synchronized(lock) { accepts++ }
-                    runCatching { client.close() }
+                    synchronized(lock) { accepted += client }
+                    firstConnected.countDown()
                 }
             }
             val port = silent.localPort
-            val started = CountDownLatch(3)
-            val answers = List(3) {
-                FutureTask<Boolean> {
-                    started.countDown()
-                    started.await()
-                    AetherCoreManager.answersSocks(port)
-                }
-            }
-            answers.forEach { task -> thread(isDaemon = true) { task.run() } }
-            answers.forEach { assertEquals(false, it.get(5, TimeUnit.SECONDS)) }
+            val probe = SocksAnswers(waitMs = 1_500)
+            val first = FutureTask { probe.answers(port) }
+            thread(isDaemon = true) { first.run() }
+            assertTrue("the first question never reached the port", firstConnected.await(5, TimeUnit.SECONDS))
+            // Asked while the first question still waits on its connection: the same answer.
+            val together = List(2) { FutureTask<Boolean> { probe.answers(port) } }
+            together.forEach { task -> thread(isDaemon = true) { task.run() } }
+            together.forEach { assertEquals(false, it.get(10, TimeUnit.SECONDS)) }
+            assertEquals(false, first.get(10, TimeUnit.SECONDS))
             runCatching { silent.close() }
             accepter.interrupt()
-            assertTrue("each of three questions asked together opened its own connection: $accepts", accepts <= 2)
+            synchronized(lock) { accepted.forEach { runCatching { it.close() } } }
+            assertEquals("questions asked while one waited opened their own connection", 1, accepts)
         }
     }
 
