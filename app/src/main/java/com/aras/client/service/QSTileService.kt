@@ -64,7 +64,7 @@ class QSTileService : TileService() {
         super.onStartListening()
 
         setState(
-            if (CoreServiceManager.isRunning()) {
+            if (CoreServiceManager.isSessionRunning()) {
                 Tile.STATE_ACTIVE
             } else {
                 Tile.STATE_INACTIVE
@@ -78,7 +78,9 @@ class QSTileService : TileService() {
      * Called when the tile stops listening.
      */
     override fun onStopListening() {
-        handler.removeCallbacksAndMessages(null)
+        // The handlers must outlive the panel: a tap closes it almost at once, and
+        // clearing the pending state checks here meant a start that never came up
+        // left the tile lit over a stopped client, and vice versa.
         if (receiverRegistered) {            try {
                 applicationContext.unregisterReceiver(mMsgReceive)
             } catch (e: Exception) {
@@ -90,13 +92,18 @@ class QSTileService : TileService() {
         super.onStopListening()
     }
 
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        super.onDestroy()
+    }
+
     /**
      * Called when the tile is clicked.
      */
     override fun onClick() {
         super.onClick()
         ensureReceiverRegistered()
-        if (CoreServiceManager.isRunning()) {
+        if (CoreServiceManager.isSessionRunning()) {
             setState(Tile.STATE_INACTIVE)
             LauncherManager.stopService(this)
             // Stopping is asynchronous; if it did not take, put the tile back in step
@@ -114,12 +121,11 @@ class QSTileService : TileService() {
     }
 
     private fun scheduleStateCheck(vararg delaysMs: Long) {
-        handler.removeCallbacksAndMessages(null)
         delaysMs.forEach { delayMs ->
             handler.postDelayed(
                 {
                     setState(
-                        if (CoreServiceManager.isRunning()) Tile.STATE_ACTIVE
+                        if (CoreServiceManager.isSessionRunning()) Tile.STATE_ACTIVE
                         else Tile.STATE_INACTIVE
                     )
                 },

@@ -45,7 +45,7 @@ fun FirstRunSetupDialog(onDismiss: () -> Unit) {
         mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true))
     }
     var showSubAnnouncement by remember {
-        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, false))
+        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true))
     }
     // Asking here too: with this touched, the one-time question never shows
     // separately after onboarding.

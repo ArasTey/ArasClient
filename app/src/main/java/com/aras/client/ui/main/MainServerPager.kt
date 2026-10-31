@@ -37,13 +37,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -62,16 +57,20 @@ import com.aras.client.R
 import com.aras.client.dto.LocateTarget
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.dto.entities.ServersCache
+import com.aras.client.enums.AetherProtocol
+import com.aras.client.enums.EConfigType
 import com.aras.client.extension.isComplexType
 import com.aras.client.extension.nullIfBlank
 import com.aras.client.handler.AngConfigManager
 import com.aras.client.handler.FreeSubManager
 import com.aras.client.handler.ArasExportImportManager
 import com.aras.client.handler.MmkvManager
+import com.aras.client.ui.compose.CardCornerRadius
 import com.aras.client.ui.compose.FlagIcon
 import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.ReorderableGridItem
 import com.aras.client.ui.compose.ReorderableListItem
+import com.aras.client.ui.compose.glassSelectionRing
 import com.aras.client.ui.compose.verticalScrollbar
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
@@ -542,13 +541,16 @@ fun ServerListItem(
         null
     }
     val palette = LocalGlassPalette.current
-    val cardShape = RoundedCornerShape(16.dp)
+    val cardShape = RoundedCornerShape(CardCornerRadius)
     val cardBrush = if (isSelected) {
         SolidColor(palette.selectedTop)
     } else {
         SolidColor(MaterialTheme.colorScheme.surfaceContainerLow)
     }
     val pingColor = if (testDelayMillis < 0L) palette.pingBad else palette.pingGood
+    // An aether card names its tunnel and its exit, not just the protocol, so
+    // its chip takes the warm accent that marks the tunnels apart.
+    val typeTint = if (configTypeName == EConfigType.AETHER.name) palette.amber else palette.accent
 
     Row(
         modifier = modifier
@@ -562,22 +564,7 @@ fun ServerListItem(
             .background(cardBrush)
             .then(
                 if (isSelected) {
-                    // The stroke is inset by half its width: a stroke centered on the
-                    // clipped edge loses its outer half, and along the arc that half is
-                    // all the antialiasing leaves visible, so the corners read as cut.
-                    // The radius shrinks to stay concentric with the card's 16dp clip.
-                    Modifier.drawWithContent {
-                        drawContent()
-                        val stroke = 1.dp.toPx()
-                        val inset = stroke / 2f
-                        drawRoundRect(
-                            color = palette.selectedBorder,
-                            topLeft = Offset(inset, inset),
-                            size = Size(size.width - stroke, size.height - stroke),
-                            cornerRadius = CornerRadius(16.dp.toPx() - inset),
-                            style = Stroke(width = stroke)
-                        )
-                    }
+                    Modifier.glassSelectionRing(palette)
                 } else {
                     Modifier
                 }
@@ -629,12 +616,12 @@ fun ServerListItem(
                     Text(
                         typeDescription,
                         style = MaterialTheme.typography.labelSmall,
-                        color = palette.accent,
+                        color = typeTint,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(palette.accent.copy(alpha = 0.13f))
+                            .background(typeTint.copy(alpha = 0.13f))
                             .padding(horizontal = 7.dp, vertical = 2.dp)
                     )
                     if (testResult.isNotBlank()) {
@@ -660,11 +647,11 @@ fun ServerListItem(
                 Text(
                     typeDescription,
                     style = MaterialTheme.typography.labelSmall,
-                    color = palette.accent,
+                    color = typeTint,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .background(palette.accent.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
+                        .background(typeTint.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 )
                 if (countryIso != null || testResult.isNotBlank()) {
@@ -728,7 +715,7 @@ private fun CircularActionIcon(
     drawableRes: Int,
     contentDesc: String,
     onClick: () -> Unit,
-    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     IconButton(
         onClick = onClick,
@@ -745,7 +732,16 @@ private fun CircularActionIcon(
     }
 }
 
-private fun getProtocolDescription(profile: ProfileItem): String {
+internal fun getProtocolDescription(profile: ProfileItem): String {
+    if (profile.configType == EConfigType.AETHER) {
+        // An aether card says what the tunnel is and where it leaves, since
+        // "AETHER" alone names neither the protocol nor the exit profile.
+        val protocol = profile.aetherProtocol?.takeIf { it.isNotBlank() }
+            ?.let { AetherProtocol.fromString(it).name }
+        val head = listOfNotNull(profile.configType.name, protocol).joinToString(" / ")
+        val exit = profile.aetherExitNode?.trim().orEmpty()
+        return if (exit.isEmpty()) head else "$head → $exit"
+    }
     if (profile.configType.isComplexType()) return profile.configType.name
     val parts = mutableListOf(profile.configType.name)
     profile.network?.let { net ->

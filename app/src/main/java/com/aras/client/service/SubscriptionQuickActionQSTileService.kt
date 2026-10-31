@@ -69,8 +69,16 @@ class SubscriptionQuickActionQSTileService : TileService() {
     override fun onStartListening() {
         super.onStartListening()
         ensureReceiverRegistered()
-        workflowRunning = workflowRunning || QuickConnectCoordinator.isRunning()
-        if (workflowRunning) renderActive() else renderReady()
+        // The stored flag outlives the workflow that wrote it: after a kill or a crash
+        // it alone would keep the tile lit over a client that is off. Only a live
+        // workflow or a live session may.
+        val workflowActive = QuickConnectCoordinator.isRunning()
+        workflowRunning = workflowActive || CoreServiceManager.isSessionRunning()
+        when {
+            workflowActive -> renderRunning()
+            workflowRunning -> renderActive()
+            else -> renderReady()
+        }
     }
 
     override fun onStopListening() {

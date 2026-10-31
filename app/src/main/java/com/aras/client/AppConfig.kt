@@ -102,6 +102,13 @@ object AppConfig {
     const val PREF_ONBOARDING_DONE = "pref_onboarding_done"
     const val PREF_QUICK_SETTINGS_TILES_INFO_SHOWN = "pref_quick_settings_tiles_info_shown"
     const val PREF_QUICK_CONNECT_RUNNING = "pref_quick_connect_running"
+
+    /**
+     * Written by the daemon when the core starts and cleared when the session ends,
+     * including a core that stops itself. The tile reads it instead of trusting the
+     * state SystemUI last stored, which survives the daemon that set it.
+     */
+    const val PREF_SESSION_RUNNING = "pref_session_running"
     const val PREF_ARASC_PROTECTED_GUIDS = "pref_arasc_protected_guids"
     const val PREF_SHOW_SUB_INFO = "pref_show_sub_info"
     const val PREF_SHOW_SUB_ANNOUNCEMENT = "pref_show_sub_announcement"

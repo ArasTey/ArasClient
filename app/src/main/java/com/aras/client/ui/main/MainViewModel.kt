@@ -231,7 +231,17 @@ class MainViewModel(
                 // a result from a previous screen visit may resurrect a dismissed message.
                 if (mainScreenActive && acceptCurrentPingMessages && uiState.value.isRunning) {
                     val firstResult = uiState.value.status !is MainStatus.ConnectionTest
-                    _uiState.update { it.copy(status = MainStatus.ConnectionTest(event.result)) }
+                    _uiState.update {
+                        it.copy(
+                            status = MainStatus.ConnectionTest(event.result),
+                            // The delayed GeoIP enrichment may carry only the country;
+                            // never let a hollow update erase the address already shown.
+                            egressCountry = event.result.country?.takeIf { value -> value.isNotBlank() }
+                                ?: it.egressCountry,
+                            egressIp = event.result.ipAddress?.takeIf { value -> value.isNotBlank() }
+                                ?: it.egressIp,
+                        )
+                    }
                     if (firstResult) showStatusMessage()
                     if (firstResult || !event.result.country.isNullOrBlank()) {
                         val groupId = _uiState.value.selectedGroupId
@@ -989,7 +999,11 @@ class MainViewModel(
     fun updateSelectedGuid(guid: String) {
         if (guid != _uiState.value.selectedGuid) {
             clearStatusMessage()
-            _uiState.update { it.withoutServerStatusMessage() }
+            // The egress line belongs to the profile that was connected, not the one
+            // the user just tapped.
+            _uiState.update {
+                it.withoutServerStatusMessage().copy(egressCountry = null, egressIp = null)
+            }
         }
         dataSource.setSelectServer(guid)
         _uiState.update { it.copy(selectedGuid = guid) }
@@ -1337,15 +1351,28 @@ class MainViewModel(
         // start failure where isRunning was already false.
         connectTimeoutJob?.cancel()
         clearStatusMessage()
+        // A session that came up from the tile or a quick action never ran a test in
+        // this screen; the daemon keeps the last measured egress, so the bar starts
+        // with it instead of staying blank until the next tap.
+        val cachedEgress = if (running) cachedEgress(uiState.value.selectedGuid) else null
         _uiState.update { state ->
             state.copy(
                 isRunning = running,
                 isConnecting = false,
                 status = if (!clearTestingText && state.isTesting) state.status
-                else if (running) MainStatus.Connected else MainStatus.Disconnected
+                else if (running) MainStatus.Connected else MainStatus.Disconnected,
+                egressCountry = if (running) state.egressCountry ?: cachedEgress?.first else null,
+                egressIp = if (running) state.egressIp ?: cachedEgress?.second else null,
             )
         }
         if (running && uiState.value.status == MainStatus.Connected) showStatusMessage()
+    }
+
+    private fun cachedEgress(guid: String?): Pair<String?, String?>? {
+        val affiliation = guid?.let { dataSource.decodeAffiliationInfo(it) } ?: return null
+        val country = affiliation.countryCode?.takeIf { it.isNotBlank() }
+        val ip = affiliation.ipAddress?.takeIf { it.isNotBlank() }
+        return if (country == null && ip == null) null else country to ip
     }
 
     override fun onCleared() {

@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -28,18 +29,14 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 internal object RealPingExecutionLimiter {
-    private val customConfigMutex = Mutex()
+    // Custom profiles start complete Xray configs, exit-node profiles bind one fixed
+    // loopback port, and Aether, Mieru, Tor and Psiphon share the daemon's single
+    // helper slot. Two probes of those kinds running at once take each other's core
+    // and both measure -1, so they share one lane. Ordinary configs stay parallel.
+    private val exclusiveMutex = Mutex()
 
-    suspend fun <T> run(configType: EConfigType, block: () -> T): T {
-        // Custom profiles bypass speed-test trimming and start complete Xray configs.
-        // Parallel teardown can abort the native probe process, so serialize their
-        // JNI measurements globally across batches.
-        return if (configType == EConfigType.CUSTOM) {
-            customConfigMutex.withLock { block() }
-        } else {
-            block()
-        }
-    }
+    suspend fun <T> run(exclusive: Boolean, block: suspend () -> T): T =
+        if (exclusive) exclusiveMutex.withLock { block() } else block()
 }
 
 /**
@@ -67,7 +64,12 @@ class RealPingWorkerService(
                 runningCount.incrementAndGet()
                 try {
                     val result = if (onlyTcp) {
-                        PingResult(startTcping(guid))
+                        // A TCP handshake is the cheapest probe, but the protocols it
+                        // cannot speak (Aether, Mieru, Tor, Psiphon, WireGuard, h3-only
+                        // and the rest) answered -1 on every round while they connected
+                        // fine. They get the real probe instead of a permanent -1; the
+                        // configs TCP can reach keep the cheap path.
+                        startTcping(guid) ?: startRealPing(guid)
                     } else {
                         startRealPing(guid)
                     }
@@ -136,15 +138,16 @@ class RealPingWorkerService(
         if (!configResult.status) {
             return retFailure
         }
+        // Any Aether, Mieru, Tor or Psiphon hop in the chain needs the daemon's single
+        // helper slot, which only one profile can hold at a time.
+        val helperChain = HelperProcessSupport.helperProfilesOf(chain).isNotEmpty()
         // An exit-node profile serves its egress on a fixed loopback port that
         // every concurrent Xray instance would also bind, so only one such test
-        // may run at a time — like custom configs, keyed as one here.
-        val limiterKey = if (config.aetherExitNode.isNotNullEmpty()) {
-            EConfigType.CUSTOM
-        } else {
-            config.configType
-        }
-        return RealPingExecutionLimiter.run(limiterKey) {
+        // may run at a time — together with the helper-backed and custom probes.
+        val exclusive = helperChain || config.aetherExitNode.isNotNullEmpty() ||
+            config.configType == EConfigType.CUSTOM
+
+        return RealPingExecutionLimiter.run(exclusive) {
             // Any Aether or Mieru hop in the resolved chain lowers to a SOCKS hop on
             // loopback, so its daemon has to be listening or every measurement through
             // it is -1. The refcounts here mean a batch of profiles sharing one entry
@@ -156,48 +159,54 @@ class RealPingWorkerService(
                 return@run retFailure
             }
             try {
-                val info = CoreNativeManager.measureOutboundDelayWithInfo(
-                    configResult.content,
-                    SettingsManager.getDelayTestUrl(),
-                    MmkvManager.decodeSettingsString(AppConfig.PREF_IP_API_URL)
-                        .takeIf { !it.isNullOrBlank() }
-                        ?: AppConfig.IP_API_URL,
-                )
-                if (info != null) {
-                    PingResult(info.getDelay(), info.getCountry(), info.getIP())
-                } else {
-                    PingResult(-1L)
-                }
+                val first = measureOnce(configResult.content)
+                if (first.delayMillis >= 0 || !helperChain) return@run first
+                // A helper that has just come up can lose the first probe while its
+                // listener settles; a second try is what turns a cold -1 into a delay.
+                delay(400L)
+                val second = measureOnce(configResult.content)
+                if (second.delayMillis >= 0) second else first
             } finally {
                 HelperProcessSupport.release(helpers)
             }
         }
     }
 
-    private fun startTcping(guid: String): Long {
-        val retFailure = -1L
+    private fun measureOnce(content: String): PingResult {
+        val info = CoreNativeManager.measureOutboundDelayWithInfo(
+            content,
+            SettingsManager.getDelayTestUrl(),
+            MmkvManager.decodeSettingsString(AppConfig.PREF_IP_API_URL)
+                .takeIf { !it.isNullOrBlank() }
+                ?: AppConfig.IP_API_URL,
+        ) ?: return PingResult(-1L)
+        return PingResult(info.getDelay(), info.getCountry(), info.getIP())
+    }
 
-        val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
-        if (!config.configType.isComplexType()
-            && config.configType != EConfigType.HYSTERIA2
-            && config.configType != EConfigType.WIREGUARD
-            && config.configType != EConfigType.AMNEZIAWG
-            && config.configType != EConfigType.ANYTLS
-            && config.configType != EConfigType.MASQUE
-            && config.configType != EConfigType.AETHER
-            && config.configType != EConfigType.MIERU
-            && !config.configType.isCarrierOnly
-            && config.alpn?.split(',')?.all { it.trim().startsWith("h3") } != true
-            && config.server.isNotNullEmpty()
-            && config.serverPort?.toIntOrNull() != null
+    /**
+     * The handshake delay, or null when TCP cannot reach this kind of profile at
+     * all — a complex config, a single-protocol tunnel without a TCP path, a
+     * carrier-only tunnel, or one that only speaks over HTTP/3. Null sends the
+     * caller to the real probe rather than reporting -1 for a profile that works.
+     */
+    private fun startTcping(guid: String): PingResult? {
+        val config = MmkvManager.decodeServerConfig(guid) ?: return PingResult(-1L)
+        if (config.configType.isComplexType()
+            || config.configType == EConfigType.HYSTERIA2
+            || config.configType == EConfigType.WIREGUARD
+            || config.configType == EConfigType.AMNEZIAWG
+            || config.configType == EConfigType.ANYTLS
+            || config.configType == EConfigType.MASQUE
+            || config.configType == EConfigType.AETHER
+            || config.configType == EConfigType.MIERU
+            || config.configType.isCarrierOnly
+            || config.alpn?.split(',')?.all { it.trim().startsWith("h3") } == true
         ) {
-            val url = config.server.orEmpty()
-            val port = config.serverPort.orEmpty().toInt()
-            val tcpTime = SpeedtestManager.socketConnectTime(url, port, 1000)
-
-            return tcpTime
+            return null
         }
 
-        return retFailure
+        val url = config.server.orEmpty()
+        val port = config.serverPort?.toIntOrNull() ?: return null
+        return PingResult(SpeedtestManager.socketConnectTime(url, port, 1000))
     }
 }

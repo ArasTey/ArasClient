@@ -668,6 +668,8 @@
     <string name="aether_core_stopped_chain_ended">تور یا سایفون درون تونل Aether از کار افتاد، پس اتصال متوقف شد: %1$s</string>
     <string name="sub_info_open_support">باز کردن لینک پشتیبانی</string>
     <string name="sub_info_open_page">باز کردن صفحه اطلاعات اشتراک</string>
+    <string name="sub_info_hide_announcement">پنهان کردن اطلاعیه</string>
+    <string name="sub_info_show_announcement">نمایش اطلاعیه</string>
     <string name="server_lab_aether_note">دروازه WARP اغلب به پینگ معمولی پاسخ نمی‌دهد و نشانی خروجی‌اش ایرانی دیده می‌شود — هر دو طبیعی است. اتصال را بررسی کنید، نه پینگ را.</string>
     <!-- Psiphon and Tor on their own, without an Aether tunnel -->
     <string name="menu_item_import_config_manually_psiphon">افزودن دستی کانفیگ سایفون</string>

@@ -118,6 +118,8 @@
     <string name="aether_core_stopped_chain_ended">Tor or Psiphon inside the Aether tunnel ended, so the connection was stopped: %1$s</string>
     <string name="sub_info_open_support">Open support link</string>
     <string name="sub_info_open_page">Open subscription page</string>
+    <string name="sub_info_hide_announcement">Hide announcement</string>
+    <string name="sub_info_show_announcement">Show announcement</string>
     <string name="server_lab_aether_key_ready">Key ready</string>
     <string name="server_lab_aether_reset_key">Reset WARP key</string>
     <string name="server_lab_aether_note">A WARP gateway often does not answer a plain ping, and its exit address reads as Iranian — both are normal. Check the connection, not the ping.</string>

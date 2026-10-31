@@ -48,12 +48,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aras.client.R
-import com.aras.client.ui.compose.FlagIcon
 import com.aras.client.ui.compose.GlassPalette
 import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.NeonConnectButton
@@ -74,7 +74,7 @@ fun MainBottomBar(
     isRunning: Boolean,
     onAction: (MainAction) -> Unit,
     subtitleOverride: String? = null,
-    subtitleFlagIso: String? = null,
+    subtitleIp: String? = null,
     isConnecting: Boolean = false
 ) {
     val palette = LocalGlassPalette.current
@@ -171,25 +171,46 @@ fun MainBottomBar(
                     // Null requests the disconnected hint; empty explicitly hides the subtitle.
                     val subtitle = subtitleOverride ?: if (isRunning) ""
                         else stringResource(R.string.bar_tap_to_connect)
-                    if (subtitle.isNotEmpty()) {
+                    if (subtitle.isNotEmpty() || !subtitleIp.isNullOrEmpty()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (subtitleFlagIso != null) {
-                                FlagIcon(
-                                    iso = subtitleFlagIso,
-                                    width = 17.dp,
-                                    height = 12.5.dp,
-                                    modifier = Modifier.padding(end = 5.dp)
+                            if (subtitle.isNotEmpty()) {
+                                // The country takes the squeeze; the address is short
+                                // and must stay whole.
+                                Text(
+                                    text = subtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 10.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
-                            Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            if (!subtitleIp.isNullOrEmpty()) {
+                                if (subtitle.isNotEmpty()) {
+                                    Text(
+                                        text = " · ",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 10.5.sp,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                                // Language-neutral, so it is pinned LTR: inside the RTL
+                                // bar the address would otherwise read reversed.
+                                Text(
+                                    text = compactAddress(subtitleIp),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        textDirection = TextDirection.Ltr
+                                    ),
+                                    fontSize = 10.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }

@@ -32,11 +32,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,7 +72,7 @@ fun GroupTabBar(
             (railWidth - 6.dp - 2.dp * (groups.size - 1).coerceAtLeast(0)) /
                 groups.size.coerceAtLeast(1)
         } else {
-            104.dp
+            118.dp
         }
 
         LaunchedEffect(selectedTabIndex, groups.size, railWidth) {
@@ -160,25 +157,7 @@ private fun GroupTabItem(
         animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
         label = "tabLabelColor"
     )
-    val label = remember(group.remarks, group.id, servers.size, labelColor) {
-        buildAnnotatedString {
-            append(group.remarks)
-            if (group.id.isNotEmpty()) {
-                withStyle(
-                    SpanStyle(
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.sp,
-                        color = labelColor.copy(alpha = 0.55f)
-                    )
-                ) {
-                    append("  (")
-                    append(servers.size.toString())
-                    append(")")
-                }
-            }
-        }
-    }
+    val countColor = labelColor.copy(alpha = 0.55f)
 
     Box(
         modifier = Modifier
@@ -193,17 +172,39 @@ private fun GroupTabItem(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelLarge,
-            fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-            letterSpacing = 0.sp,
-            color = labelColor,
-            modifier = Modifier.padding(horizontal = 8.dp)
-        )
+        // Name and count are separate texts: folded into one string the tail —
+        // the count — was the first thing ellipsis threw away on a long name.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = group.remarks,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelLarge,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                letterSpacing = 0.sp,
+                color = labelColor,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (group.id.isNotEmpty()) {
+                Text(
+                    text = "  (${servers.size})",
+                    maxLines = 1,
+                    softWrap = false,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.sp,
+                    color = countColor
+                )
+            }
+        }
     }
 }

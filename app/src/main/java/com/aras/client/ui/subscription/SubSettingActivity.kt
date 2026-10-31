@@ -313,7 +313,7 @@ fun SubSettingScreen(
         var autoSortAfterTest by rememberMmkvBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, true)
         var autoScrollToTop by rememberMmkvBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)
         var showSubInfo by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_INFO, true)
-        var showSubAnnouncement by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, false)
+        var showSubAnnouncement by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
         var showFreeSub by rememberMmkvBool(AppConfig.PREF_SHOW_FREE_SUB, true)
 
         AlertDialog(

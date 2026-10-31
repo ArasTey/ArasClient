@@ -57,14 +57,22 @@ class ServerPsiphonActivity : BaseServerActivity() {
     @Composable
     override fun ScreenContent() {
         val uiState = rememberSaveable(saver = ServerUiState.Saver) {
-            ServerUiState.from(initialConfig = initialConfig)
-        }.apply {
-            configType = EConfigType.PSIPHON
+            ServerUiState.from(initialConfig = initialConfig).apply {
+                configType = EConfigType.PSIPHON
+                // The carrier runs on its own listener, so it gets a free port up front
+                // rather than sharing the app default with every other carrier profile.
+                if (aetherListenPort.isBlank()) aetherListenPort = pickCarrierListenPort()
+            }
         }
 
         ServerEditorScaffold(
             title = "Psiphon",
-            onSaveClick = { saveServer(uiState) }
+            onSaveClick = {
+                if (uiState.aetherListenPort.isBlank()) {
+                    uiState.aetherListenPort = pickCarrierListenPort()
+                }
+                saveServer(uiState)
+            }
         ) {
             FormTextField(
                 stringResource(R.string.server_lab_remarks),

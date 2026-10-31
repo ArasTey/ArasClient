@@ -158,6 +158,20 @@ object CountryResolver {
     }
 
     /**
+     * The country's name in [locale], for the connected bar: an IP API's English
+     * "Croatia" or a raw "HR" both read as the name the rest of the UI is written
+     * in. Provider text that maps to no country is handed back unchanged rather
+     * than dropped.
+     */
+    fun displayName(country: String?, locale: Locale = Locale.getDefault()): String? {
+        val raw = country?.trim().orEmpty()
+        if (raw.isBlank()) return null
+        val iso = isoForCountry(raw) ?: return raw
+        val name = Locale("", iso).getDisplayCountry(locale)
+        return name.ifBlank { raw }
+    }
+
+    /**
      * Card policy: the flag represents where the endpoint sits. A country
      * measured by the connection test wins, then GeoIP, then provider naming.
      */

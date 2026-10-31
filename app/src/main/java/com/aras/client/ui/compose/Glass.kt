@@ -19,11 +19,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
@@ -47,7 +52,6 @@ data class GlassPalette(
     val railSelectedText: Color,
     val railText: Color,
     val selectedTop: Color,
-    val selectedBorder: Color,
     val chipFill: Color,
     val chipBorder: Color,
     val chipText: Color,
@@ -75,7 +79,6 @@ val DarkGlassPalette = GlassPalette(
     railSelectedText = Color(0xFFFFFFFF),
     railText = Color(0xFFA9BDC9),
     selectedTop = Color(0x333A96CD),
-    selectedBorder = Color(0x7554C3F2),
     chipFill = Color(0x295A96EB),
     chipBorder = Color(0x1FFFFFFF),
     chipText = Color(0xFF9DBFF3),
@@ -103,7 +106,6 @@ val LightGlassPalette = GlassPalette(
     railSelectedText = Color(0xFFFFFFFF),
     railText = Color(0xFF546977),
     selectedTop = Color(0xA6E4F6FF),
-    selectedBorder = Color(0x8C2E9DD6),
     chipFill = Color(0x1F0284C7),
     chipBorder = Color(0x140284C7),
     chipText = Color(0xFF0B6E9E),
@@ -133,6 +135,38 @@ fun Modifier.glassPanel(
     .clip(shape)
     .background(fill, shape)
     .border(borderWidth, borderColor, shape)
+
+/** The corner radius every card shares with the ring drawn around it when picked. */
+val CardCornerRadius: Dp = 16.dp
+
+/** The stroke of that ring, the same wherever a card can be selected. */
+val CardSelectionStroke: Dp = 1.5.dp
+
+/**
+ * The ring around a selected card. It is drawn by a single modifier so every
+ * section gets the same stroke, radius and corners, with one colour that stays
+ * equally visible along all four edges; the earlier top-to-bottom fade made the
+ * bottom corners read as a thinner line. The stroke is inset by half its width:
+ * a stroke centred on the clipped edge loses its outer half, and along the arc
+ * that half is all the antialiasing leaves visible, so the corners look cut. The
+ * radius shrinks by the same inset to stay concentric with the card's clip.
+ */
+fun Modifier.glassSelectionRing(
+    palette: GlassPalette,
+    cornerRadius: Dp = CardCornerRadius,
+    strokeWidth: Dp = CardSelectionStroke,
+): Modifier = drawWithContent {
+    drawContent()
+    val stroke = strokeWidth.toPx()
+    val inset = stroke / 2f
+    drawRoundRect(
+        brush = SolidColor(palette.accent.copy(alpha = 0.9f)),
+        topLeft = Offset(inset, inset),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(cornerRadius.toPx() - inset),
+        style = Stroke(width = stroke)
+    )
+}
 
 /** Ambient backdrop: drawn in code — soft scene light, vignette and film grain. */
 @Composable

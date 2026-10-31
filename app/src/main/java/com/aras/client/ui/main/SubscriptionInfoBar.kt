@@ -45,6 +45,10 @@ import com.aras.client.handler.MmkvManager
 import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.glassPanel
 import com.aras.client.util.Utils
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -64,8 +68,13 @@ fun SubscriptionInfoBar(
 ) {
     if (groupId.isEmpty()) return
     val showInfo = MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true)
-    val showAnnouncement =
-        MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, false)
+    // Shown by default and switchable in the bar itself: it is the subscription's
+    // own word to the user, not something to keep hidden behind a settings screen.
+    var showAnnouncement by remember(groupId) {
+        mutableStateOf(
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
+        )
+    }
 
     var sub by remember(groupId) { mutableStateOf<SubscriptionItem?>(null) }
     LaunchedEffect(groupId) {
@@ -85,6 +94,7 @@ fun SubscriptionInfoBar(
     val current = sub ?: return
 
     val hasInfo = showInfo && (current.trafficTotal > 0 || current.expireAt > 0)
+    val hasAnnouncement = current.announcement?.isNotBlank() == true
     val announcement = current.announcement?.takeIf {
         showAnnouncement && it.isNotBlank()
     }
@@ -96,8 +106,10 @@ fun SubscriptionInfoBar(
 
     // A glass card with nothing but five icons in it reads as an empty box, so
     // the panel only draws its chrome when it actually has information to show;
-    // otherwise the actions sit directly on the backdrop like a toolbar.
-    val framed = announcement != null || hasInfo
+    // otherwise the actions sit directly on the backdrop like a toolbar. A hidden
+    // announcement still frames the panel, or the toggle that brings it back
+    // would move the whole bar on every tap.
+    val framed = hasAnnouncement || hasInfo
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -145,6 +157,17 @@ fun SubscriptionInfoBar(
                 onPing = onPingSubscription,
                 onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
                 onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription },
+                hasAnnouncement = hasAnnouncement,
+                announcementVisible = announcement != null,
+                onToggleAnnouncement = if (hasAnnouncement) {
+                    {
+                        showAnnouncement = !showAnnouncement
+                        MmkvManager.encodeSettings(
+                            AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT,
+                            showAnnouncement
+                        )
+                    }
+                } else null,
                 // Without traffic/announcement the actions are the whole panel, so
                 // they collapse into a compact pill instead of spreading across a
                 // full-width empty slab.
@@ -165,6 +188,9 @@ private fun SubscriptionActions(
     onPing: (() -> Unit)?,
     onRemove: (() -> Unit)?,
     onCopy: (() -> Unit)?,
+    hasAnnouncement: Boolean = false,
+    announcementVisible: Boolean = false,
+    onToggleAnnouncement: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     compact: Boolean = false
 ) {
@@ -205,10 +231,22 @@ private fun SubscriptionActions(
         onCopy?.let {
             SubBarAction(R.drawable.ic_copy, R.string.share_method_clipboard, tint = palette.accent, onClick = it)
         }
+        // Only a subscription that has an announcement gets the switch: there is
+        // nothing to show or hide otherwise.
+        if (hasAnnouncement && onToggleAnnouncement != null) {
+            SubBarAction(
+                if (announcementVisible) R.drawable.ic_announcement_on_24dp
+                else R.drawable.ic_announcement_off_24dp,
+                if (announcementVisible) R.string.sub_info_hide_announcement
+                else R.string.sub_info_show_announcement,
+                tint = if (announcementVisible) palette.amber else palette.faint,
+                onClick = onToggleAnnouncement
+            )
+        }
         // Remote links, so the sanitize check sits here too, not only at parse time.
         supportUrl?.let { url ->
             SubBarAction(
-                if (Utils.isTelegramLink(url)) R.drawable.ic_telegram_24dp else R.drawable.ic_feedback_24dp,
+                if (Utils.isTelegramLink(url)) R.drawable.ic_telegram_24dp else R.drawable.ic_support_24dp,
                 R.string.sub_info_open_support,
                 tint = supportBlue,
                 onClick = { Utils.openUri(context, url) },
@@ -275,9 +313,11 @@ private fun TrafficExpiryBar(sub: SubscriptionItem) {
             if (sub.expireAt > 0) {
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = expirySummary(sub.expireAt),
+                    text = expiryLabel(sub.expireAt),
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
+                    maxLines = 1,
+                    softWrap = false,
                     color = if (isExpiringSoon(sub.expireAt))
                         palette.danger
                     else
@@ -381,18 +421,42 @@ private fun trafficSummary(sub: SubscriptionItem): String {
     return "${formatBytes(used)} / ${formatBytes(sub.trafficTotal)}"
 }
 
-private fun expirySummary(expireAt: Long): String {
-    val now = System.currentTimeMillis()
+/**
+ * Panels send `expire` in epoch seconds; anything below the millisecond scale
+ * has to be lifted first, or a 2026 subscription date lands in January 1970.
+ */
+private fun expireMillis(expireAt: Long): Long =
+    if (expireAt in 1 until 10_000_000_000L) expireAt * 1000 else expireAt
+
+/**
+ * When the volume runs out: the date itself, so it can be checked against the
+ * panel's own page, and how long is left. The year only shows when it is not
+ * this one, which is what keeps the line short.
+ */
+private fun expiryLabel(expireAt: Long, now: Long = System.currentTimeMillis()): String {
+    val millis = expireMillis(expireAt)
+    val zone = ZoneId.systemDefault()
+    val expiry = Instant.ofEpochMilli(millis).atZone(zone)
+    val today = Instant.ofEpochMilli(now).atZone(zone)
+    val pattern = if (expiry.year == today.year) "d MMM" else "d MMM yyyy"
+    val date = DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(expiry)
+    if (millis <= now) return date
+    return "$date · ${expirySummary(millis, now)}"
+}
+
+private fun expirySummary(expireAt: Long, now: Long = System.currentTimeMillis()): String {
     val days = TimeUnit.MILLISECONDS.toDays(expireAt - now)
     return when {
         expireAt <= now -> "-"
-        days >= 1 -> "$days d"
-        else -> "${TimeUnit.MILLISECONDS.toHours(expireAt - now)} h"
+        // No space before the unit: in an RTL line "6 d" is reordered to "d 6"
+        // and reads like a malformed date, while "6d" stays a single token.
+        days >= 1 -> "${days}d"
+        else -> "${TimeUnit.MILLISECONDS.toHours(expireAt - now)}h"
     }
 }
 
 private fun isExpiringSoon(expireAt: Long): Boolean {
-    val remaining = expireAt - System.currentTimeMillis()
+    val remaining = expireMillis(expireAt) - System.currentTimeMillis()
     return remaining in 1..TimeUnit.DAYS.toMillis(3)
 }
 

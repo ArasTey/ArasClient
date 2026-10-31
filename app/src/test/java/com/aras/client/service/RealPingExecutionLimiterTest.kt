@@ -1,6 +1,5 @@
 package com.aras.client.service
 
-import com.aras.client.enums.EConfigType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -15,14 +14,14 @@ import java.util.concurrent.atomic.AtomicInteger
 class RealPingExecutionLimiterTest {
 
     @Test
-    fun customConfigMeasurementsAreSerializedAcrossWorkers() {
+    fun exclusiveProbesAreSerializedAcrossWorkers() {
         runBlocking {
             val active = AtomicInteger(0)
             val maxActive = AtomicInteger(0)
 
             List(8) {
                 async(Dispatchers.Default) {
-                    RealPingExecutionLimiter.run(EConfigType.CUSTOM) {
+                    RealPingExecutionLimiter.run(true) {
                         val current = active.incrementAndGet()
                         maxActive.accumulateAndGet(current, ::maxOf)
                         Thread.sleep(20)
@@ -36,14 +35,14 @@ class RealPingExecutionLimiterTest {
     }
 
     @Test
-    fun generatedConfigMeasurementsRemainConcurrent() {
+    fun ordinaryMeasurementsRemainConcurrent() {
         runBlocking {
             val entered = CountDownLatch(2)
             val release = CountDownLatch(1)
 
             val jobs = List(2) {
                 async(Dispatchers.Default) {
-                    RealPingExecutionLimiter.run(EConfigType.VMESS) {
+                    RealPingExecutionLimiter.run(false) {
                         entered.countDown()
                         release.await(5, TimeUnit.SECONDS)
                     }

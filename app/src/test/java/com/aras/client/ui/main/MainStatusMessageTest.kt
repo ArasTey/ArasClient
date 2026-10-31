@@ -42,17 +42,48 @@ class MainStatusMessageTest {
     }
 
     @Test
-    fun hiddenPingDetailsDoNotEraseResultOrRestoreConnectedFallback() {
-        val result = ConnectionTestResult(42, country = "Test", ipAddress = "192.0.2.1")
-        val state = MainUiState(isRunning = true, status = MainStatus.ConnectionTest(result), statusMessageVisible = true)
-        // formatStatus emits the delay only; the IP is the bar subtitle and the
-        // country is drawn as a flag chip by MainScreen.
+    fun hiddenPingDetailsKeepTheConfigNameAndEgress() {
+        val result = ConnectionTestResult(42, country = "Netherlands", ipAddress = "192.0.2.1")
+        val state = MainUiState(
+            isRunning = true,
+            status = MainStatus.ConnectionTest(result),
+            statusMessageVisible = true,
+            egressCountry = "Netherlands",
+            egressIp = "192.0.2.1"
+        )
         val formatted = "Connection succeeded in 42 ms"
-        assertEquals(MainBarText(formatted, "192.0.2.1"), mainBarText(state, formatted, "Server"))
+        assertEquals(
+            MainBarText(formatted, "Netherlands", "192.0.2.1"),
+            mainBarText(state, formatted, "Server", "Netherlands")
+        )
+        // The confirmation owns the title only while it is fresh; the country and
+        // address stay under it instead of vanishing with the message.
         val hidden = state.copy(statusMessageVisible = false)
-        assertEquals(MainBarText(formatted, ""), mainBarText(hidden, formatted, "Server"))
+        assertEquals(
+            MainBarText("Server", "Netherlands", "192.0.2.1"),
+            mainBarText(hidden, formatted, "Server", "Netherlands")
+        )
         assertEquals(state.status, hidden.status)
         assertTrue(hidden.isRunning)
+    }
+
+    @Test
+    fun connectedBarKeepsTheEgressLineAfterTheConfirmationClears() {
+        val state = MainUiState(
+            isRunning = true,
+            status = MainStatus.Connected,
+            egressCountry = "NL",
+            egressIp = "192.0.2.1"
+        )
+        assertEquals(
+            MainBarText("Server", "Netherlands", "192.0.2.1"),
+            mainBarText(state, "Connected", "Server", "Netherlands")
+        )
+        // Without a measured egress the old guidance timer still applies.
+        assertEquals(
+            MainBarText("Server", "Connected"),
+            mainBarText(state.copy(egressCountry = null, egressIp = null, statusMessageVisible = true), "Connected", "Server")
+        )
     }
 
     @Test
@@ -63,9 +94,33 @@ class MainStatusMessageTest {
     }
 
     @Test
+    fun countryNamesAreLocalizedForTheBar() {
+        assertEquals("Germany", CountryResolver.displayName("DE", java.util.Locale.ENGLISH))
+        assertEquals("Netherlands", CountryResolver.displayName("Netherlands", java.util.Locale.ENGLISH))
+        assertEquals("Raw", CountryResolver.displayName("Raw", java.util.Locale.ENGLISH))
+        assertEquals(null, CountryResolver.displayName(" ", java.util.Locale.ENGLISH))
+    }
+
+    @Test
+    fun longEgressAddressesKeepRoomForTheCountryName() {
+        assertEquals("192.0.2.1", compactAddress("192.0.2.1"))
+        assertEquals("2001:db8::1", compactAddress("2001:db8::1"))
+        assertEquals(
+            "2a02:4540:…:951e:1f12",
+            compactAddress("2a02:4540:64:55f:81a0:1b2f:951e:1f12")
+        )
+    }
+
+    @Test
     fun failedPingAndTestProgressRemainReadableWithoutGuidance() {
         val failed = MainUiState(isRunning = true, status = MainStatus.ConnectionTest(ConnectionTestResult(-1)))
-        assertEquals(MainBarText("Test failed", ""), mainBarText(failed, "Test failed", "Server"))
+        // The failure owns the line while it is fresh; once it clears the bar goes
+        // back to naming the config instead of keeping a failure pinned under it.
+        assertEquals(
+            MainBarText("Test failed", ""),
+            mainBarText(failed.copy(statusMessageVisible = true), "Test failed", "Server")
+        )
+        assertEquals(MainBarText("Server", ""), mainBarText(failed, "Test failed", "Server"))
         val testing = failed.copy(isTesting = true, status = MainStatus.TestProgress("3"))
         assertEquals(MainBarText("Tests running: 3", ""), mainBarText(testing, "Tests running: 3", "Server"))
     }

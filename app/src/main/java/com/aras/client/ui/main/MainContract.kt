@@ -29,6 +29,10 @@ data class MainUiState(
     val status: MainStatus = MainStatus.Disconnected,
     // Presentation only: hiding a message must not change connection or test state.
     val statusMessageVisible: Boolean = false,
+    // What the running session leaves through. Kept apart from `status` so the
+    // five-second confirmation can clear without taking the egress line with it.
+    val egressCountry: String? = null,
+    val egressIp: String? = null,
     val locateTarget: LocateTarget? = null,
     val confirmRemove: Boolean = false,
     val doubleColumnDisplay: Boolean = false,
@@ -44,21 +48,67 @@ internal fun MainUiState.withoutServerStatusMessage(): MainUiState = copy(
     } else status
 )
 
-internal data class MainBarText(val title: String, val subtitle: String)
+internal data class MainBarText(
+    val title: String,
+    val subtitle: String,
+    val subtitleIp: String = ""
+)
 
-/** Empty subtitle is intentional: never fall back to the connected guidance after dismissal. */
-internal fun mainBarText(state: MainUiState, formattedStatus: String, connectedTitle: String): MainBarText =
-    when (state.status) {
+/**
+ * A full IPv6 address is wide enough to claim the whole bar row and squeeze the
+ * country name to an ellipsis, so long addresses keep both ends and drop the
+ * middle groups. IPv4 and short addresses pass through unchanged.
+ */
+internal fun compactAddress(address: String, maxGroups: Int = 4): String {
+    val trimmed = address.trim()
+    if (':' !in trimmed) return trimmed
+    val groups = trimmed.split(':')
+    if (groups.size <= maxGroups) return trimmed
+    return "${groups.take(2).joinToString(":")}:…:${groups.takeLast(2).joinToString(":")}"
+}
+
+/**
+ * Empty subtitle is intentional: never fall back to the connected guidance after dismissal.
+ * While a session runs, the egress country and address stay in the subtitle past the
+ * five-second confirmation; before this they were part of the transient message and the
+ * bar lost them, which read as the flag and IP vanishing on their own.
+ */
+internal fun mainBarText(
+    state: MainUiState,
+    formattedStatus: String,
+    connectedTitle: String,
+    egressCountryName: String = ""
+): MainBarText {
+    val country = egressCountryName.takeIf { it.isNotBlank() }.orEmpty()
+    val ip = state.egressIp?.takeIf { it.isNotBlank() }.orEmpty()
+    val egress = country.isNotEmpty() || ip.isNotEmpty()
+    return when (state.status) {
         MainStatus.Connected -> MainBarText(
             connectedTitle,
-            if (state.statusMessageVisible) formattedStatus.replace('\n', ' ') else ""
+            when {
+                egress -> country
+                state.statusMessageVisible -> formattedStatus.replace('\n', ' ')
+                else -> ""
+            },
+            if (egress) ip else ""
         )
-        is MainStatus.ConnectionTest -> MainBarText(
-            formattedStatus,
-            if (state.statusMessageVisible) state.status.result.ipAddress.orEmpty() else ""
-        )
+        is MainStatus.ConnectionTest -> if (state.isRunning) {
+            MainBarText(
+                // The confirmation owns the title while it is fresh, then the config
+                // name comes back with the egress line still under it.
+                if (state.statusMessageVisible) formattedStatus.replace('\n', ' ') else connectedTitle,
+                country,
+                ip
+            )
+        } else {
+            MainBarText(
+                formattedStatus,
+                if (state.statusMessageVisible) state.status.result.ipAddress.orEmpty() else ""
+            )
+        }
         else -> MainBarText(formattedStatus, "")
     }
+}
 
 /**
  * All possible user interaction intents

@@ -77,12 +77,19 @@ object CoreServiceManager {
             field = value
             val service = value?.get()?.getService()
             CoreNativeManager.initCoreEnv(service)
-            if (service != null) ensureMessageReceiver(service)
+            if (service != null) {
+                appContext = service.applicationContext
+                ensureMessageReceiver(service)
+            }
             if (service != null && processFinder == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 processFinder = XrayProcessFinder(service)
                 coreController.registerProcessFinder(processFinder)
             }
         }
+
+    /** The daemon's context, for refreshing the tiles from the core callback. */
+    @Volatile
+    private var appContext: Context? = null
 
     private var receiverRegistered = false
 
@@ -116,6 +123,20 @@ object CoreServiceManager {
      * @return True if the service is running, false otherwise.
      */
     fun isRunning() = coreController.isRunning
+
+    /**
+     * Whether a session is running by the daemon's own account: the core is up and
+     * the daemon has not ended the session. A stop that never reached the native
+     * core still leaves the client off, so the persisted flag has the last word.
+     * Until the daemon has written one (an update from a build without it), the
+     * live core state stands alone.
+     */
+    fun isSessionRunning(): Boolean =
+        isRunning() && MmkvManager.decodeSettingsBool(AppConfig.PREF_SESSION_RUNNING, true)
+
+    private fun markSession(running: Boolean) {
+        MmkvManager.encodeSettings(AppConfig.PREF_SESSION_RUNNING, running)
+    }
 
     /**
      * Gets the name of the currently running server.
@@ -260,6 +281,7 @@ object CoreServiceManager {
         }
 
         if (!isReload) {
+            markSession(true)
             notifyTileState(service, AppConfig.MSG_STATE_START_SUCCESS)
         }
         NotificationManager.startSpeedNotification()
@@ -272,6 +294,11 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
+        // The session ends here, before anything below can return early or fail:
+        // the tiles read this flag and must never keep showing a session that the
+        // client has already ended.
+        markSession(false)
+
         val service = getService() ?: return false
 
         networkMonitor?.unregister()
@@ -488,6 +515,13 @@ object CoreServiceManager {
          */
         override fun shutdown(): Long {
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: CoreCallback shutdown")
+            // A core that stops on its own (fatal dial failure, a helper it needs gone)
+            // ends the session without any service path running. Clear the session flag
+            // and refresh the tile here, or it stays lit over a core that is gone.
+            if (!isReloading) {
+                markSession(false)
+                appContext?.let { QSTileService.requestStateRefresh(it) }
+            }
             return 0
         }
 
@@ -555,7 +589,7 @@ object CoreServiceManager {
             val serviceControl = serviceControl?.get() ?: return
             when (intent?.getIntExtra("key", 0)) {
                 AppConfig.MSG_REGISTER_CLIENT -> {
-                    if (isRunning()) {
+                    if (isSessionRunning()) {
                         MessageHelper.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_RUNNING, "")
                     } else {
                         MessageHelper.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_NOT_RUNNING, "")

@@ -29,6 +29,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.aras.client.AppConfig
 import com.aras.client.AppConfig.REALITY
 import com.aras.client.AppConfig.TLS
 import com.aras.client.R
@@ -50,6 +51,7 @@ import com.aras.client.ui.compose.FormTextField
 import com.aras.client.ui.compose.NavigationBarsSpacer
 import com.aras.client.ui.compose.SettingsSwitchItem
 import com.aras.client.ui.compose.verticalScrollbar
+import com.aras.client.util.FreePort
 import com.aras.client.util.JsonUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -436,6 +438,27 @@ abstract class BaseServerActivity : BaseComponentActivity() {
             else -> toast(R.string.toast_config_file_invalid)
         }
         return false
+    }
+
+    /**
+     * A listen port for a carrier that runs on its own: free right now, and away
+     * from every port another profile names as well as the app's own listeners.
+     * The aether core can take the ports right after a profile's listener for
+     * the carriers around its tunnel, so those count as taken too.
+     */
+    protected fun pickCarrierListenPort(): String {
+        val taken = buildSet {
+            add(AppConfig.PORT_SOCKS.toInt())
+            add(AppConfig.PORT_AETHER_SOCKS.toInt())
+            add(AppConfig.PORT_MIERU_SOCKS.toInt())
+            add(AppConfig.PORT_LOCAL_DNS.toInt())
+            MmkvManager.decodeAllServerList().forEach { guid ->
+                val port = MmkvManager.decodeServerConfig(guid)
+                    ?.aetherListenPort?.trim()?.toIntOrNull() ?: return@forEach
+                for (offset in 0..AppConfig.AETHER_EXIT_IN_PORT_OFFSET) add(port + offset)
+            }
+        }
+        return FreePort.pick(taken).toString()
     }
 
     protected open fun validateCommonConfig(config: ProfileItem): Boolean {

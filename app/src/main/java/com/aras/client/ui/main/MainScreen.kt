@@ -59,10 +59,18 @@ fun MainScreen(
         if (isConnecting) mainViewModel.connectedServerTitle() else ""
     }
     val connectingTitle = stringResource(R.string.connection_connecting)
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val egressCountryName = remember(uiState.egressCountry, configuration.locales) {
+        com.aras.client.util.CountryResolver.displayName(
+            uiState.egressCountry,
+            configuration.locales[0]
+        ).orEmpty()
+    }
     val barText = mainBarText(
         uiState,
         mainViewModel.formatStatus(uiState.status),
-        mainViewModel.connectedServerTitle()
+        mainViewModel.connectedServerTitle(),
+        egressCountryName
     )
     LifecycleResumeEffect(mainViewModel) {
         mainViewModel.setMainScreenActive(true)
@@ -74,10 +82,6 @@ fun MainScreen(
     val shareQRCodeBitmap = uiState.shareQRCodeBitmap
     val scrollToTopTick = uiState.scrollToTopTick
 
-    val testFlagIso = if (uiState.statusMessageVisible) {
-        (uiState.status as? MainStatus.ConnectionTest)?.result?.country
-            ?.let { com.aras.client.util.CountryResolver.isoForCountry(it) }
-    } else null
     var showMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var showSearch by remember { mutableStateOf(false) }
@@ -234,7 +238,7 @@ fun MainScreen(
                             uiState.status == MainStatus.Disconnected -> null
                             else -> barText.subtitle
                         },
-                        subtitleFlagIso = if (isConnecting) null else testFlagIso,
+                        subtitleIp = if (isConnecting) null else barText.subtitleIp,
                         isRunning = isRunning,
                         isConnecting = isConnecting,
                         onAction = onAction
