@@ -1,30 +1,23 @@
 package com.aras.client.service
 
 import com.aras.client.enums.EConfigType
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Which component is allowed to read the TUN.
- *
- * There is exactly one TUN descriptor and two things that want it: hev-socks5-
- * tunnel (`TProxyStartService(config, vpnInterface.fd)`) and the standalone
- * AmneziaWG tunnel (`pfd.detachFd()` in CoreServiceManager). Handing it to both
- * gives the TUN two readers — tun2socks drains every packet into the local SOCKS
- * proxy, which in AmneziaWG mode no core is serving, so the tunnel is up and
- * carries nothing. That is why AmneziaWG appeared to start and then do nothing.
+ * Every supported profile uses one TUN ownership model: tun2socks is the
+ * only TUN reader and the bundled core dials the selected outbound.
  */
 class TunOwnershipTest {
 
     @Test
-    fun `amneziawg does not start tun2socks`() {
-        assertFalse(shouldRunTun2Socks(EConfigType.AMNEZIAWG))
+    fun `AmneziaWG is dialled by the core and still uses tun2socks`() {
+        assertTrue(shouldRunTun2Socks(EConfigType.AMNEZIAWG))
     }
 
     @Test
     fun `plain wireguard still uses tun2socks`() {
-        // WIREGUARD goes through the Xray wireguard outbound, unlike AMNEZIAWG.
+        // Both protocols use the core's WireGuard outbound.
         assertTrue(shouldRunTun2Socks(EConfigType.WIREGUARD))
     }
 
@@ -44,8 +37,6 @@ class TunOwnershipTest {
 
     @Test
     fun `an unresolved profile falls back to tun2socks`() {
-        // A null type means we could not decode the selection; the safe default is
-        // the path every other profile takes.
         assertTrue(shouldRunTun2Socks(null))
     }
 }

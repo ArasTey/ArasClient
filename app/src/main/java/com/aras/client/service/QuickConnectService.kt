@@ -186,7 +186,7 @@ class QuickConnectService : Service() {
     }
 
     private suspend fun stopCurrentConnection(): Boolean {
-        if (!CoreServiceManager.isRunning() && !CoreNativeManager.awgIsRunning()) return true
+        if (!CoreServiceManager.isRunning()) return true
         val serviceControl = CoreServiceManager.serviceControl?.get()
         if (serviceControl != null) {
             serviceControl.stopService()
@@ -194,7 +194,7 @@ class QuickConnectService : Service() {
             LauncherManager.stopService(this)
         }
         val stopped = withTimeoutOrNull(6_000L) {
-            while (CoreServiceManager.isRunning() || CoreNativeManager.awgIsRunning()) {
+            while (CoreServiceManager.isRunning()) {
                 delay(100)
             }
             true

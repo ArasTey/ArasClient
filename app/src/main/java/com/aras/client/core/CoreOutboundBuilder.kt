@@ -307,10 +307,10 @@ object CoreOutboundBuilder {
     }
 
     /**
-     * AmneziaWG uses the same wireguard outbound protocol as plain WireGuard,
-     * but the bundled core is compiled against amneziawg-go, so the junk
-     * packet parameters ride along on the peer. Kernel TUN is disabled:
-     * the obfuscation only exists in the userspace AWG device.
+     * AmneziaWG uses the core's WireGuard outbound with AmneziaWG support.
+     * The junk-packet and mimic parameters ride along on the peer and are
+     * applied by the bundled userspace core; the app's TUN is read only by
+     * tun2socks and is never handed to a second standalone tunnel.
      */
     private fun toOutboundAmneziawg(profileItem: ProfileItem): OutboundBean? {
         val outboundBean = toOutboundWireguard(profileItem) ?: return null

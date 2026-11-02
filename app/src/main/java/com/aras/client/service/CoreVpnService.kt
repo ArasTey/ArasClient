@@ -315,33 +315,14 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
     }
 
-/**
- * Whether the selected profile is dialled by the standalone AmneziaWG tunnel
- * rather than by the Xray core.
- */
-private fun isAmneziaWgSelected(): Boolean {
-    val guid = MmkvManager.getSelectServer() ?: return false
-    return !shouldRunTun2Socks(MmkvManager.decodeServerConfig(guid)?.configType)
-}
-
     /**
      * Runs the tun2socks process.
      * Starts the tun2socks process with the appropriate parameters.
      */
     private fun runTun2socks() {
-        // AmneziaWG owns the TUN itself. CoreServiceManager hands this same
-        // ParcelFileDescriptor to the standalone awg-go tunnel, and TProxyService
-        // would hand the very same descriptor to hev-socks5-tunnel — one TUN with
-        // two readers. tun2socks drains the packets and forwards them to the local
-        // SOCKS proxy, which in this mode no core is serving, so the AmneziaWG
-        // tunnel starves and the connection shows as up with no traffic.
-        // There is nothing for tun2socks to feed here anyway: no Xray instance runs.
-        if (isAmneziaWgSelected()) {
-            tun2SocksService?.stopTun2Socks()
-            tun2SocksService = null
-            LogUtil.i(AppConfig.TAG, "StartCore-VPN: tun2socks skipped; AmneziaWG reads the TUN directly")
-            return
-        }
+        // All profiles, including AmneziaWG, are dialled by the bundled core.
+        // tun2socks is the sole TUN reader and forwards packets to the core's
+        // local SOCKS inbound; never attach a second reader to the VPN descriptor.
 
         if (SettingsManager.isUsingHevTun()) {
             tun2SocksService = TProxyService(
@@ -416,12 +397,11 @@ private fun isAmneziaWgSelected(): Boolean {
 }
 
 /**
- * Whether hev-socks5-tunnel should read the TUN for a profile of [configType].
+ * Whether hev-socks5-tunnel should read the VPN TUN.
  *
- * Everything except AmneziaWG is dialled by the Xray core, which listens on the
- * local SOCKS inbound that tun2socks forwards to. AmneziaWG is dialled by the
- * standalone awg-go tunnel, which takes the TUN descriptor itself — so running
- * both gives one TUN two readers, and the connection comes up carrying nothing.
+ * Every supported profile, including AmneziaWG, is dialled by the bundled
+ * Xray core. A single TUN reader forwards packets to the core's local SOCKS
+ * inbound, avoiding competing readers and preserving the normal VPN path.
  */
-internal fun shouldRunTun2Socks(configType: EConfigType?): Boolean =
-    configType != EConfigType.AMNEZIAWG
+@Suppress("UNUSED_PARAMETER")
+internal fun shouldRunTun2Socks(configType: EConfigType?): Boolean = true

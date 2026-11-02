@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   release:
     types: [ published ]
 
@@ -130,6 +132,7 @@ jobs:
           java-version: '17'
 
       - name: Restore signing key
+        if: github.event_name != 'pull_request'
         # The keystore is deliberately not in the repository: whoever can read it can
         # sign an update the phone will accept. It comes from the repository secrets
         # instead, so a release is signed exactly as a local build is.
@@ -153,16 +156,23 @@ jobs:
           keyPassword=$KEY_PASSWORD
           EOF
 
-      - name: Test, lint, and build release APKs
+      - name: Test and build APKs
+        env:
+          BUILD_EVENT: ${{ github.event_name }}
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest :app:lintVitalRelease :app:assembleRelease --no-daemon
+          if [[ "$BUILD_EVENT" == "pull_request" ]]; then
+            ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon
+          else
+            ./gradlew :app:testDebugUnitTest :app:lintVitalRelease :app:assembleRelease --no-daemon
+          fi
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v5
         with:
           name: apks
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            ${{ github.event_name == 'pull_request' && 'app/build/outputs/apk/debug/*.apk' || 'app/build/outputs/apk/release/*.apk' }}
 
   release:
     runs-on: ubuntu-24.04
