@@ -1,41 +1,58 @@
 package com.aras.client.ui.radar
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.aras.client.radar.config.RadarConfigCheck
+import com.aras.client.radar.config.RadarConfigDiscovery
+import com.aras.client.radar.config.RadarConfigProbe
+import com.aras.client.radar.config.RadarConfigProbeCache
+import com.aras.client.radar.config.RadarProbeStatus
+import com.aras.client.radar.config.RadarSourceReport
 import com.aras.client.radar.ui.RadarScanView
 import com.aras.client.ui.compose.AppTheme
-import android.content.Intent
 import com.aras.client.ui.main.MainActivity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Socket
-import java.net.URL
-import android.util.Base64
+import com.aras.client.util.CountryResolver
+import com.aras.client.util.GeoIPResolver
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
-private data class RadarCandidate(
-    val uri: String,
-    val latency: Long?,
-    val note: String,
-    val dnsLatency: Long? = null,
-)
-
-/** Public-source discovery. TCP reachability is not treated as proof of a working proxy tunnel. */
+/** Isolated Config Finder screen. It does not alter VPN connection or profile management flows. */
 @OptIn(ExperimentalMaterial3Api::class)
 class RadarConfigActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,120 +60,129 @@ class RadarConfigActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 var scanning by remember { mutableStateOf(false) }
-                var message by remember { mutableStateOf("برای شروع، اسکن را اجرا کن.") }
-                val results = remember { mutableStateListOf<RadarCandidate>() }
-                var radar by remember { mutableStateOf<RadarScanView?>(null) }
+                var message by remember { mutableStateOf("برای شروع، اسکن منابع را اجرا کن.") }
                 var resultFilter by remember { mutableStateOf("all") }
                 var protocolFilter by remember { mutableStateOf("all") }
-                val visibleResults = results.filter { candidate ->
-                    val reachabilityMatches = when (resultFilter) {
-                        "reachable" -> candidate.latency != null
-                        "failed" -> candidate.latency == null
+                var countryFilter by remember { mutableStateOf("all") }
+                val results = remember { mutableStateListOf<RadarConfigCheck>() }
+                val sourceReports = remember { mutableStateListOf<RadarSourceReport>() }
+                var radar by remember { mutableStateOf<RadarScanView?>(null) }
+
+                val protocols = results.map { it.candidate.protocol }.distinct().sorted()
+                val countries = results.map { it.candidate.countryIso.ifBlank { "unknown" } }.distinct().sorted()
+                val visibleResults = results.filter { check ->
+                    val statusMatches = when (resultFilter) {
+                        "reachable" -> check.tcpReachable
+                        "failed" -> !check.tcpReachable
                         else -> true
                     }
-                    val protocolMatches = protocolFilter == "all" ||
-                        protocolOf(candidate.uri) == protocolFilter
-                    reachabilityMatches && protocolMatches
-                }.sortedWith(
-                    compareBy<RadarCandidate> { it.latency == null }
-                        .thenBy { it.latency ?: Long.MAX_VALUE }
-                )
+                    val protocolMatches = protocolFilter == "all" || check.candidate.protocol == protocolFilter
+                    val country = check.candidate.countryIso.ifBlank { "unknown" }
+                    val countryMatches = countryFilter == "all" || country == countryFilter
+                    statusMatches && protocolMatches && countryMatches
+                }.sortedWith(compareBy<RadarConfigCheck> { !it.tcpReachable }.thenBy { it.tcpLatencyMs ?: Long.MAX_VALUE })
+
                 Scaffold(topBar = { TopAppBar(title = { Text("رادار کانفیگ") }) }) { padding ->
-                    Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("جست‌وجو در منابع عمومی و پیش‌آزمایش دسترسی شبکه", style = MaterialTheme.typography.titleMedium)
-                        Text("پاسخ TCP به‌تنهایی سلامت تونل را ثابت نمی‌کند. هیچ کانفیگی خودکار نصب یا متصل نمی‌شود.", style = MaterialTheme.typography.bodySmall)
-                        AndroidView(
-                            factory = { ctx -> RadarScanView(ctx).also { radar = it; it.startScan() } },
-                            modifier = Modifier.fillMaxWidth().height(230.dp),
-                            update = { if (scanning) it.startScan() else it.stopScan() }
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(enabled = !scanning, onClick = { results.clear(); radar?.clearBlips(); scanning = true; message = "در حال دریافت و بررسی منابع…" }) { Text("شروع اسکن") }
-                            OutlinedButton(enabled = scanning, onClick = { scanning = false }) { Text("توقف") }
-                        }
-                        if (scanning) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(message, style = MaterialTheme.typography.bodyMedium)
-                        Card(Modifier.fillMaxWidth()) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text("پیدا شده", style = MaterialTheme.typography.labelSmall)
-                                    Text(results.size.toString(), style = MaterialTheme.typography.titleLarge)
-                                }
-                                Column {
-                                    Text("TCP پاسخ‌گو", style = MaterialTheme.typography.labelSmall)
-                                    Text(results.count { it.latency != null }.toString(), style = MaterialTheme.typography.titleLarge, color = Color(0xFF00A86B))
-                                }
-                                Column {
-                                    Text("سریع ≤۱۵۰ms", style = MaterialTheme.typography.labelSmall)
-                                    Text(results.count { (it.latency ?: Long.MAX_VALUE) <= 150 }.toString(), style = MaterialTheme.typography.titleLarge)
-                                }
+                    LazyColumn(
+                        Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("کشف چندمنبعی، اعتبارسنجی ساختار، DNS و دسترسی TCP", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "پاسخ TCP به معنی سالم بودن تونل نیست. برای تست واقعی، کانفیگ را به فهرست سرورها اضافه و از تست داخلی برنامه استفاده کن.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = resultFilter == "all",
-                                onClick = { resultFilter = "all" },
-                                label = { Text("همه (" + results.size + ")") }
-                            )
-                            FilterChip(
-                                selected = resultFilter == "reachable",
-                                onClick = { resultFilter = "reachable" },
-                                label = { Text("پاسخ‌گو (" + results.count { it.latency != null } + ")") }
-                            )
-                            FilterChip(
-                                selected = resultFilter == "failed",
-                                onClick = { resultFilter = "failed" },
-                                label = { Text("بدون پاسخ (" + results.count { it.latency == null } + ")") }
+                        item {
+                            AndroidView(
+                                factory = { context -> RadarScanView(context).also {
+                                    radar = it
+                                    if (scanning) it.startScan() else it.stopScan()
+                                } },
+                                modifier = Modifier.fillMaxWidth().height(230.dp),
+                                update = { if (scanning) it.startScan() else it.stopScan() }
                             )
                         }
-                        androidx.compose.foundation.lazy.LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            item {
-                                FilterChip(selected = protocolFilter == "all", onClick = { protocolFilter = "all" }, label = { Text("همهٔ پروتکل‌ها") })
-                            }
-                            item {
-                                FilterChip(selected = protocolFilter == "vmess", onClick = { protocolFilter = "vmess" }, label = { Text("VMess") })
-                            }
-                            item {
-                                FilterChip(selected = protocolFilter == "vless", onClick = { protocolFilter = "vless" }, label = { Text("VLESS") })
-                            }
-                            item {
-                                FilterChip(selected = protocolFilter == "trojan", onClick = { protocolFilter = "trojan" }, label = { Text("Trojan") })
-                            }
-                            item {
-                                FilterChip(selected = protocolFilter == "ss", onClick = { protocolFilter = "ss" }, label = { Text("Shadowsocks") })
-                            }
-                            item {
-                                FilterChip(selected = protocolFilter == "hysteria2", onClick = { protocolFilter = "hysteria2" }, label = { Text("Hysteria") })
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(enabled = !scanning, onClick = {
+                                        results.clear()
+                                        sourceReports.clear()
+                                        radar?.clearBlips()
+                                        scanning = true
+                                        message = "در حال دریافت منابع و کشف کانفیگ‌ها…"
+                                    }) { Text("شروع اسکن") }
+                                    OutlinedButton(enabled = scanning, onClick = { scanning = false }) { Text("توقف") }
+                                }
+                                if (scanning) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                Text(message, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
-                        // The screen already owns the vertical scroll container. Use a regular
-                        // Column here rather than nesting a LazyColumn inside verticalScroll;
-                        // the nested lazy list received unbounded height and hid lower configs.
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            visibleResults.forEach { item ->
+                        item {
+                            Card(Modifier.fillMaxWidth()) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Metric("کشف‌شده", results.size.toString())
+                                    Metric("TCP پاسخ‌گو", results.count { it.tcpReachable }.toString(), Color(0xFF00A86B))
+                                    Metric("منابع سالم", sourceReports.count { it.error == null }.toString())
+                                }
+                            }
+                        }
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("وضعیت دسترسی", style = MaterialTheme.typography.titleSmall)
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    item { FilterChip(selected = resultFilter == "all", onClick = { resultFilter = "all" }, label = { Text("همه") }) }
+                                    item { FilterChip(selected = resultFilter == "reachable", onClick = { resultFilter = "reachable" }, label = { Text("TCP پاسخ‌گو") }) }
+                                    item { FilterChip(selected = resultFilter == "failed", onClick = { resultFilter = "failed" }, label = { Text("ناموفق") }) }
+                                }
+                            }
+                        }
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("پروتکل", style = MaterialTheme.typography.titleSmall)
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    item { FilterChip(selected = protocolFilter == "all", onClick = { protocolFilter = "all" }, label = { Text("همه") }) }
+                                    items(protocols) { protocol ->
+                                        FilterChip(selected = protocolFilter == protocol, onClick = { protocolFilter = protocol }, label = { Text(protocol.uppercase()) })
+                                    }
+                                }
+                            }
+                        }
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("کشور سرور", style = MaterialTheme.typography.titleSmall)
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    item { FilterChip(selected = countryFilter == "all", onClick = { countryFilter = "all" }, label = { Text("همه کشورها") }) }
+                                    items(countries) { country ->
+                                        val label = if (country == "unknown") "نامشخص" else country
+                                        FilterChip(selected = countryFilter == country, onClick = { countryFilter = country }, label = { Text(label) })
+                                    }
+                                }
+                            }
+                        }
+                        item { Text("نتایج (" + visibleResults.size + ")", style = MaterialTheme.typography.titleMedium) }
+                        itemsIndexed(visibleResults, key = { _, check -> check.candidate.identity }) { index, check ->
+                            CandidateCard(check, index + 1) {
+                                startActivity(Intent(this@RadarConfigActivity, MainActivity::class.java).apply {
+                                    action = "com.aras.client.action.IMPORT_RADAR_CONFIG"
+                                    putExtra("radar_config", check.candidate.uri)
+                                })
+                                finish()
+                            }
+                        }
+                        if (sourceReports.isNotEmpty()) {
+                            item { Text("گزارش سلامت منابع", style = MaterialTheme.typography.titleMedium) }
+                            items(sourceReports, key = { it.source }) { report ->
                                 Card(Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(12.dp)) {
-                                        Text(item.uri.take(120), style = MaterialTheme.typography.bodyMedium)
-                                        Text(
-                                            if (item.latency == null) {
-                                                (item.dnsLatency?.let { "DNS " + it + " ms · " } ?: "") + item.note
-                                            } else {
-                                                "DNS " + (item.dnsLatency?.toString() ?: "—") + " ms · TCP " + item.latency + " ms · " + item.note
-                                            },
-                                            color = when { item.latency == null -> MaterialTheme.colorScheme.error; item.latency <= 150 -> Color(0xFF00A86B); item.latency <= 300 -> Color(0xFFB8860B); else -> Color(0xFFC62828) })
-                                        if (item.latency != null) {
-                                            Button(onClick = {
-                                                startActivity(Intent(this@RadarConfigActivity, MainActivity::class.java).apply {
-                                                    action = "com.aras.client.action.IMPORT_RADAR_CONFIG"
-                                                    putExtra("radar_config", item.uri)
-                                                })
-                                                finish()
-                                            }) { Text("افزودن برای تست واقعی") }
+                                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(report.source, style = MaterialTheme.typography.titleSmall)
+                                        Text("فایل: " + report.fetchedFiles + " · کانفیگ یکتا: " + report.parsedCandidates, style = MaterialTheme.typography.bodySmall)
+                                        if (!report.error.isNullOrBlank()) {
+                                            Text(report.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                                         }
                                     }
                                 }
@@ -164,45 +190,48 @@ class RadarConfigActivity : ComponentActivity() {
                         }
                     }
                 }
+
                 LaunchedEffect(scanning) {
                     if (!scanning) return@LaunchedEffect
                     try {
-                        val uris = withContext(Dispatchers.IO) { discover().distinct() }
-                        var reachable = 0
-                        val bounded = uris.take(180)
-                        if (bounded.isEmpty()) {
-                            message = "منابع پاسخ ندادند یا کانفیگ قابل‌خواندن پیدا نشد؛ اتصال اینترنت و دسترسی به GitHub را بررسی کن."
-                        } else if (uris.size > bounded.size) {
-                            message = "تعداد زیادی نتیجه پیدا شد؛ برای حفظ سرعت، ۱۸۰ مورد اول بررسی می‌شوند."
-                        }
-                        var checked = 0
-                        for (batch in bounded.chunked(8)) {
-                            if (!scanning) break
-                            val batchResults = coroutineScope {
-                                batch.map { uri -> async(Dispatchers.IO) { testTcp(uri) } }.map { it.await() }
+                        message = "در حال بررسی فهرست مخازن و فیدهای عمومی…"
+                        val report = RadarConfigDiscovery().discover()
+                        sourceReports.clear()
+                        sourceReports.addAll(report.sources)
+                        val candidates = report.candidates.take(MAX_CANDIDATES)
+                        if (candidates.isEmpty()) {
+                            message = "کانفیگی استخراج نشد. گزارش منابع را بررسی کن؛ ممکن است GitHub محدود یا منبع موقتاً قطع باشد."
+                        } else {
+                            message = "تشخیص کشور و آماده‌سازی " + candidates.size + " کانفیگ…"
+                            GeoIPResolver.refresh(candidates.map { it.host }.distinct())
+                            val enriched = candidates.map { it.copy(countryIso = GeoIPResolver.cached(it.host)) }
+                            var checked = 0
+                            var reachable = 0
+                            for (batch in enriched.chunked(PROBE_BATCH_SIZE)) {
+                                if (!scanning) break
+                                val batchResults = coroutineScope {
+                                    batch.map { candidate -> async(Dispatchers.IO) {
+                                        RadarConfigProbeCache.get(candidate)
+                                            ?: RadarConfigProbe.check(candidate).also { RadarConfigProbeCache.put(it) }
+                                    } }.map { it.await() }
+                                }
+                                batchResults.forEach { result ->
+                                    if (result.tcpReachable) reachable++
+                                    radar?.addTestedCandidate(result.tcpLatencyMs ?: -1L)
+                                    results.add(result)
+                                    checked++
+                                }
+                                message = "بررسی " + checked + "/" + enriched.size +
+                                    " · پاسخ TCP: " + reachable + " · تونل واقعی هنوز تأیید نشده"
                             }
-                            for (result in batchResults) {
-                                if (result.latency != null) reachable++
-                                // Every candidate gets a blip: green/yellow for reachable latency,
-                                // red for an unreachable endpoint.
-                                radar?.addTestedCandidate(result.latency ?: -1L)
-                                results.add(result)
-                                checked++
-                            }
-                            message = "بررسی " + checked + "/" + bounded.size + " · پاسخ TCP: " + reachable
-                        }
-                        if (scanning) {
-                            message = if (checked == 0) {
-                                "اسکن پایان یافت، اما نتیجه‌ای برای آزمایش پیدا نشد."
-                            } else {
-                                "آزمایش تمام شد: " + checked + " کانفیگ · TCP پاسخ‌گو: " + reachable +
-                                    " · تکراری‌ها حذف شدند؛ اتصال واقعی هنوز باید داخل برنامه تست شود."
-                            }
+                            if (scanning) message = "پایان اسکن: " + checked + " مورد بررسی شد؛ " +
+                                reachable + " مورد فقط از نظر TCP پاسخ‌گو بودند."
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
-                    } catch (e: Exception) { message = "خطا در اسکن: " + (e.message ?: "شبکه") }
-                    finally {
+                    } catch (error: Exception) {
+                        message = "خطا در Config Finder: " + (error.message ?: "خطای ناشناخته")
+                    } finally {
                         scanning = false
                         radar?.stopScan()
                     }
@@ -211,102 +240,43 @@ class RadarConfigActivity : ComponentActivity() {
         }
     }
 
-    private fun discover(): List<String> {
-        val repos = listOf("barry-far/V2ray-Config", "0xRadikal/Free-v2ray-Configs", "ircfspace/tconfig", "Argh94/V2RayAutoConfig")
-        val found = linkedSetOf<String>()
-        for (repo in repos) try {
-            val metadata = get("https://api.github.com/repos/" + repo, 10000)
-            val branch = Regex("""default_branch"\s*:\s*"([^"]+)""").find(metadata)?.groupValues?.get(1) ?: "main"
-            val tree = get("https://api.github.com/repos/" + repo + "/git/trees/" + branch + "?recursive=1", 10000)
-            val paths = Regex("\"path\"\\s*:\\s*\"([^\"]+)\"").findAll(tree).map { it.groupValues[1] }
-                .filter { p -> val q = p.lowercase(); (q.endsWith(".txt") || q.endsWith(".yaml") || q.endsWith(".yml") || q.endsWith(".json")) && (q.contains("config") || q.contains("sub") || q.contains("all") || q.contains("country")) }
-                .take(10)
-            for (path in paths) {
-                val raw = get("https://raw.githubusercontent.com/" + repo + "/" + branch + "/" + path.split("/").joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }, 8000)
-                extract(raw).forEach { found.add(it) }
-                if (found.size >= 250) return found.toList()
-            }
-        } catch (_: Exception) { /* Other sources may still work. */ }
-        return found.toList()
-    }
-
-    private fun extract(text: String): List<String> {
-        val pattern = Regex("(?:vmess|vless|trojan|ss|hy2|hysteria2|tuic|socks)://[^\\s\"'<>]+", RegexOption.IGNORE_CASE)
-        val direct = pattern.findAll(text).map { it.value.trimEnd(',', ';', ')') }.toList()
-        if (direct.isNotEmpty()) return direct
-        val compact = text.filterNot { it.isWhitespace() }
-        if (compact.length !in 24..2_000_000) return emptyList()
-        val bytes = runCatching { Base64.decode(compact, Base64.DEFAULT) }
-            .recoverCatching { Base64.decode(compact, Base64.URL_SAFE or Base64.NO_WRAP) }
-            .getOrNull() ?: return emptyList()
-        val decoded = bytes.toString(Charsets.UTF_8)
-        return pattern.findAll(decoded).map { it.value.trimEnd(',', ';', ')') }.toList()
-    }
-
-    private fun testTcp(uri: String): RadarCandidate {
-        val endpoint = parseEndpoint(uri)
-            ?: return RadarCandidate(uri, null, "آدرس یا پورت قابل تشخیص نیست")
-        val dnsStart = System.nanoTime()
-        val addresses = try {
-            InetAddress.getAllByName(endpoint.first)
-        } catch (_: Exception) {
-            return RadarCandidate(uri, null, "DNS ناموفق بود یا میزبان در دسترس نیست")
+    @Composable
+    private fun Metric(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+        Column {
+            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text(value, style = MaterialTheme.typography.titleLarge, color = color)
         }
-        val dnsMs = (System.nanoTime() - dnsStart) / 1_000_000L
-        var lastError: Exception? = null
-        for (address in addresses) {
-            val tcpStart = System.nanoTime()
-            try {
-                Socket().use { socket ->
-                    socket.connect(InetSocketAddress(address, endpoint.second), 1800)
-                }
-                val tcpMs = (System.nanoTime() - tcpStart) / 1_000_000L
-                return RadarCandidate(
-                    uri = uri,
-                    latency = tcpMs,
-                    note = "DNS و پورت پاسخ دادند؛ سلامت تونل تأیید نشده",
-                    dnsLatency = dnsMs,
+    }
+
+    @Composable
+    private fun CandidateCard(check: RadarConfigCheck, number: Int, onImport: () -> Unit) {
+        val candidate = check.candidate
+        val color = when (check.status) {
+            RadarProbeStatus.TCP_REACHABLE -> Color(0xFF00A86B)
+            RadarProbeStatus.PRIVATE_ADDRESS -> Color(0xFFB8860B)
+            else -> MaterialTheme.colorScheme.error
+        }
+        val flag = CountryResolver.flagForCountry(candidate.countryIso.ifBlank { candidate.remark })
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text((if (flag.isBlank()) "" else flag + " ") +
+                    candidate.remark.ifBlank { "کانفیگ شماره " + number }, style = MaterialTheme.typography.titleSmall)
+                Text(candidate.protocol.uppercase() + " · " + candidate.host + ":" + candidate.port)
+                if (!check.resolvedIp.isNullOrBlank()) Text("IP: " + check.resolvedIp, style = MaterialTheme.typography.bodySmall)
+                Text("منبع: " + candidate.source, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    check.detail +
+                        (check.dnsLatencyMs?.let { " · DNS " + it + " ms" } ?: "") +
+                        (check.tcpLatencyMs?.let { " · TCP " + it + " ms" } ?: ""),
+                    color = color, style = MaterialTheme.typography.bodySmall
                 )
-            } catch (e: Exception) {
-                lastError = e
+                if (check.tcpReachable) Button(onClick = onImport) { Text("افزودن به سرورها برای تست واقعی") }
             }
         }
-        val detail = if (lastError is java.net.SocketTimeoutException) {
-            "مهلت اتصال TCP تمام شد"
-        } else {
-            "DNS پاسخ داد، اما پورت TCP در دسترس نیست"
-        }
-        return RadarCandidate(uri, null, detail, dnsMs)
     }
 
-    private fun protocolOf(uri: String): String {
-        val scheme = uri.substringBefore("://", "").lowercase()
-        return when (scheme) {
-            "hy2" -> "hysteria2"
-            else -> scheme
-        }
-    }
-
-    private fun parseEndpoint(uri: String): Pair<String, Int>? = runCatching {
-        if (uri.startsWith("vmess://", true)) {
-            val encoded = uri.substringAfter("://").substringBefore('#')
-            val raw = runCatching { Base64.decode(encoded, Base64.DEFAULT) }
-                .recoverCatching { Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP) }
-                .getOrThrow().toString(Charsets.UTF_8)
-            val host = Regex("\"add\"\\s*:\\s*\"([^\"]+)\"").find(raw)?.groupValues?.get(1) ?: return null
-            val port = Regex("\"port\"\\s*:\\s*\"?(\\d+)").find(raw)?.groupValues?.get(1)?.toIntOrNull() ?: return null
-            return host to port
-        }
-        val authority = uri.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@')
-        val host = authority.substringBeforeLast(':').trim('[', ']')
-        val port = authority.substringAfterLast(':').toIntOrNull()
-        if (host.isBlank() || port == null || port !in 1..65535) null else host to port
-    }.getOrNull()
-
-    private fun get(url: String, timeout: Int): String {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = timeout; c.readTimeout = timeout
-        c.setRequestProperty("User-Agent", "G-ST-VPN-Radar/1.0")
-        return try { c.inputStream.bufferedReader().use { it.readText().take(2_000_000) } } finally { c.disconnect() }
+    private companion object {
+        const val MAX_CANDIDATES = 600
+        const val PROBE_BATCH_SIZE = 8
     }
 }

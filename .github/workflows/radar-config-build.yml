@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [feat/radar-config-discovery, fix/radar-vpn-full-restoration]
+    branches: [feat/radar-config-discovery, fix/radar-vpn-full-restoration, not-SIGNAL/NOT-NET]
   workflow_dispatch:
 
 permissions:
