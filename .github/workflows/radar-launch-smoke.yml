@@ -58,12 +58,41 @@ jobs:
       - name: Install and launch on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           arch: x86_64
           profile: pixel_2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -memory 4096 -cores 2
           disable-animations: true
           script: |
-            set -eu; APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"; if [ -z "$APK" ]; then APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"; fi; test -n "$APK"; adb install -r "$APK"; adb logcat -c; adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity; sleep 20; adb logcat -d -v threadtime > radar-launch-logcat.txt; if adb shell pidof com.RDR.vpn >/dev/null 2>&1; then echo "RADAR main process is still running after launch."; else echo "RADAR process exited after launch. Recent fatal logs:"; grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' radar-launch-logcat.txt || true; exit 1; fi
+            set -eu
+            APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"
+            if [ -z "$APK" ]; then APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"; fi
+            test -n "$APK"
+            adb wait-for-device
+            adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
+            # Wait for Android's package manager to become responsive before installation.
+            READY=0
+            for attempt in $(seq 1 20); do
+              if adb shell cmd package list packages >/dev/null 2>&1; then READY=1; break; fi
+              sleep 3
+            done
+            if [ "$READY" -ne 1 ]; then
+              echo "Android package manager did not become responsive."
+              adb logcat -d -v threadtime > radar-launch-logcat.txt || true
+              exit 1
+            fi
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity
+            sleep 20
+            adb logcat -d -v threadtime > radar-launch-logcat.txt
+            if adb shell pidof com.RDR.vpn >/dev/null 2>&1; then
+              echo "RADAR main process is still running after launch."
+            else
+              echo "RADAR process exited after launch. Recent fatal logs:"
+              grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' radar-launch-logcat.txt || true
+              exit 1
+            fi
 
       - name: Upload launch diagnostics and APK
         if: always()
