@@ -10,35 +10,20 @@
         android:smallScreens="true"
         android:xlargeScreens="true" />
 
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera.autofocus"
-        android:required="false" />
-    <uses-feature
-        android:name="android.software.leanback"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.touchscreen"
-        android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
-    <!-- https://developer.android.com/about/versions/11/privacy/package-visibility -->
-    <uses-permission
-        android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
-        tools:ignore="ForegroundServicesPolicy" />
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
-        android:minSdkVersion="34" />
-    <!-- <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:ignore="ForegroundServicesPolicy" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" android:minSdkVersion="34" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -57,18 +42,12 @@
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"
             android:exported="false">
-            <meta-data
-                android:name="autoStoreLocales"
-                android:value="true" />
+            <meta-data android:name="autoStoreLocales" android:value="true" />
         </service>
 
-        <activity
-            android:name=".ui.radar.RadarConfigActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".ui.radar.DpiTestActivity"
-            android:exported="false" />
+        <activity android:name=".ui.radar.RadarConfigActivity" android:exported="false" />
+        <activity android:name=".ui.radar.DpiTestActivity" android:exported="false" />
+        <activity android:name=".ui.repair.ConfigRepairActivity" android:exported="false" />
 
         <activity
             android:name=".ui.main.MainActivity"
@@ -84,32 +63,10 @@
                 <data android:scheme="file" />
                 <data android:mimeType="application/x-rdr" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:mimeType="application/octet-stream" />
-                <data android:pathPattern=".*\\.RDR" />
-                <data android:pathPattern=".*\\.rdr" />
-                <data android:pathPattern=".*\\.npv" />
-                <data android:pathPattern=".*\\.npvt" />
-                <data android:pathPattern=".*\\.npvs" />
-                <data android:pathPattern=".*\\.npv4" />
-                <data android:pathPattern=".*\\.NPV" />
-                <data android:pathPattern=".*\\.NPVT" />
-                <data android:pathPattern=".*\\.NPVS" />
-                <data android:pathPattern=".*\\.NPV4" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
-        <activity
-            android:name=".ui.calculator.CalculatorActivity"
-            android:exported="false" />
+
+        <activity android:name=".ui.calculator.CalculatorActivity" android:exported="false" />
 
         <activity-alias
             android:name=".ui.main.DefaultLauncherAlias"
@@ -125,183 +82,41 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".ui.calculator.CalculatorLauncherAlias"
-            android:targetActivity=".ui.calculator.CalculatorActivity"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/ic_calculator_launcher"
-            android:label="@string/calculator_launcher_label">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity
-            android:name=".ui.server.ServerVmessActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerVlessActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerShadowsocksActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerSocksActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerHttpActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerTrojanActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerWireguardActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerHysteria2Activity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerMieruActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerAetherActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerAnytlsActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerAmneziawgActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerCustomConfigActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerGroupActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerProxyChainActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.hybrid.HybridActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.ai.AiDiagnosticsActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.settings.SettingsActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.perappproxy.PerAppProxyActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.apppicker.AppPickerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.ScannerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.logcat.LogcatActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.routing.RoutingSettingActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.routing.RoutingEditActivity"
-            android:windowSoftInputMode="stateUnchanged|adjustResize"
-            android:exported="false" />
-        <activity
-            android:name=".ui.subscription.SubSettingActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.userasset.UserAssetActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.userasset.UserAssetUrlActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".ui.subscription.SubEditActivity"
-            android:windowSoftInputMode="stateUnchanged|adjustResize"
-            android:exported="false" />
-        <activity
-            android:name=".ui.shortcut.ScScannerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.shortcut.ScSwitchActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:process=":RunSoArasDaemon"
-            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
-        <activity
-            android:name=".ui.shortcut.ScQuickConnectActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:process=":RunSoArasDaemon"
-            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
-        <activity
-            android:name=".ui.shortcut.ScStartActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:process=":RunSoArasDaemon"
-            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
-        <activity
-            android:name=".ui.shortcut.ScStopActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:process=":RunSoArasDaemon"
-            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
-
-        <activity
-            android:name=".ui.UrlSchemeActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.BROWSABLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data android:scheme="aras" />
-                <data android:host="install-config" />
-                <data android:host="install-sub" />
-            </intent-filter>
-        </activity>
-        <activity
-            android:name=".ui.checkupdate.CheckUpdateActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.export.ExportActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.backup.BackupActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.AboutActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.TranslatorsActivity"
-            android:exported="false" />
+        <activity android:name=".ui.server.ServerVmessActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerVlessActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerShadowsocksActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerSocksActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerHttpActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerTrojanActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerWireguardActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerHysteria2Activity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerMieruActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerAetherActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerAnytlsActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerAmneziawgActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerCustomConfigActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerGroupActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.server.ServerProxyChainActivity" android:exported="false" android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity android:name=".ui.hybrid.HybridActivity" android:exported="false" />
+        <activity android:name=".ui.ai.AiDiagnosticsActivity" android:exported="false" />
+        <activity android:name=".ui.settings.SettingsActivity" android:exported="false" />
+        <activity android:name=".ui.perappproxy.PerAppProxyActivity" android:exported="false" />
+        <activity android:name=".ui.apppicker.AppPickerActivity" android:exported="false" />
+        <activity android:name=".ui.ScannerActivity" android:exported="false" />
+        <activity android:name=".ui.logcat.LogcatActivity" android:exported="false" />
+        <activity android:name=".ui.routing.RoutingSettingActivity" android:exported="false" />
+        <activity android:name=".ui.routing.RoutingEditActivity" android:windowSoftInputMode="stateUnchanged|adjustResize" android:exported="false" />
+        <activity android:name=".ui.subscription.SubSettingActivity" android:exported="false" />
+        <activity android:name=".ui.userasset.UserAssetActivity" android:exported="false" />
+        <activity android:name=".ui.userasset.UserAssetUrlActivity" android:exported="false" />
+        <activity android:name=".ui.subscription.SubEditActivity" android:windowSoftInputMode="stateUnchanged|adjustResize" android:exported="false" />
+        <activity android:name=".ui.shortcut.ScScannerActivity" android:exported="false" />
+        <activity android:name=".ui.UrlSchemeActivity" android:exported="true" />
+        <activity android:name=".ui.checkupdate.CheckUpdateActivity" android:exported="false" />
+        <activity android:name=".ui.export.ExportActivity" android:exported="false" />
+        <activity android:name=".ui.backup.BackupActivity" android:exported="false" />
+        <activity android:name=".ui.AboutActivity" android:exported="false" />
+        <activity android:name=".ui.TranslatorsActivity" android:exported="false" />
 
         <service
             android:name=".service.CoreVpnService"
@@ -315,145 +130,17 @@
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
-            <meta-data
-                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
-                android:value="true" />
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="vpn" />
+            <meta-data android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON" android:value="true" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="vpn" />
         </service>
 
-        <service
-            android:name=".service.CoreProxyOnlyService"
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.cache"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:label="@string/app_name"
-            android:process=":RunSoArasDaemon">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="proxy" />
-        </service>
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
 
-        <service
-            android:name=".service.CoreRootService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:label="@string/app_name"
-            android:process=":RunSoArasDaemon">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="proxy" />
-        </service>
-
-        <service
-            android:name=".service.CoreTestService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:process=":RunSoArasDaemon">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="test" />
-        </service>
-
-        <service
-            android:name=".service.SubscriptionUpdateService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:process=":RunSoArasDaemon">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="test" />
-        </service>
-
-        <service
-            android:name=".service.QuickConnectService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:process=":RunSoArasDaemon">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="test" />
-        </service>
-
-        <receiver
-            android:name=".receiver.WidgetProvider"
-            android:exported="true"
-            android:process=":RunSoArasDaemon">
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/app_widget_provider" />
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="${applicationId}.action.widget.click" />
-                <action android:name="${applicationId}.action.activity" />
-            </intent-filter>
-        </receiver>
-        <receiver
-            android:name=".receiver.AetherGlassWidgetProvider"
-            android:exported="true">
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/aether_glass_widget_info" />
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.aras.client.action.AETHER_WIDGET_TOGGLE" />
-                <action android:name="com.aras.client.action.AETHER_WIDGET_REFRESH" />
-                <action android:name="${applicationId}.action.activity" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".receiver.BootReceiver"
-            android:exported="true"
-            android:label="BootReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
-
-        <service
-            android:name=".service.QSTileService"
-            android:enabled="true"
-            android:exported="true"
-            android:foregroundServiceType="specialUse"
-            android:icon="@drawable/ic_stat_name"
-            android:label="@string/app_tile_name"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:process=":RunSoArasDaemon">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE"/>
-            </intent-filter>
-            <meta-data
-                android:name="android.service.quicksettings.ACTIVE_TILE"
-                android:value="true" />
-            <meta-data
-                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
-                android:value="true" />
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="tile" />
-        </service>
-
-        <service
-            android:name=".service.SubscriptionQuickActionQSTileService"
-            android:enabled="true"
-            android:exported="true"
-            android:foregroundServiceType="specialUse"
-            android:icon="@drawable/ic_stat_name"
-            android:label="@string/app_tile_name"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:process=":RunSoArasDaemon">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE"/>
-            </intent-filter>
-            <meta-data
-                android:name="android.service.quicksettings.ACTIVE_TILE"
-                android:value="true" />
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="tile" />
-        </service>
     </application>
 </manifest>
