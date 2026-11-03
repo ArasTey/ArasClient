@@ -55,6 +55,12 @@ jobs:
       - name: Assemble debug APK and unit tests
         run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest -x :app:checkDebugAarMetadata
 
+      - name: Verify debug APK output
+        run: |
+          echo "APK output tree:"
+          find "$GITHUB_WORKSPACE/app/build/outputs" -maxdepth 6 -type f -name '*.apk' -print || true
+          test -n "$(find "$GITHUB_WORKSPACE/app/build/outputs/apk" -type f -name '*.apk' -print -quit)"
+
       - name: Install and launch on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -65,12 +71,19 @@ jobs:
           disable-animations: true
           script: |
             set -eu
-            APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"
-            if [ -z "$APK" ]; then APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"; fi
-            test -n "$APK"
+            APK_ROOT="$GITHUB_WORKSPACE/app/build/outputs/apk"
+            echo "Searching APKs under: $APK_ROOT"
+            find "$APK_ROOT" -type f -name '*.apk' -print
+            APK="$(find "$APK_ROOT" -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"
+            if [ -z "$APK" ]; then APK="$(find "$APK_ROOT" -type f -name '*.apk' | head -n 1 || true)"; fi
+            if [ -z "$APK" ]; then
+              echo "No APK found. Workspace output tree:"
+              find "$GITHUB_WORKSPACE/app/build/outputs" -maxdepth 6 -type f -print || true
+              exit 1
+            fi
+            echo "Installing APK: $APK"
             adb wait-for-device
             adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
-            # Wait for Android's package manager to become responsive before installation.
             READY=0
             for attempt in $(seq 1 20); do
               if adb shell cmd package list packages >/dev/null 2>&1; then READY=1; break; fi
@@ -78,19 +91,19 @@ jobs:
             done
             if [ "$READY" -ne 1 ]; then
               echo "Android package manager did not become responsive."
-              adb logcat -d -v threadtime > radar-launch-logcat.txt || true
+              adb logcat -d -v threadtime > "$GITHUB_WORKSPACE/radar-launch-logcat.txt" || true
               exit 1
             fi
             adb install -r "$APK"
             adb logcat -c
             adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity
             sleep 20
-            adb logcat -d -v threadtime > radar-launch-logcat.txt
+            adb logcat -d -v threadtime > "$GITHUB_WORKSPACE/radar-launch-logcat.txt"
             if adb shell pidof com.RDR.vpn >/dev/null 2>&1; then
               echo "RADAR main process is still running after launch."
             else
               echo "RADAR process exited after launch. Recent fatal logs:"
-              grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' radar-launch-logcat.txt || true
+              grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' "$GITHUB_WORKSPACE/radar-launch-logcat.txt" || true
               exit 1
             fi
 
