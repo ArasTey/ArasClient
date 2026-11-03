@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aras.client.handler.SpeedtestManager
 import com.aras.client.ui.radar.RadarDisplay
 import com.aras.client.ui.radar.RadarPalette
 import com.aras.client.ui.radar.RadarNode
@@ -81,8 +84,24 @@ fun RadarDashboard(
     )
     var verification by remember { mutableStateOf(RadarVerification.DISCONNECTED) }
     var publicIp by remember { mutableStateOf<String?>(null) }
-    // Start compact so the server/configuration list remains visible on phone screens.
+    var speedRunning by remember { mutableStateOf(false) }
+    var speedLatency by remember { mutableStateOf(-1L) }
+    var speedDown by remember { mutableStateOf(-1.0) }
+    var speedUp by remember { mutableStateOf(-1.0) }
+    var speedError by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(speedRunning) {
+        if (!speedRunning) return@LaunchedEffect
+        val result = withContext(Dispatchers.IO) {
+            SpeedtestManager.runFullTest()
+        }
+        speedLatency = result.latencyMs
+        speedDown = result.downloadMbps
+        speedUp = result.uploadMbps
+        speedError = result.error
+        speedRunning = false
+    }
 
     LaunchedEffect(isRunning, hasPing, selectedGuid) {
         publicIp = null
@@ -92,20 +111,13 @@ fun RadarDashboard(
         }
 
         verification = RadarVerification.CHECKING
-        // Re-check periodically so a tunnel drop is reflected without toggling the VPN switch.
-        // This effect is cancelled automatically when the service stops or this screen leaves composition.
         while (true) {
             val result = withContext(Dispatchers.IO) { verifyVpnEgress(context) }
             publicIp = result.ip
-            // Feed the live Android VPN-network/IP probe through the same state
-            // resolver covered by RadarStateTest; do not infer success from animation.
             val snapshot = TunnelSnapshot(
                 sessionId = selectedGuid?.hashCode()?.toLong() ?: 0L,
                 phase = if (result.tunnelActive) TunnelPhase.RUNNING else TunnelPhase.ERROR,
                 tunInterfaceUp = result.tunnelActive,
-                // A successful response from a connection opened on Android's VPN Network
-                // proves that request/response data crossed the tunnel. This is a verification
-                // signal, not a claim about the VPN service's full byte counters.
                 trafficBytesLastSample = if (result.verified && !result.ip.isNullOrBlank()) 1L else 0L,
                 ipCheck = if (result.verified && !result.ip.isNullOrBlank()) {
                     IpCheck.Verified(result.ip)
@@ -212,7 +224,7 @@ fun RadarDashboard(
                         .clip(CircleShape)
                         .background(statusColor)
                 )
-                Spacer(Modifier.width(7.dp))
+                Spacer(modifier = Modifier.width(7.dp))
                 Text(
                     text = when (verification) {
                         RadarVerification.VERIFIED -> "ONLINE"
@@ -229,7 +241,7 @@ fun RadarDashboard(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
-                Spacer(Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = if (expanded) "MINIMIZE" else "EXPAND",
                     color = statusColor,
@@ -243,7 +255,7 @@ fun RadarDashboard(
                 )
             }
 
-            Spacer(Modifier.height(if (expanded) 8.dp else 2.dp))
+            Spacer(modifier = Modifier.height(if (expanded) 8.dp else 2.dp))
 
             RadarDisplay(
                 state = when (verification) {
@@ -260,15 +272,10 @@ fun RadarDashboard(
                 palette = if (isDarkTheme) RadarPalette.Night else RadarPalette.Day,
                 title = statusLabel,
                 subtitle = statusDetail,
-                // One contact per saved configuration. Missing/failed profile pings
-                // remain red even when the selected tunnel is healthy; global danger
-                // forces all plotted contacts red.
                 nodes = when (verification) {
                     RadarVerification.DISCONNECTED, RadarVerification.CHECKING -> emptyList()
                     else -> if (configPings.isNotEmpty()) {
                         configPings.mapIndexed { index, config ->
-                            // A selected profile must agree with the live selected-profile ping
-                            // signal; other profiles retain their own last measured ping result.
                             val profileHealthy = config.pingMs > 0L &&
                                 (config.guid != selectedGuid || hasPing)
                             val tunnelHealthy = verification == RadarVerification.VERIFIED
@@ -294,49 +301,139 @@ fun RadarDashboard(
             )
 
             if (expanded) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(when (verification) {
-                        RadarVerification.VERIFIED -> Color(0xFF00230F)
-                        RadarVerification.TUNNEL_IP_UNVERIFIED, RadarVerification.TUNNEL_LOST -> Color(0xFF33060C)
-                        RadarVerification.DISCONNECTED -> Color(0xFF252A30)
-                        RadarVerification.CHECKING -> if (isDarkTheme) Color(0xFF171F29) else Color(0xFFF1F4F7)
-                    })
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("PUBLIC EGRESS IP", color = secondaryText, fontSize = 9.sp, letterSpacing = 1.sp)
-                    Text(
-                        text = publicIp ?: if (verification == RadarVerification.CHECKING) "Checking…" else "—",
-                        color = primaryText,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(when (verification) {
+                            RadarVerification.VERIFIED -> Color(0xFF00230F)
+                            RadarVerification.TUNNEL_IP_UNVERIFIED, RadarVerification.TUNNEL_LOST -> Color(0xFF33060C)
+                            RadarVerification.DISCONNECTED -> Color(0xFF252A30)
+                            RadarVerification.CHECKING -> if (isDarkTheme) Color(0xFF171F29) else Color(0xFFF1F4F7)
+                        })
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("PUBLIC EGRESS IP", color = secondaryText, fontSize = 9.sp, letterSpacing = 1.sp)
+                        Text(
+                            text = publicIp ?: if (verification == RadarVerification.CHECKING) "Checking…" else "—",
+                            color = primaryText,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                        Text("SELECTED NODE", color = secondaryText, fontSize = 9.sp, letterSpacing = 1.sp)
+                        Text(
+                            text = if (isRunning) serverTitle.take(22).ifBlank { "Connected profile" } else "No active node",
+                            color = primaryText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.End,
+                            maxLines = 1
+                        )
+                    }
                 }
-                Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
-                    Text("SELECTED NODE", color = secondaryText, fontSize = 9.sp, letterSpacing = 1.sp)
-                    Text(
-                        text = if (isRunning) serverTitle.take(22).ifBlank { "Connected profile" } else "No active node",
-                        color = primaryText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.End,
-                        maxLines = 1
-                    )
+                Text(
+                    text = "IP check uses the active VPN network when Android exposes it.",
+                    color = secondaryText,
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 7.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "SPEED TEST",
+                    color = secondaryText,
+                    fontSize = 9.sp,
+                    letterSpacing = 1.2.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            when (verification) {
+                                RadarVerification.VERIFIED -> Color(0xFF00230F)
+                                RadarVerification.TUNNEL_IP_UNVERIFIED, RadarVerification.TUNNEL_LOST -> Color(0xFF33060C)
+                                RadarVerification.DISCONNECTED -> Color(0xFF252A30)
+                                RadarVerification.CHECKING -> if (isDarkTheme) Color(0xFF171F29) else Color(0xFFF1F4F7)
+                            }
+                        )
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        Text("PING", color = secondaryText, fontSize = 9.sp, letterSpacing = 0.8.sp)
+                        Text(
+                            SpeedtestManager.formatLatency(speedLatency),
+                            color = primaryText,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        Text("DOWNLOAD", color = secondaryText, fontSize = 9.sp, letterSpacing = 0.8.sp)
+                        Text(
+                            SpeedtestManager.formatMbps(speedDown),
+                            color = primaryText,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        Text("UPLOAD", color = secondaryText, fontSize = 9.sp, letterSpacing = 0.8.sp)
+                        Text(
+                            SpeedtestManager.formatMbps(speedUp),
+                            color = primaryText,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
-            }
-            Text(
-                text = "IP check uses the active VPN network when Android exposes it.",
-                color = secondaryText,
-                fontSize = 9.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 7.dp)
-            )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(statusColor.copy(alpha = 0.18f))
+                        .clickable(enabled = !speedRunning) {
+                            speedRunning = true
+                            speedError = null
+                        }
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (speedRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = statusColor
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("TESTING…", color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    } else {
+                        Text("RUN SPEED TEST", color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    }
+                }
+                speedError?.let {
+                    Text(it, color = Color(0xFFFF737D), fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                Text(
+                    text = "Measures real throughput via Cloudflare endpoints (VPN path when connected).",
+                    color = secondaryText,
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
         }
     }
@@ -346,8 +443,6 @@ private fun verifyVpnEgress(context: Context): RadarIpResult {
     val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         ?: return RadarIpResult(tunnelActive = false, verified = false)
 
-    // Do not rely on activeNetwork alone: on some Android/VPN combinations it can
-    // report the underlying Wi-Fi/mobile network. Search all Android VPN networks.
     val activeNetwork = connectivity.activeNetwork
     val vpnNetworks = buildList {
         if (activeNetwork != null) {
@@ -370,8 +465,6 @@ private fun verifyVpnEgress(context: Context): RadarIpResult {
         return RadarIpResult(tunnelActive = false, verified = false)
     }
 
-    // Try more than one lightweight IP endpoint. Some VPN exits or DNS filters
-    // block a particular provider even though the tunnel itself carries traffic.
     val endpoints = listOf(
         "https://api.ipify.org",
         "https://icanhazip.com/"
@@ -400,19 +493,14 @@ private fun verifyVpnEgress(context: Context): RadarIpResult {
                 val looksLikeIp = ip.isNotBlank() &&
                     ip.matches(Regex("^[0-9a-fA-F:.]+$")) &&
                     (ip.contains('.') || ip.contains(':'))
-
                 if (looksLikeIp) {
                     return RadarIpResult(tunnelActive = true, verified = true, ip = ip)
                 }
             } catch (_: Exception) {
-                // Try the next endpoint/network before reporting a failed verification.
             } finally {
-                connection.disconnect()
+                try { connection.disconnect() } catch (_: Exception) {}
             }
         }
     }
-
-    // Android has an active VPN interface, but no external request succeeded
-    // through it, so do not falsely mark the radar green.
     return RadarIpResult(tunnelActive = true, verified = false)
 }
