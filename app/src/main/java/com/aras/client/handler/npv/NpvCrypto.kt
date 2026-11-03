@@ -2,6 +2,7 @@ package com.aras.client.handler.npv
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.Mac
@@ -15,14 +16,14 @@ import javax.crypto.spec.SecretKeySpec
  * Based on public structures used by open-source NPV readers (PBKDF2-HMAC-SHA256 +
  * ChaCha20-Poly1305). AppKey whitebox tables are intentionally not bundled.
  */
-internal object NpvCrypto {
+object NpvCrypto {
 
     private const val KEY_LEN = 32
 
     fun pbkdf2HmacSha256(password: ByteArray, salt: ByteArray, iterations: Int, keyLen: Int = KEY_LEN): ByteArray {
         return try {
             val spec = PBEKeySpec(
-                String(password, Charsets.UTF_8).toCharArray(),
+                String(password, StandardCharsets.UTF_8).toCharArray(),
                 salt,
                 iterations.coerceIn(1, 5_000_000),
                 keyLen * 8
@@ -64,7 +65,12 @@ internal object NpvCrypto {
         return out.copyOf(keyLen)
     }
 
-    fun chacha20Poly1305Open(key: ByteArray, nonce: ByteArray, ciphertextAndTag: ByteArray, aad: ByteArray = ByteArray(0)): ByteArray? {
+    fun chacha20Poly1305Open(
+        key: ByteArray,
+        nonce: ByteArray,
+        ciphertextAndTag: ByteArray,
+        aad: ByteArray = ByteArray(0),
+    ): ByteArray? {
         if (key.size != 32 || nonce.size != 12 || ciphertextAndTag.size < 16) return null
         return try {
             val cipher = Cipher.getInstance("ChaCha20-Poly1305")
