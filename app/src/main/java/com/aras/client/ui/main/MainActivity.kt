@@ -262,7 +262,14 @@ class MainActivity : HelperBaseComponentActivity() {
                     MainAction.ImportClipboard -> importClipboard()
                     MainAction.ImportConfigLocal -> importConfigLocal()
                     MainAction.ImportArascFile -> importArascFile()
-                    is MainAction.ImportManually -> importManually(action.type)
+                    is MainAction.ImportManually -> {
+                        val configType = EConfigType.fromInt(action.type)
+                        if (configType != null) {
+                            importManually(configType)
+                        } else {
+                            toastError(R.string.toast_failure)
+                        }
+                    }
                     MainAction.RestartService -> LauncherManager.restartServiceOrStart(this, ::requestServiceStart)
                     MainAction.LocateSelectedServer -> mainViewModel.triggerLocateSelectedServer()
                     is MainAction.SelectServer -> setSelectServer(action.guid)
@@ -466,7 +473,7 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun importClipboard() {
-        val text = Utils.getClipboardContent(this)
+        val text = Utils.getClipboard(this)
         if (text.isNullOrBlank()) {
             toastError(R.string.toast_none_data)
             return
