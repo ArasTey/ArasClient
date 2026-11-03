@@ -11,6 +11,7 @@ import com.aras.client.handler.MmkvManager
 import com.aras.client.util.LogUtil
 import com.aras.client.handler.SettingsManager
 import com.aras.client.ui.compose.ThemeManager
+import com.aras.client.ui.calculator.LauncherIconManager
 
 class AngApplication : Application(), Configuration.Provider {
     companion object {
@@ -36,6 +37,9 @@ class AngApplication : Application(), Configuration.Provider {
      */
     override fun onCreate() {
         super.onCreate()
+
+        // Restore the default launcher on installs that used the removed Telegram icon.
+        LauncherIconManager.migrateRemovedTelegramMode(this)
 
         MmkvManager.initialize(this)
 
