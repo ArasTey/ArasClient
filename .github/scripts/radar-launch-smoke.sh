@@ -9,12 +9,12 @@ echo "Emulator script working directory: $WORKSPACE"
 echo "Searching APKs under: $APK_ROOT"
 find "$APK_ROOT" -type f -name '*.apk' -print
 
-APK="$(find "$APK_ROOT" -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"
+APK="$(find "$APK_ROOT" -type f -name '*universal*.apk' | head -n 1 || true)"
 if [ -z "$APK" ]; then
   APK="$(find "$APK_ROOT" -type f -name '*.apk' | head -n 1 || true)"
 fi
 if [ -z "$APK" ]; then
-  echo "No APK found. Workspace output tree:"
+  echo "No APK found."
   find "$WORKSPACE/app/build/outputs" -maxdepth 6 -type f -print || true
   exit 1
 fi
@@ -22,29 +22,13 @@ fi
 echo "Installing APK: $APK"
 adb wait-for-device
 adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
-
-READY=0
-for attempt in $(seq 1 20); do
-  if adb shell cmd package list packages >/dev/null 2>&1; then
-    READY=1
-    break
-  fi
-  sleep 3
-done
-if [ "$READY" -ne 1 ]; then
-  echo "Android package manager did not become responsive."
-  adb logcat -d -v threadtime > "$LOG_FILE" || true
-  exit 1
-fi
-
 adb install -r "$APK"
 adb logcat -c
-adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity
-sleep 3
 
-echo "Enabling the exported Telegram launcher alias for an authorized emulator launch."
-adb shell pm enable com.RDR.vpn/com.aras.client.ui.telegram.TelegramLauncherAlias
-adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.telegram.TelegramLauncherAlias
+# The debug-only launcher alias targets the real, non-exported TelegramActivity.
+# Production manifests do not contain this test entry point.
+echo "Launching Telegram through the debug-only test alias."
+adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.telegram.TelegramSmokeLauncherAlias || true
 sleep 8
 adb logcat -d -v threadtime > "$LOG_FILE"
 
@@ -55,15 +39,15 @@ if grep -E -q 'FATAL EXCEPTION|Fatal signal|Process: com.RDR.vpn' "$LOG_FILE"; t
 fi
 
 if ! adb shell pidof com.RDR.vpn >/dev/null 2>&1; then
-  echo "RADAR process exited after launch. Recent fatal logs:"
+  echo "RADAR process exited after launch."
   grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' "$LOG_FILE" || true
   exit 1
 fi
 
-ACTIVITY_DUMP="$(adb shell dumpsys activity activities | tr -d '\\r')"
+ACTIVITY_DUMP="$(adb shell dumpsys activity activities | tr -d '\r')"
 if ! printf '%s' "$ACTIVITY_DUMP" | grep -Fq 'com.aras.client.ui.telegram.TelegramActivity'; then
   echo "TelegramActivity was not found in the activity stack."
-  printf '%s\\n' "$ACTIVITY_DUMP" | grep -E 'mResumedActivity|topResumedActivity|Resumed' || true
+  printf '%s\n' "$ACTIVITY_DUMP" | grep -E 'mResumedActivity|topResumedActivity|Resumed' || true
   exit 1
 fi
 
