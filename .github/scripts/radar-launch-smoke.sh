@@ -25,11 +25,12 @@ adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
 adb install -r "$APK"
 adb logcat -c
 
-# The debug-only launcher alias targets the real, non-exported TelegramActivity.
-# Production manifests do not contain this test entry point.
-echo "Launching Telegram through the debug-only test alias."
-adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.telegram.TelegramSmokeLauncherAlias || true
-sleep 8
+# Launch the public app entry point. Do not use pm enable/disable on aliases:
+# modern Android builds may reject shell changes to app component state.
+echo "Launching RADAR through its exported main activity."
+adb shell am force-stop com.RDR.vpn
+adb shell am start -n com.RDR.vpn/com.aras.client.ui.main.MainActivity
+sleep 20
 adb logcat -d -v threadtime > "$LOG_FILE"
 
 if grep -E -q 'FATAL EXCEPTION|Fatal signal|Process: com.RDR.vpn' "$LOG_FILE"; then
@@ -45,10 +46,10 @@ if ! adb shell pidof com.RDR.vpn >/dev/null 2>&1; then
 fi
 
 ACTIVITY_DUMP="$(adb shell dumpsys activity activities | tr -d '\r')"
-if ! printf '%s' "$ACTIVITY_DUMP" | grep -Fq 'com.aras.client.ui.telegram.TelegramActivity'; then
-  echo "TelegramActivity was not found in the activity stack."
+if ! printf '%s' "$ACTIVITY_DUMP" | grep -Fq 'com.aras.client.ui.main.MainActivity'; then
+  echo "MainActivity was not found in the activity stack."
   printf '%s\n' "$ACTIVITY_DUMP" | grep -E 'mResumedActivity|topResumedActivity|Resumed' || true
   exit 1
 fi
 
-echo "RADAR process is alive and TelegramActivity is present in the activity stack."
+echo "RADAR process is alive and MainActivity is present in the activity stack."
