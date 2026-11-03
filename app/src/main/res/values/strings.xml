@@ -906,8 +906,6 @@
     <string name="title_pref_app_icon">App icon</string>
     <string name="app_icon_default">Default</string>
     <string name="app_icon_calculator">Calculator</string>
-    <string name="app_icon_telegram">Telegram</string>
-    <string name="telegram_launcher_label">Telegram</string>
     <string name="calculator_launcher_label">Calculator</string>
     <string name="calculator_access_code">Access code (4–12 digits; hold AC to restore icon)</string>
 </resources>
