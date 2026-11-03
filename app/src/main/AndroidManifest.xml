@@ -115,6 +115,10 @@
             android:name=".ui.calculator.CalculatorActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.telegram.TelegramActivity"
+            android:exported="false" />
+
         <activity-alias
             android:name=".ui.main.DefaultLauncherAlias"
             android:targetActivity=".ui.main.MainActivity"
@@ -136,6 +140,19 @@
             android:exported="true"
             android:icon="@drawable/ic_calculator_launcher"
             android:label="@string/calculator_launcher_label">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ui.telegram.TelegramLauncherAlias"
+            android:targetActivity=".ui.telegram.TelegramActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_telegram_24dp"
+            android:label="@string/telegram_launcher_label">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
