@@ -12,7 +12,6 @@ import java.security.MessageDigest
 object LauncherIconManager {
     private const val DEFAULT_ALIAS = "com.aras.client.ui.main.DefaultLauncherAlias"
     private const val CALCULATOR_ALIAS = "com.aras.client.ui.calculator.CalculatorLauncherAlias"
-    private const val TELEGRAM_ALIAS = "com.aras.client.ui.telegram.TelegramLauncherAlias"
     private const val PREFS = "radar_launcher"
     private const val KEY_ICON_MODE = "icon_mode"
     private const val KEY_ACCESS_CODE_HASH = "access_code_sha256"
@@ -20,23 +19,42 @@ object LauncherIconManager {
 
     const val MODE_DEFAULT = "default"
     const val MODE_CALCULATOR = "calculator"
-    const val MODE_TELEGRAM = "telegram"
 
     fun selectedMode(context: Context): String =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_ICON_MODE, MODE_DEFAULT) ?: MODE_DEFAULT
-
-    fun apply(context: Context, mode: String) {
-        val selected = when (mode) {
+        when (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_ICON_MODE, MODE_DEFAULT)) {
             MODE_CALCULATOR -> MODE_CALCULATOR
-            MODE_TELEGRAM -> MODE_TELEGRAM
             else -> MODE_DEFAULT
         }
+
+    /**
+     * Migrates installs that previously selected the removed Telegram launcher icon.
+     * Restore the regular app launcher without changing calculator or VPN features.
+     */
+    fun migrateRemovedTelegramMode(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getString(KEY_ICON_MODE, MODE_DEFAULT) != "telegram") return
+
+        val pm = context.packageManager
+        pm.setComponentEnabledSetting(
+            ComponentName(context, CALCULATOR_ALIAS),
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+        )
+        pm.setComponentEnabledSetting(
+            ComponentName(context, DEFAULT_ALIAS),
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+        )
+        prefs.edit().putString(KEY_ICON_MODE, MODE_DEFAULT).apply()
+    }
+
+    fun apply(context: Context, mode: String) {
+        val selected = if (mode == MODE_CALCULATOR) MODE_CALCULATOR else MODE_DEFAULT
         val pm = context.packageManager
         val aliases = listOf(
             DEFAULT_ALIAS to (selected == MODE_DEFAULT),
-            CALCULATOR_ALIAS to (selected == MODE_CALCULATOR),
-            TELEGRAM_ALIAS to (selected == MODE_TELEGRAM)
+            CALCULATOR_ALIAS to (selected == MODE_CALCULATOR)
         )
         // Disable the non-selected aliases first, then enable exactly one launcher entry.
         aliases.filterNot { it.second }.forEach { (alias, _) ->
