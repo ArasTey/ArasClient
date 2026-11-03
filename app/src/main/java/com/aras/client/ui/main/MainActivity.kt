@@ -165,7 +165,7 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     /**
-     * When the user opens a .arasc / .npv file from a file manager, offer to import
+     * When the user opens a .arasc / NPV file from a file manager, offer to import
      * it straight into the app (password prompt appears if required).
      */
     private fun maybeImportOpenedArasc(intent: android.content.Intent?) {
@@ -329,6 +329,7 @@ class MainActivity : HelperBaseComponentActivity() {
     private fun shareAsArascFile(guid: String) {
         lifecycleScope.launch(Dispatchers.IO) {
             if (ArasExportImportManager.isProtected(guid)) {
+                // Data-layer policy: protected configs never leave as raw files.
                 withContext(Dispatchers.Main) { toastError(R.string.export_badge_protected) }
                 return@launch
             }
@@ -431,33 +432,72 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun requestServiceStart() {
-        val intent = VpnService.prepare(this)
-        if (intent != null) {
-            requestVpnPermission.launch(intent)
-        } else {
+        if (!SettingsManager.isVpnMode()) {
             startXray()
+            return
         }
+        val intent = VpnService.prepare(this)
+        if (intent == null) startXray() else requestVpnPermission.launch(intent)
     }
 
     private fun startXray() {
+        if (mainViewModel.uiState.value.selectedGuid.isNullOrEmpty()) {
+            toast(R.string.title_file_chooser)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 37 &&
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)
+        ) {
+            checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) {}
+        }
         LauncherManager.startService(this)
     }
 
     private fun handleLayoutTestClick() {
-        mainViewModel.onAction(MainAction.TestCurrentServer)
+        mainViewModel.testCurrentServerRealPing()
     }
 
     private fun importQRcode() {
-        // handled via ScannerActivity elsewhere
-        mainViewModel.onAction(MainAction.ImportQRcode)
+        launchQRCodeScanner { scanResult ->
+            if (scanResult != null) {
+                mainViewModel.onAction(MainAction.ImportBatchConfig(scanResult))
+            }
+        }
     }
 
     private fun importClipboard() {
-        mainViewModel.onAction(MainAction.ImportClipboard)
+        val text = Utils.getClipboardContent(this)
+        if (text.isNullOrBlank()) {
+            toastError(R.string.toast_none_data)
+            return
+        }
+        mainViewModel.onAction(MainAction.ImportBatchConfig(text))
     }
 
     private fun importManually(type: EConfigType) {
-        mainViewModel.onAction(MainAction.ImportManually(type))
+        val activityClass = when (type) {
+            EConfigType.CUSTOM -> ServerCustomConfigActivity::class.java
+            EConfigType.POLICYGROUP -> ServerGroupActivity::class.java
+            EConfigType.PROXYCHAIN -> ServerProxyChainActivity::class.java
+            EConfigType.VMESS -> ServerVmessActivity::class.java
+            EConfigType.VLESS -> ServerVlessActivity::class.java
+            EConfigType.SHADOWSOCKS -> ServerShadowsocksActivity::class.java
+            EConfigType.SOCKS -> ServerSocksActivity::class.java
+            EConfigType.HTTP -> ServerHttpActivity::class.java
+            EConfigType.TROJAN -> ServerTrojanActivity::class.java
+            EConfigType.WIREGUARD -> ServerWireguardActivity::class.java
+            EConfigType.HYSTERIA2 -> ServerHysteria2Activity::class.java
+            EConfigType.ANYTLS -> ServerAnytlsActivity::class.java
+            EConfigType.AMNEZIAWG -> ServerAmneziawgActivity::class.java
+            EConfigType.AETHER -> ServerAetherActivity::class.java
+            EConfigType.MIERU -> ServerMieruActivity::class.java
+            else -> ServerHttpActivity::class.java
+        }
+        val intent = Intent(this, activityClass).apply {
+            putExtra("createConfigType", type.value)
+            putExtra("subscriptionId", mainViewModel.uiState.value.selectedGroupId)
+        }
+        profileEditorLauncher.launch(intent)
     }
 
     private fun importConfigLocal() {
@@ -608,6 +648,8 @@ class MainActivity : HelperBaseComponentActivity() {
             composeDialogHolder.show = false
             return
         }
+        // Keep the dialog open during the decryption attempt; it closes on
+        // success or re-prompts with an error on wrong password.
         handleArascAttempt(bytes, password.toCharArray())
     }
 
@@ -625,6 +667,8 @@ class MainActivity : HelperBaseComponentActivity() {
             return
         }
         if (!profile.configType.hasEditor) {
+            // Import-only protocols have no editor. Falling through to
+            // ServerHttpActivity would save the profile back as an HTTP proxy.
             toastError(getString(R.string.no_editor_for_protocol, profile.configType.name))
             return
         }
@@ -660,43 +704,6 @@ class MainActivity : HelperBaseComponentActivity() {
         if (guid != selected) {
             mainViewModel.updateSelectedGuid(guid)
             LauncherManager.restartService(this)
-        }
-    }
-
-    private fun launchFileChooser(onResult: (android.net.Uri?) -> Unit) {
-        val launcher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            onResult(uri)
-        }
-        // Use existing helper from base if available; fallback open document
-        try {
-            // Prefer the activity helper used elsewhere in the project
-            val method = this::class.java.methods.find { it.name == "launchFileChooser" && it.parameterCount == 1 }
-            if (method != null) {
-                // already in class - shouldn't recurse; use OpenDocument intent
-            }
-        } catch (_: Exception) {
-        }
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-        }
-        // Use a one-shot launcher registered at class level would be better;
-        // fall back to startActivityForResult pattern via ActivityResultContracts already set up.
-        // For compatibility with existing HelperBaseComponentActivity API:
-        if (this::class.java.declaredMethods.any { it.name == "openDocument" }) {
-            // no-op
-        }
-        // Use the project's existing launch pattern from HelperBaseComponentActivity
-        @Suppress("DEPRECATION")
-        try {
-            val helper = this::class.java.getMethod("launchFileChooser", Function1::class.java)
-            helper.invoke(this, onResult)
-        } catch (_: Exception) {
-            // Last resort: GetContent
-            val getContent = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-                onResult(uri)
-            }
-            getContent.launch("*/*")
         }
     }
 
