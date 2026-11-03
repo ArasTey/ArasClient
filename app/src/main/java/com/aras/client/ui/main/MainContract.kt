@@ -82,6 +82,7 @@ sealed interface MainAction {
     data object ImportConfigLocal : MainAction
     data object ImportArascFile : MainAction
     data object ImportManualMenu : MainAction
+    data object OpenConfigRepair : MainAction
     data class ImportManually(val type: Int) : MainAction
     data object RestartService : MainAction
     data object LocateSelectedServer : MainAction
