@@ -49,6 +49,7 @@ import com.aras.client.extension.toTrafficString
 import com.aras.client.extension.toast
 import com.aras.client.extension.toastError
 import com.aras.client.extension.toastSuccess
+import com.aras.client.extension.withLatinDigits
 import com.aras.client.handler.MmkvManager
 import com.aras.client.handler.SettingsManager
 import com.aras.client.ui.base.HelperBaseComponentActivity
@@ -363,7 +364,8 @@ private fun UserAssetItem(
     val propertiesText = if (fileMetadata != null) {
         remember(fileMetadata) {
             val dateFormat = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM)
-            "${fileMetadata.length.toTrafficString()}  •  ${dateFormat.format(Date(fileMetadata.lastModified))}"
+            "${fileMetadata.length.toTrafficString()}  •  " +
+                dateFormat.format(Date(fileMetadata.lastModified)).withLatinDigits()
         }
     } else {
         stringResource(R.string.msg_file_not_found)

@@ -53,15 +53,12 @@ object AetherIdentityManager {
         status(workDir(context), protocol)
 
     internal fun status(workDir: File, protocol: AetherProtocol): AetherIdentityStatus = when (protocol) {
-        AetherProtocol.MASQUE -> AetherIdentityStatus(
+        // MIM is MASQUE inside MASQUE: both of its hops are masque accounts, kept in
+        // the same files a MASQUE tunnel uses - the core loads MIM's outer from the
+        // masque config itself (aether lib.rs: "loaded existing masque identity").
+        AetherProtocol.MASQUE, AetherProtocol.MIM -> AetherIdentityStatus(
             protocol,
             read(workDir, MASQUE_FILE),
-            read(workDir, MASQUE_INNER_FILE),
-        )
-
-        AetherProtocol.MIM -> AetherIdentityStatus(
-            protocol,
-            read(workDir, BASE_FILE),
             read(workDir, MASQUE_INNER_FILE),
         )
 
@@ -107,9 +104,12 @@ object AetherIdentityManager {
         val previous = File(context.filesDir, PREVIOUS_DIR).apply { mkdirs() }
         val port = AetherCoreManager.scanPort(profile)
 
-        // Move the old identities aside first so the core registers afresh, and so a
-        // registration that never completes can still be undone.
-        val stashed = stash(work, previous)
+        // Move this protocol's identities aside first so the core registers afresh, and
+        // so a registration that never completes can still be undone. Only the files
+        // this tunnel's registration rewrites move: the core writes each transport's key
+        // beside that transport's config path, so renewing one protocol never touches
+        // the keys the other protocols hold.
+        val stashed = stash(work, previous, protocol)
         val ready = AetherCoreManager.runUntil(
             context = context,
             arguments = AetherCoreManager.buildArguments(profile, port, scan = true),
@@ -123,7 +123,7 @@ object AetherIdentityManager {
             restore(stashed, work)
             return null
         }
-        previous.listFiles()?.forEach { it.delete() }
+        stashed.forEach { it.file.delete() }
         return status(context, protocol)
     }
 
@@ -162,18 +162,20 @@ object AetherIdentityManager {
 
     private data class Stashed(val name: String, val file: File)
 
-    private fun stash(work: File, previous: File): List<Stashed> {
-        val names = listOf(
-            BASE_FILE, MASQUE_FILE, MASQUE_INNER_FILE, WIREGUARD_FILE, WIREGUARD_INNER_FILE,
-        )
-        return names.mapNotNull { name ->
+    /** The identity files the core rewrites when [protocol] registers a device. */
+    private fun identityFiles(protocol: AetherProtocol): List<String> = when (protocol) {
+        AetherProtocol.MASQUE, AetherProtocol.MIM -> listOf(MASQUE_FILE, MASQUE_INNER_FILE)
+        else -> listOf(WIREGUARD_FILE, WIREGUARD_INNER_FILE)
+    }
+
+    private fun stash(work: File, previous: File, protocol: AetherProtocol): List<Stashed> =
+        identityFiles(protocol).mapNotNull { name ->
             val file = File(work, name)
             if (!file.isFile) return@mapNotNull null
             val target = File(previous, name)
             target.delete()
             if (file.renameTo(target)) Stashed(name, target) else null
         }
-    }
 
     private fun restore(stashed: List<Stashed>, work: File) {
         stashed.forEach { saved ->

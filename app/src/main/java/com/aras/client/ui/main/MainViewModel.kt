@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.aras.client.AppConfig
 import com.aras.client.R
+import com.aras.client.core.CoreNativeManager
 import com.aras.client.dto.ConnectionTestResult
 import com.aras.client.dto.GroupMapItem
 import com.aras.client.dto.LocateTarget
@@ -21,6 +22,8 @@ import com.aras.client.dto.entities.SubscriptionCache
 import com.aras.client.extension.isComplexType
 import com.aras.client.extension.matchesPattern
 import com.aras.client.extension.moveItem
+import com.aras.client.extension.withLatinDigits
+import com.aras.client.fmt.CustomFmt
 import com.aras.client.handler.FreeTrashManager
 import com.aras.client.ui.base.BaseViewModel
 import com.aras.client.util.LogUtil
@@ -342,7 +345,7 @@ class MainViewModel(
                 dataSource.getString(R.string.connection_test_empty_message)
             }
             dataSource.getString(R.string.connection_test_error, detail)
-        }
+        }.withLatinDigits()
 
     // ---------- Public state accessors ----------
     fun serversForGroup(groupId: String): StateFlow<List<ServersCache>> =
@@ -418,7 +421,11 @@ class MainViewModel(
     private fun maybeAnnounceUpdate() {
         viewModelScope.launch(ioDispatcher) {
             try {
-                val result = UpdateCheckerManager.checkForUpdate()
+                val includePreRelease = MmkvManager.decodeSettingsBool(
+                    AppConfig.PREF_CHECK_UPDATE_PRE_RELEASE,
+                    false
+                )
+                val result = UpdateCheckerManager.checkForUpdate(includePreRelease)
                 if (result.hasUpdate) {
                     updateAnnouncement.value = result
                 }
@@ -655,6 +662,7 @@ class MainViewModel(
 
                     if (imported.configCount > 0) {
                         toast(dataSource.getString(R.string.title_import_config_count, imported.configCount))
+                        warnIfCoreTooOld(imported.minCoreVersion)
                     }
                     if (imported.newSubscriptionIds.isNotEmpty()) {
                         val updateResult = imported.newSubscriptionIds.fold(
@@ -788,10 +796,24 @@ class MainViewModel(
                     )
                 )
         }
+        warnIfCoreTooOld(result.minCoreVersion)
         if (result.configCount > 0) {
             setupGroupTab(forceRefresh = true)
             refreshSelectedGuid()
             refreshGeoIPIfDue(force = true)
+        }
+    }
+
+    /**
+     * A freshly imported config can demand a newer core than this build carries
+     * (custom xray documents mark it with `"version": { "min": ... }`); without
+     * this the profile just sits there and the core's parse error is the only clue.
+     */
+    private fun warnIfCoreTooOld(minCoreVersion: String?) {
+        val minimum = minCoreVersion ?: return
+        val bundled = CoreNativeManager.getLibVersion()
+        if (CustomFmt.isCoreOlderThan(bundled, minimum)) {
+            toast(dataSource.getString(R.string.toast_core_too_old, minimum, bundled))
         }
     }
 
@@ -1081,6 +1103,7 @@ class MainViewModel(
         _uiState.update {
             it.copy(
                 isTesting = false,
+                testingGuids = emptySet(),
                 requestServiceStart = false,
                 status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected
             )
@@ -1124,7 +1147,13 @@ class MainViewModel(
                 if (server.guid in round.candidates) server.copy(testDelayMillis = 0L) else server
             }
         }
-        _uiState.update { it.copy(isTesting = true, status = MainStatus.Testing) }
+        _uiState.update {
+            it.copy(
+                isTesting = true,
+                testingGuids = round.candidates.toSet(),
+                status = MainStatus.Testing,
+            )
+        }
         testPreparationJob = viewModelScope.launch {
             try {
                 withContext(ioDispatcher) {
@@ -1257,6 +1286,7 @@ class MainViewModel(
                 _uiState.update {
                     it.copy(
                         isTesting = false,
+                        testingGuids = emptySet(),
                         status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected,
                         requestServiceStart = smartTarget != null,
                         scrollToTopTick = it.scrollToTopTick +

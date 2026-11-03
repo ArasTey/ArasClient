@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.aras.client.util.ConnectionStatsManager
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 // ---------------------------------------------------------------- formatting
 
@@ -37,7 +38,7 @@ fun formatBytes(bytes: Long): String {
         unit++
     }
     return if (unit == 0) "${value.toLong()} ${units[unit]}"
-    else String.format("%.1f %s", value, units[unit])
+    else String.format(Locale.ROOT, "%.1f %s", value, units[unit])
 }
 
 fun formatDuration(millis: Long): String {
@@ -47,8 +48,8 @@ fun formatDuration(millis: Long): String {
     val m = (totalSec % 3600) / 60
     val s = totalSec % 60
     return when {
-        h > 0 -> String.format("%d:%02d:%02d", h, m, s)
-        else -> String.format("%02d:%02d", m, s)
+        h > 0 -> String.format(Locale.ROOT, "%d:%02d:%02d", h, m, s)
+        else -> String.format(Locale.ROOT, "%02d:%02d", m, s)
     }
 }
 

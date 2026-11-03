@@ -35,6 +35,8 @@ object AetherExitNodeResolver {
                 }
             }
         }
-        return Resolved(matches.distinctBy { it.remarks + it.configType.name }, wanted)
+        // The matches stay whole: two profiles of the same name are exactly the
+        // ambiguity this resolver exists to refuse, not duplicates to collapse.
+        return Resolved(matches, wanted)
     }
 }

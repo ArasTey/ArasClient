@@ -14,7 +14,16 @@ object ClashYamlFmt {
     private val proxyKey = Regex("(?m)^\\s*(?:[\"']?proxies[\"']?)\\s*:")
     private val leadingProxyKey = Regex("^\\s*\\{\\s*[\"']?proxies[\"']?\\s*:\\s*\\[")
 
+    /** The proxies this app can dial, and how many entries were left out. */
+    data class ParseResult(val links: List<String>, val skipped: Int)
+
     private val commonKeys = setOf("name", "type", "server", "port")
+
+    /** Provider metadata that does not affect how the proxy is dialled. */
+    private val annotationKeys = setOf("country")
+
+    private val supportedTypes =
+        setOf("ss", "vmess", "vless", "trojan", "hysteria2", "anytls", "socks5")
 
     /**
      * Keys that only tune a session (UDP relay, TCP fast open, multiplexing,
@@ -32,7 +41,8 @@ object ClashYamlFmt {
     private val tlsKeys =
         setOf("tls", "servername", "sni", "skip-cert-verify", "client-fingerprint", "alpn")
 
-    private val transportKeys = setOf("network", "ws-opts", "grpc-opts", "h2-opts")
+    private val transportKeys =
+        setOf("network", "ws-opts", "grpc-opts", "h2-opts", "xhttp-opts")
 
     private fun typeKeys(type: String): Set<String> = when (type) {
         "ss" -> setOf("cipher", "password", "plugin", "plugin-opts")
@@ -43,6 +53,7 @@ object ClashYamlFmt {
             "password", "obfs", "obfs-password", "up", "down", "ports", "hop-interval"
         )
         "anytls" -> setOf("password")
+        "socks5" -> setOf("username", "password")
         else -> emptySet()
     }
 
@@ -58,7 +69,7 @@ object ClashYamlFmt {
         }.getOrDefault(false)
     }
 
-    fun toLinks(text: String): List<String> {
+    fun toLinks(text: String): ParseResult {
         require(text.length <= MAX_CHARACTERS) { "Clash YAML is too large" }
         val options = LoaderOptions().apply {
             codePointLimit = MAX_CHARACTERS
@@ -72,28 +83,42 @@ object ClashYamlFmt {
         val proxies = root["proxies"] as? List<*>
             ?: throw IllegalArgumentException("Clash YAML must contain a proxies list")
         require(proxies.isNotEmpty() && proxies.size <= 10_000) { "Invalid Clash proxy count" }
-        // Validate the whole list before the caller changes subscription storage.
-        return proxies.mapIndexed { index, value ->
+        // Third-party subscriptions routinely mix in proxies this client cannot
+        // dial; one of them must not discard the whole list. A proxy is still
+        // rejected as a unit rather than downgraded, so no dial option is lost.
+        var skipped = 0
+        val links = proxies.mapNotNull { value ->
             try {
-                toLink(value as? Map<*, *> ?: error("Expected proxy mapping"))
-            } catch (e: IllegalArgumentException) {
-                throw IllegalArgumentException("Unsupported or invalid Clash proxy at index ${index + 1}")
+                toLink(value as? Map<*, *> ?: throw IllegalArgumentException("Expected proxy mapping"))
+            } catch (e: Exception) {
+                skipped++
+                null
             }
         }
+        return ParseResult(links, skipped)
     }
 
     private fun toLink(proxy: Map<*, *>): String {
         val type = proxy.string("type")
-        require(type in setOf("ss", "vmess", "vless", "trojan", "hysteria2", "anytls")) {
-            "Unsupported proxy type"
-        }
-        require(proxy.keys.all { it in commonKeys + typeKeys(type) + tlsKeys + transportKeys + tuningKeys })
+        require(type in supportedTypes) { "Unsupported proxy type" }
+        require(proxy.keys.all { it in commonKeys + typeKeys(type) + tlsKeys + transportKeys + tuningKeys + annotationKeys })
         val host = proxy.string("server").removeSurrounding("[", "]")
         require(host.none { it.isWhitespace() || it in "/?#@" })
         val port = proxy.string("port").toIntOrNull()
         require(port != null && port in 1..65535)
         val address = if (':' in host) "[$host]:$port" else "$host:$port"
         val name = proxy.optional("name") ?: host
+
+        if (type == "socks5") {
+            // The core's SOCKS outbound has no TLS layer; a TLS-wrapped SOCKS
+            // proxy would silently be dialled in plaintext.
+            require(!proxy.boolean("tls", false)) { "TLS SOCKS proxy is unsupported" }
+            val username = proxy.optional("username")
+            val userInfo = if (username == null) "" else
+                "${encode(username)}:${encode(proxy.optional("password").orEmpty())}@"
+            return "socks5://$userInfo$address#${encode(name)}"
+        }
+
         val credential = proxy.string(if (type in setOf("vmess", "vless")) "uuid" else "password")
 
         if (type == "ss") {
@@ -138,8 +163,10 @@ object ClashYamlFmt {
             return "anytls://${encode(credential)}@$address$q#${encode(name)}"
         }
 
-        val network = proxy.optional("network") ?: "tcp"
-        require(network in setOf("tcp", "ws", "grpc", "h2", "http"))
+        // mihomo renamed tcp to raw; the app's transport still calls it tcp.
+        val network = (proxy.optional("network") ?: "tcp").lowercase()
+            .let { if (it == "raw") "tcp" else it }
+        require(network in setOf("tcp", "ws", "grpc", "h2", "http", "xhttp"))
         val tls = proxy.boolean("tls", type == "trojan")
         require(type != "trojan" || tls)
         val reality = proxy["reality-opts"] as? Map<*, *>
@@ -162,6 +189,7 @@ object ClashYamlFmt {
         require(proxy["ws-opts"] == null || network == "ws")
         require(proxy["grpc-opts"] == null || network == "grpc")
         require(proxy["h2-opts"] == null || network in setOf("h2", "http"))
+        require(proxy["xhttp-opts"] == null || network == "xhttp")
         proxy["ws-opts"]?.let { value ->
             val ws = value as? Map<*, *> ?: throw IllegalArgumentException()
             require(
@@ -198,6 +226,19 @@ object ClashYamlFmt {
                 else -> throw IllegalArgumentException()
             }
             h2.optional("path")?.let { query["path"] = it }
+        }
+        proxy["xhttp-opts"]?.let { value ->
+            val xhttp = value as? Map<*, *> ?: throw IllegalArgumentException()
+            require(xhttp.keys.all { it in setOf("host", "path", "mode", "extra") })
+            when (val hosts = xhttp["host"]) {
+                is List<*> -> hosts.firstOrNull { it is String }?.let { query["host"] = it as String }
+                is String -> query["host"] = hosts
+                null -> {}
+                else -> throw IllegalArgumentException()
+            }
+            xhttp.optional("path")?.let { query["path"] = it }
+            xhttp.optional("mode")?.let { query["mode"] = it }
+            xhttp.optional("extra")?.let { query["extra"] = it }
         }
         query["type"] = when (network) {
             "ws" -> if (proxy["ws-opts"].let { (it as? Map<*, *>)?.get("v2ray-http-upgrade") == true }) {
@@ -267,7 +308,7 @@ object ClashYamlFmt {
 
     private fun Map<*, *>.optional(key: String): String? = get(key)?.let {
         require(it is String || it is Number)
-        it.toString()
+        it.toString().takeIf { value -> value.isNotBlank() }
     }
 
     private fun Map<*, *>.string(key: String): String = optional(key)?.takeIf { it.isNotBlank() }

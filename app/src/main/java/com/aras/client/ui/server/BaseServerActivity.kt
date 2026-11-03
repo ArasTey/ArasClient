@@ -2,6 +2,7 @@ package com.aras.client.ui.server
 
 import android.os.Bundle
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
@@ -48,6 +50,7 @@ import com.aras.client.ui.compose.AppTopBar
 import com.aras.client.ui.compose.DeleteConfirmDialog
 import com.aras.client.ui.compose.FormDropdownField
 import com.aras.client.ui.compose.FormTextField
+import com.aras.client.ui.compose.GlassBackground
 import com.aras.client.ui.compose.NavigationBarsSpacer
 import com.aras.client.ui.compose.SettingsSwitchItem
 import com.aras.client.ui.compose.verticalScrollbar
@@ -401,8 +404,14 @@ abstract class BaseServerActivity : BaseComponentActivity() {
         }
     }
 
-    protected fun validateBasicConfig(state: ServerUiState): Boolean {
-        if (state.remarks.isBlank()) {
+    /**
+     * Whether the name field has to be filled. An editor that can describe the
+     * profile itself turns this off and names a blank one in [nameProfile].
+     */
+    protected open val remarksRequired: Boolean get() = true
+
+    protected open fun validateBasicConfig(state: ServerUiState): Boolean {
+        if (remarksRequired && state.remarks.isBlank()) {
             toast(R.string.server_lab_remarks)
             return false
         }
@@ -424,6 +433,12 @@ abstract class BaseServerActivity : BaseComponentActivity() {
     }
 
     protected open fun validateProtocolConfig(config: ProfileItem): Boolean = true
+
+    /**
+     * Names a profile the user left nameless. Runs only after every check passed,
+     * so a save that is refused never writes a made-up name into the field.
+     */
+    protected open fun nameProfile(state: ServerUiState, config: ProfileItem) {}
 
     /**
      * Refuses a Psiphon or Tor profile the core would not take. The carrier runs
@@ -459,6 +474,22 @@ abstract class BaseServerActivity : BaseComponentActivity() {
             }
         }
         return FreePort.pick(taken).toString()
+    }
+
+    /**
+     * [name] with a number on the end when this group already has a profile of that
+     * name. A generated name describes the profile instead of inventing a word, so
+     * two profiles saved with the same settings would otherwise carry one name.
+     */
+    protected fun uniqueRemarks(name: String): String {
+        val taken = MmkvManager.decodeServerList(subscriptionId.orEmpty())
+            .filter { it != editGuid }
+            .mapNotNull { MmkvManager.decodeServerConfig(it)?.remarks }
+            .toSet()
+        if (name !in taken) return name
+        var index = 2
+        while ("$name $index" in taken) index++
+        return "$name $index"
     }
 
     protected open fun validateCommonConfig(config: ProfileItem): Boolean {
@@ -515,6 +546,7 @@ abstract class BaseServerActivity : BaseComponentActivity() {
         val config = state.toProfileItem(initialConfig)
         if (!validateCommonConfig(config)) return false
         if (!validateProtocolConfig(config)) return false
+        nameProfile(state, config)
 
         config.description = AngConfigManager.generateDescription(config)
         if (config.subscriptionId.isEmpty() && !subscriptionId.isNullOrEmpty()) {
@@ -536,44 +568,48 @@ abstract class BaseServerActivity : BaseComponentActivity() {
     ) {
         var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
         val scrollState = rememberScrollState()
-        Scaffold(
-            contentWindowInsets = WindowInsets(0),
-            topBar = {
-                AppTopBar(
-                    title = title,
-                    onBackClick = { finish() },
-                    actions = {
-                        if (editGuid.isNotEmpty() && !isRunning) {
-                            IconButton(onClick = { showDeleteDialog = true }) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            GlassBackground(Modifier.matchParentSize())
+            Scaffold(
+                containerColor = Color.Transparent,
+                contentWindowInsets = WindowInsets(0),
+                topBar = {
+                    AppTopBar(
+                        title = title,
+                        onBackClick = { finish() },
+                        actions = {
+                            if (editGuid.isNotEmpty() && !isRunning) {
+                                IconButton(onClick = { showDeleteDialog = true }) {
+                                    Icon(
+                                        painterResource(R.drawable.ic_delete_24dp),
+                                        stringResource(R.string.acc_delete)
+                                    )
+                                }
+                            }
+                            IconButton(onClick = onSaveClick) {
                                 Icon(
-                                    painterResource(R.drawable.ic_delete_24dp),
-                                    stringResource(R.string.acc_delete)
+                                    painterResource(R.drawable.ic_fab_check),
+                                    stringResource(R.string.acc_save)
                                 )
                             }
                         }
-                        IconButton(onClick = onSaveClick) {
-                            Icon(
-                                painterResource(R.drawable.ic_fab_check),
-                                stringResource(R.string.acc_save)
-                            )
-                        }
-                    }
-                )
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .consumeWindowInsets(innerPadding)
-                    .imePadding()
-                    .verticalScroll(scrollState)
-                    .verticalScrollbar(scrollState)
-                    .padding(bottom = 36.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                content()
-                NavigationBarsSpacer()
+                    )
+                }
+            ) { innerPadding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .consumeWindowInsets(innerPadding)
+                        .imePadding()
+                        .verticalScroll(scrollState)
+                        .verticalScrollbar(scrollState)
+                        .padding(bottom = 36.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    content()
+                    NavigationBarsSpacer()
+                }
             }
         }
         if (showDeleteDialog) {
@@ -588,7 +624,7 @@ abstract class BaseServerActivity : BaseComponentActivity() {
         }
     }
 
-    private fun deleteServer(guid: String) {
+    protected fun deleteServer(guid: String) {
         if (guid.isEmpty() || guid == MmkvManager.getSelectServer()) {
             toast(R.string.toast_action_not_allowed)
             return

@@ -77,9 +77,9 @@ class AetherIdentityManagerTest {
 
     @Test
     fun `a two hop profile reports both identities`() {
-        // The outer hop is the base tunnel and uses the base identity file; the inner
-        // one is the nested masque and has its own.
-        write(AetherIdentityManager.BASE_FILE, "device_id = \"outer-one\"\nipv4 = \"172.16.0.2\"\n")
+        // MIM is MASQUE inside MASQUE: the core loads its outer hop from the masque
+        // file and keeps the nested inner one beside it (aether lib.rs).
+        write(AetherIdentityManager.MASQUE_FILE, "device_id = \"outer-one\"\nipv4 = \"172.16.0.2\"\n")
         write(AetherIdentityManager.MASQUE_INNER_FILE, "device_id = \"inner-one\"\nipv4 = \"172.16.0.3\"\n")
 
         val status = AetherIdentityManager.status(folder.root, AetherProtocol.MIM)

@@ -6,6 +6,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.MockedStatic
@@ -78,11 +79,19 @@ class CarrierFmtTest {
     @Test
     fun `a carrier profile with no name is given one`() {
         val psiphon = CarrierFmt.parse("psiphon://?region=DE")!!
-        assertEquals("Psiphon DE", psiphon.remarks)
-        assertEquals("?region=DE&mode=auto#Psiphon%20DE", CarrierFmt.toUri(psiphon))
+        assertEquals("Psiphon DE port 10819", psiphon.remarks)
+        assertEquals(
+            "?region=DE&mode=auto#Psiphon%20DE%20port%2010819",
+            CarrierFmt.toUri(psiphon),
+        )
 
-        assertEquals("Psiphon", CarrierFmt.parse("psiphon://?mode=auto")!!.remarks)
-        assertEquals("Tor", CarrierFmt.parse("tor://?bridges=auto")!!.remarks)
+        assertEquals("Psiphon port 10820", CarrierFmt.parse("psiphon://?listen=10820")!!.remarks)
+        assertEquals("Tor port 10821", CarrierFmt.parse("tor://?bridges=auto&listen=10821")!!.remarks)
+        // The port the app chose itself is said so; one the user typed is not.
+        assertEquals(
+            "Psiphon auto port 10820",
+            CarrierFmt.defaultRemarks(CarrierFmt.parse("psiphon://?listen=10820")!!, autoPort = true),
+        )
     }
 
     @Test
@@ -92,7 +101,13 @@ class CarrierFmtTest {
         val config = CarrierFmt.parse("psiphon://?listen=10819")!!
 
         assertNull(config.aetherListenPort)
-        assertEquals("?mode=auto#Psiphon", CarrierFmt.toUri(config))
+        val exported = CarrierFmt.toUri(config)
+        assertTrue("the listen port should stay out of the link", !exported.contains("listen="))
+        assertEquals(
+            "the link should still name the profile",
+            "?mode=auto#Psiphon%20port%2010819",
+            exported,
+        )
     }
 
     @Test

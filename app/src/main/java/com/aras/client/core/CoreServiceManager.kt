@@ -125,6 +125,25 @@ object CoreServiceManager {
     fun isRunning() = coreController.isRunning
 
     /**
+     * Round trip through the tunnel that is carrying traffic right now, or -1 when the
+     * VPN is down or neither delay endpoint answers. Both delay endpoints are tried, the
+     * same pair the bottom-bar measure uses.
+     */
+    fun measureLiveTunnelDelay(): Long {
+        if (!isRunning()) return -1L
+        for (second in listOf(false, true)) {
+            val time = runCatching {
+                coreController.measureDelay(SettingsManager.getDelayTestUrl(second))
+            }.getOrElse {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to measure live delay", it)
+                -1L
+            }
+            if (time >= 0) return time
+        }
+        return -1L
+    }
+
+    /**
      * Whether a session is running by the daemon's own account: the core is up and
      * the daemon has not ended the session. A stop that never reached the native
      * core still leaves the client off, so the persisted flag has the last word.

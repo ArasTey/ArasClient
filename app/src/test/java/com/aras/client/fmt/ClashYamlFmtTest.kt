@@ -27,7 +27,7 @@ class ClashYamlFmtTest {
                     Host: example.com
         """.trimIndent()
         assertTrue(ClashYamlFmt.isClashYaml(yaml))
-        val profile = AngConfigManager.parseAnyLink(ClashYamlFmt.toLinks(yaml).single())!!
+        val profile = AngConfigManager.parseAnyLink(ClashYamlFmt.toLinks(yaml).links.single())!!
         assertEquals("example.com", profile.server)
         assertEquals("ws", profile.network)
         assertEquals("tls", profile.security)
@@ -37,7 +37,7 @@ class ClashYamlFmtTest {
 
     @Test
     fun importsFlowYamlAndEscapesCredentials() {
-        val link = ClashYamlFmt.toLinks("proxies: [{name: 'A B', type: trojan, server: '2001:db8::1', port: 443, password: 'p@ss# word', skip-cert-verify: true}]").single()
+        val link = ClashYamlFmt.toLinks("proxies: [{name: 'A B', type: trojan, server: '2001:db8::1', port: 443, password: 'p@ss# word', skip-cert-verify: true}]").links.single()
         val uri = URI(link)
         assertEquals("p@ss# word", uri.userInfo)
         assertTrue(uri.rawQuery.contains("allowInsecure=1"))
@@ -50,7 +50,7 @@ class ClashYamlFmtTest {
             proxies:
               - {name: SS, type: ss, server: example.com, port: 8388, cipher: aes-128-gcm, password: secret}
               - {name: VMess, type: vmess, server: example.com, port: 443, uuid: abc, alterId: 0, tls: true}
-        """.trimIndent())
+        """.trimIndent()).links
         assertEquals("aes-128-gcm:secret", String(Base64.getDecoder().decode(links[0].substringAfter("ss://").substringBefore('@'))))
         val json = String(Base64.getDecoder().decode(links[1].substringAfter("vmess://")))
         assertTrue(json.contains("\"tls\":\"tls\""))
@@ -62,7 +62,7 @@ class ClashYamlFmtTest {
         val profile = AngConfigManager.parseAnyLink(ClashYamlFmt.toLinks("""
             proxies:
               - {type: vless, server: example.com, port: 443, uuid: abc, tls: true, reality-opts: {public-key: test-key, short-id: ab}, flow: xtls-rprx-vision}
-        """.trimIndent()).single())!!
+        """.trimIndent()).links.single())!!
         assertEquals("reality", profile.security)
         assertEquals("test-key", profile.publicKey)
         assertEquals("ab", profile.shortId)
@@ -73,7 +73,7 @@ class ClashYamlFmtTest {
         val json = """
             {"proxies":[{"name":"SS WS","type":"ss","server":"example.com","port":443,"cipher":"aes-128-gcm","password":"secret","plugin":"v2ray-plugin","client-fingerprint":"chrome","plugin-opts":{"mode":"websocket","host":"cdn.example.com","path":"/proxy","tls":true}}]}
         """.trimIndent()
-        val generatedLink = ClashYamlFmt.toLinks(json).single()
+        val generatedLink = ClashYamlFmt.toLinks(json).links.single()
         assertTrue(generatedLink.contains("plugin=v2ray-plugin%3Bmode%3Dwebsocket"))
         val profile = ShadowsocksFmt.parse(
             "ss://aes-128-gcm:secret@example.com:443" +
@@ -89,11 +89,11 @@ class ClashYamlFmtTest {
     }
 
     @Test
-    fun rejectsUnsupportedOptionsRatherThanDowngrading() {
+    fun skipsProxiesWithUnsupportedOptionsRatherThanDowngrading() {
         for (extra in listOf("plugin: obfs-local", "certificate: cert.pem", "packet-addr: true")) {
-            assertThrows(IllegalArgumentException::class.java) {
-                ClashYamlFmt.toLinks("proxies: [{type: ss, server: example.com, port: 443, password: secret, cipher: aes-128-gcm, $extra}]")
-            }
+            val result = ClashYamlFmt.toLinks("proxies: [{type: ss, server: example.com, port: 443, password: secret, cipher: aes-128-gcm, $extra}]")
+            assertTrue(result.links.isEmpty())
+            assertEquals(1, result.skipped)
         }
     }
 
@@ -115,7 +115,7 @@ class ClashYamlFmtTest {
                 sni: hy.example.com
                 skip-cert-verify: true
         """.trimIndent()
-        val profile = Hysteria2Fmt.parse(ClashYamlFmt.toLinks(yaml).single())!!
+        val profile = Hysteria2Fmt.parse(ClashYamlFmt.toLinks(yaml).links.single())!!
         assertEquals("hy.example.com", profile.server)
         assertEquals("op", profile.obfsPassword)
         assertEquals("100", profile.bandwidthUp)
@@ -126,16 +126,92 @@ class ClashYamlFmtTest {
     }
 
     @Test
-    fun rejectsUnknownHysteria2ObfsRatherThanDialingWrong() {
-        assertThrows(IllegalArgumentException::class.java) {
-            ClashYamlFmt.toLinks("proxies: [{type: hysteria2, server: h.example.com, port: 443, password: pw, obfs: weird}]")
-        }
+    fun skipsUnknownHysteria2ObfsRatherThanDialingWrong() {
+        val result = ClashYamlFmt.toLinks("proxies: [{type: hysteria2, server: h.example.com, port: 443, password: pw, obfs: weird}]")
+        assertTrue(result.links.isEmpty())
+        assertEquals(1, result.skipped)
+    }
+
+    @Test
+    fun importsSupportedProxiesAndSkipsTheRest() {
+        val yaml = """
+            proxies:
+              - {name: H, type: http, server: h.example.com, port: 443, username: u, password: p, tls: true}
+              - {name: V, type: vless, server: v.example.com, port: 443, uuid: abc, tls: true}
+              - {name: S, type: socks5, server: s.example.com, port: 1080, username: user, password: pass}
+        """.trimIndent()
+        val result = ClashYamlFmt.toLinks(yaml)
+        assertEquals(1, result.skipped)
+        assertEquals(2, result.links.size)
+        assertEquals("VLESS", AngConfigManager.parseAnyLink(result.links[0])!!.configType.name)
+        val socks = AngConfigManager.parseAnyLink(result.links[1])!!
+        assertEquals("SOCKS", socks.configType.name)
+        assertEquals("s.example.com", socks.server)
+        assertEquals("1080", socks.serverPort)
+        assertEquals("user", socks.username)
+        assertEquals("pass", socks.password)
+    }
+
+    @Test
+    fun treatsMihomoRawNetworkAsTcp() {
+        val profile = AngConfigManager.parseAnyLink(
+            ClashYamlFmt.toLinks("proxies: [{name: R, type: vless, server: example.com, port: 443, uuid: abc, tls: true, network: raw}]").links.single()
+        )!!
+        assertEquals("tcp", profile.network)
+    }
+
+    @Test
+    fun importsXhttpTransport() {
+        val yaml = """
+            proxies:
+              - name: X
+                type: vless
+                server: example.com
+                port: 443
+                uuid: abc
+                tls: true
+                servername: www.example.com
+                network: xhttp
+                xhttp-opts:
+                  path: /G3EEoH63
+                  mode: auto
+        """.trimIndent()
+        val profile = AngConfigManager.parseAnyLink(ClashYamlFmt.toLinks(yaml).links.single())!!
+        assertEquals("xhttp", profile.network)
+        assertEquals("/G3EEoH63", profile.path)
+        assertEquals("auto", profile.xhttpMode)
+    }
+
+    @Test
+    fun treatsBlankOptionalValuesAsAbsent() {
+        val result = ClashYamlFmt.toLinks("""
+            proxies:
+              - {name: HY, type: hysteria2, server: hy.example.com, port: 443, password: pw, obfs: '', obfs-password: '', up: '', down: '', sni: hy.example.com}
+        """.trimIndent())
+        assertEquals(0, result.skipped)
+        val profile = Hysteria2Fmt.parse(result.links.single())!!
+        assertEquals("hy.example.com", profile.server)
+        assertTrue(profile.obfsPassword.isNullOrEmpty())
+    }
+
+    @Test
+    fun ignoresCountryAnnotation() {
+        val result = ClashYamlFmt.toLinks("proxies: [{name: T, type: trojan, server: example.com, port: 443, password: pw, country: DE}]")
+        assertEquals(0, result.skipped)
+        assertEquals("TROJAN", AngConfigManager.parseAnyLink(result.links.single())!!.configType.name)
+    }
+
+    @Test
+    fun skipsProxyWithUnsupportedSniControl() {
+        val result = ClashYamlFmt.toLinks("proxies: [{type: hysteria2, server: h.example.com, port: 443, password: pw, disable-sni: true}]")
+        assertTrue(result.links.isEmpty())
+        assertEquals(1, result.skipped)
     }
 
     @Test
     fun importsAnytlsEvenWithoutTransportOptions() {
         val yaml = "proxies: [{name: AT, type: anytls, server: at.example.com, port: 443, password: pw, sni: at.example.com, skip-cert-verify: true, client-fingerprint: chrome}]"
-        val profile = AnytlsFmt.parse(ClashYamlFmt.toLinks(yaml).single())!!
+        val profile = AnytlsFmt.parse(ClashYamlFmt.toLinks(yaml).links.single())!!
         assertEquals("at.example.com", profile.server)
         assertEquals("pw", profile.password)
         assertEquals("at.example.com", profile.sni)
@@ -165,7 +241,7 @@ class ClashYamlFmtTest {
                 ip-version: ipv4
                 dialer-proxy: other
         """.trimIndent()
-        val profile = AngConfigManager.parseAnyLink(ClashYamlFmt.toLinks(yaml).single())!!
+        val profile = AngConfigManager.parseAnyLink(ClashYamlFmt.toLinks(yaml).links.single())!!
         assertEquals("cdn.example.com", profile.host)
         assertEquals("/p", profile.path)
     }
@@ -176,7 +252,7 @@ class ClashYamlFmtTest {
             proxies:
               - {name: H2, type: vless, server: example.com, port: 443, uuid: abc, tls: true, network: h2, h2-opts: {host: [h2.example.com], path: /h2}}
               - {name: HU, type: vless, server: example.com, port: 443, uuid: abc, tls: true, network: ws, ws-opts: {path: /up, headers: {Host: up.example.com}, v2ray-http-upgrade: true}}
-        """.trimIndent())
+        """.trimIndent()).links
         val h2 = AngConfigManager.parseAnyLink(links[0])!!
         assertEquals("http", h2.network)
         assertEquals("h2.example.com", h2.host)
@@ -189,7 +265,7 @@ class ClashYamlFmtTest {
     @Test
     fun importsShadowsocksObfsHttpPlugin() {
         val yaml = "proxies: [{name: SSO, type: ss, server: example.com, port: 443, cipher: aes-128-gcm, password: secret, plugin: obfs, plugin-opts: {mode: http, host: bing.com}}]"
-        val link = ClashYamlFmt.toLinks(yaml).single()
+        val link = ClashYamlFmt.toLinks(yaml).links.single()
         // The converter emits the SIP002 link; the plugin is URI-encoded inside it.
         assertTrue(URLDecoder.decode(link, "UTF-8").contains("plugin=obfs-local;obfs=http;obfs-host=bing.com"))
         // The app's SS parser turns that plugin string back into TCP+HTTP obfs.
@@ -216,7 +292,7 @@ class ClashYamlFmtTest {
             {"mixed-port":7890,"mode":"rule","proxies":[{"name":"NL","type":"trojan","server":"example.com","port":443,"password":"secret","sni":"example.com"}]}
         """.trimIndent()
         assertTrue(ClashYamlFmt.isClashYaml(json))
-        val link = ClashYamlFmt.toLinks(json).single()
+        val link = ClashYamlFmt.toLinks(json).links.single()
         assertTrue(link.startsWith("trojan://"))
     }
 
@@ -224,7 +300,7 @@ class ClashYamlFmtTest {
     fun importsBomPrefixedMinifiedJson() {
         val json = "\uFEFF{\"dns\":{\"enable\":true},\"proxies\":[{\"name\":\"US\",\"type\":\"vmess\",\"server\":\"example.com\",\"port\":443,\"uuid\":\"abc\",\"alterId\":0}]}"
         assertTrue(ClashYamlFmt.isClashYaml(json))
-        assertTrue(ClashYamlFmt.toLinks(json).single().startsWith("vmess://"))
+        assertTrue(ClashYamlFmt.toLinks(json).links.single().startsWith("vmess://"))
     }
 
     @Test

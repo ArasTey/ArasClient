@@ -134,6 +134,7 @@ fun SettingsScreen(
     var confirmRemove by rememberMmkvBool(AppConfig.PREF_CONFIRM_REMOVE, false)
     var doubleColumnDisplay by rememberMmkvBool(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)
     var groupAllDisplay by rememberMmkvBool(AppConfig.PREF_GROUP_ALL_DISPLAY, false)
+    var showFreeSub by rememberMmkvBool(AppConfig.PREF_SHOW_FREE_SUB, true)
     var language by remember {
         mutableStateOf(
             MmkvManager.decodeSettingsString(AppConfig.PREF_LANGUAGE, "auto") ?: "auto"
@@ -244,6 +245,15 @@ fun SettingsScreen(
                     checked = groupAllDisplay,
                     onCheckedChange = {
                         groupAllDisplay = it
+                        SettingsChangeManager.makeSetupGroupTab()
+                    }
+                )
+                SettingsSwitchItem(
+                    title = stringResource(R.string.title_pref_show_free_sub),
+                    summary = stringResource(R.string.summary_pref_show_free_sub),
+                    checked = showFreeSub,
+                    onCheckedChange = {
+                        showFreeSub = it
                         SettingsChangeManager.makeSetupGroupTab()
                     }
                 )

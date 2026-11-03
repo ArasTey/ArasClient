@@ -32,7 +32,40 @@ fun Long.toTrafficString(): String {
         size /= DIVISOR
         unitIndex++
     }
-    return String.format(Locale.getDefault(), "%.1f %s", size, units[unitIndex])
+    return String.format(Locale.ROOT, "%.1f %s", size, units[unitIndex])
+}
+
+/**
+ * Rewrites every number in this text with Western digits. The locale-aware
+ * formatters (formatted strings, translated `%d`, dates) hand back the digits
+ * of the app language — Persian or Arabic-Indic among others — while ports,
+ * addresses and plain interpolation are always Western. One pass over the
+ * decimal-digit blocks plus the Arabic decimal and grouping signs, leaving the
+ * surrounding words in the app language.
+ */
+fun String.withLatinDigits(): String {
+    var needsChange = false
+    for (ch in this) {
+        if (ch.code > 127 && (Character.isDigit(ch) || ch == '٫' || ch == '٬')) {
+            needsChange = true
+            break
+        }
+    }
+    if (!needsChange) return this
+    val out = StringBuilder(length)
+    for (ch in this) {
+        when {
+            Character.isDigit(ch) -> {
+                val value = Character.getNumericValue(ch)
+                out.append(if (value in 0..9) '0' + value else ch)
+            }
+
+            ch == '٫' -> out.append('.')
+            ch == '٬' -> out.append(',')
+            else -> out.append(ch)
+        }
+    }
+    return out.toString()
 }
 
 val URI.idnHost: String

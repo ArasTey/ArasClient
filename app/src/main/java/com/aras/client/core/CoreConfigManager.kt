@@ -16,6 +16,7 @@ import com.aras.client.enums.BalancerStrategyType
 import com.aras.client.enums.CoreResolvedType
 import com.aras.client.enums.EConfigType
 import com.aras.client.extension.isNotNullEmpty
+import com.aras.client.fmt.CustomFmt
 import com.aras.client.handler.MmkvManager
 import com.aras.client.handler.SettingsManager
 import com.aras.client.R
@@ -70,7 +71,11 @@ object CoreConfigManager {
                     errorMessage = "Failed to build config context"
                 )
             if (configContext.isCustom) {
-                return buildXrayCustomConfig(configContext)
+                val custom = buildXrayCustomConfig(configContext)
+                if (!custom.status) return custom
+                val testable = CustomFmt.rewriteForOutboundTest(custom.content)
+                    ?: return custom
+                return custom.copy(content = testable)
             }
             val xrayConfig = buildUnifiedConfig(configContext)
             postProcessForSpeedtest(xrayConfig)

@@ -27,7 +27,7 @@ jobs:
           repository: ArasTey/xray-core
           # Pinned by tag, not to a branch: the core is built from source here, so
           # what it is has to be the same on every run of a given release.
-          ref: aras-core-26.10.22
+          ref: aras-core-26.11.1
           path: xray-core-src
 
       - name: Set up Go

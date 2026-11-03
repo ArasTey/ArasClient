@@ -123,6 +123,149 @@
     <string name="server_lab_aether_key_ready">Key ready</string>
     <string name="server_lab_aether_reset_key">Reset WARP key</string>
     <string name="server_lab_aether_note">A WARP gateway often does not answer a plain ping, and its exit address reads as Iranian — both are normal. Check the connection, not the ping.</string>
+
+    <!-- Aether editor -->
+    <string name="aether_editor_title" translatable="false">Aether</string>
+    <string name="aether_editor_new">New profile</string>
+    <string name="aether_editor_edit">Edit profile</string>
+    <string name="aether_name_label">Profile name</string>
+    <string name="aether_name_placeholder">Name this profile</string>
+    <string name="aether_name_hint">Optional — leave it blank and the app picks a name.</string>
+    <string name="aether_direct_exit">Direct exit</string>
+    <string name="aether_exit_via">Exit via %1$s</string>
+    <string name="aether_exit_missing">No profile is named “%1$s”.</string>
+    <string name="aether_exit_ambiguous">More than one profile is named “%1$s”.</string>
+    <string name="aether_exit_none">No other profile can be an exit node; the direct exit is used.</string>
+    <string name="aether_exit_hint">The name of exactly one other profile. Blank means the direct exit.</string>
+    <string name="aether_exit_bad">The exit node must name exactly one usable profile.</string>
+    <string name="aether_exit_chip_missing">Exit missing</string>
+    <string name="aether_exit_chip_ambiguous">Exit ambiguous</string>
+    <string name="aether_section_endpoint">Endpoint</string>
+    <string name="aether_section_warp_key">WARP key</string>
+    <string name="aether_section_tunnel">Tunnel</string>
+    <string name="aether_section_carriers">Psiphon &amp; Tor</string>
+    <string name="aether_section_advanced">Advanced</string>
+    <string name="aether_summary_hops">%1$s → %2$s</string>
+    <string name="aether_summary_not_set">Not set</string>
+    <string name="aether_summary_defaults">Defaults</string>
+    <string name="aether_summary_command">Command override</string>
+    <string name="aether_summary_not_used">Not used</string>
+    <string name="aether_gateway_label">Gateway</string>
+    <string name="aether_gateway_placeholder">IP address</string>
+    <string name="aether_gateway_hint">The IPv4 or IPv6 address the core dials.</string>
+    <string name="aether_gateway_bad">Enter an IP address and a valid port.</string>
+    <string name="aether_hop_hint">Leave both blank and the core scans when you connect.</string>
+    <string name="aether_hop_partial">Enter both hops, or leave both blank.</string>
+    <string name="aether_hop_same">The two hops must be different.</string>
+    <string name="aether_hop_bad">Each hop must be an IP address with a port, and the two must differ.</string>
+    <string name="aether_carrier_endpoint_notice">Only %1$s runs here; the endpoint and the WARP key are not used.</string>
+    <string name="aether_command_notice">The command replaces every setting below.</string>
+    <string name="aether_command_hint">Runs instead of the settings on this screen.</string>
+    <string name="aether_command_clear">Clear command</string>
+    <string name="aether_protocol_wg">WireGuard</string>
+    <string name="aether_protocol_masque">MASQUE</string>
+    <string name="aether_protocol_gool">GOOL</string>
+    <string name="aether_protocol_mim">MIM</string>
+    <string name="aether_protocol_wg_hint">One WireGuard gateway. Simple and usually the fastest.</string>
+    <string name="aether_protocol_masque_hint">One HTTPS gateway, with a browser TLS handshake.</string>
+    <string name="aether_protocol_gool_hint">Two gateways: an outer and an inner hop.</string>
+    <string name="aether_protocol_mim_hint">MASQUE inside MASQUE, over two hops.</string>
+    <string name="aether_protocol_wg_short" translatable="false">WG</string>
+    <string name="aether_protocol_masque_short" translatable="false">MASQUE</string>
+    <string name="aether_protocol_gool_short" translatable="false">GOOL</string>
+    <string name="aether_protocol_mim_short" translatable="false">MIM</string>
+    <string name="aether_two_hop">two-hop</string>
+    <string name="aether_scan_turbo_hint">Quick sweep; fewer checks per candidate.</string>
+    <string name="aether_scan_balanced_hint">The core\'s default balance of speed and checks.</string>
+    <string name="aether_scan_thorough_hint">More candidates and more checks; slower.</string>
+    <string name="aether_scan_verified_hint">Every candidate is checked end to end.</string>
+    <string name="aether_scan_ironclad_hint">The strictest checks; the slowest sweep.</string>
+    <string name="aether_obfuscation_auto_hint">The core chooses per protocol.</string>
+    <string name="aether_obfuscation_on_hint">Shapes the traffic to get past filtering; stronger can be slower.</string>
+    <string name="aether_transport_h3_hint">QUIC over UDP; faster where UDP passes.</string>
+    <string name="aether_transport_h2_hint">TCP; for networks that block UDP.</string>
+    <string name="aether_fp_chrome_hint">Current Chrome, with post-quantum key exchange.</string>
+    <string name="aether_fp_chrome120_hint">Chrome 120\'s ClientHello.</string>
+    <string name="aether_fp_firefox_hint">Firefox\'s ClientHello.</string>
+    <string name="aether_fp_python_hint">Python\'s suites, as far as the core can send them.</string>
+    <string name="aether_fp_go_hint">Go\'s ClientHello.</string>
+    <string name="aether_masque_sni_hint">Default: www.cloudflare.com</string>
+    <string name="aether_ech_hint">Hides the server name during the handshake.</string>
+    <string name="aether_fragment_toggle">Split the first packets</string>
+    <string name="aether_fragment_hint">Only over HTTP/2; helps against deep packet inspection.</string>
+    <string name="aether_fragment_size">Fragment size</string>
+    <string name="aether_fragment_delay">Fragment delay (ms)</string>
+    <string name="aether_fragment_range">Size 1–4096, delay 0–1000; a number or min-max.</string>
+    <string name="aether_fragment_bad">Fragment size or delay is out of range.</string>
+    <string name="aether_dns_hint">Comma-separated; blank uses the core\'s resolvers.</string>
+    <string name="aether_exit_loc_hint">Country codes, e.g. DE,NL; prefix ! to refuse them.</string>
+    <string name="aether_listen_hint">The local SOCKS port the app dials. Default 10819.</string>
+    <string name="aether_group_scan">Scanning</string>
+    <string name="aether_group_transport">Transport</string>
+    <string name="aether_group_routing">Routing</string>
+    <string name="aether_group_listener">Local listener</string>
+    <string name="aether_group_fronting">CDN fronting</string>
+    <string name="aether_carrier_chain">Inside the tunnel</string>
+    <string name="aether_carrier_reverse">Around the tunnel</string>
+    <string name="aether_carrier_only">Only</string>
+    <string name="aether_carrier_short_chain">inside</string>
+    <string name="aether_carrier_short_reverse">around</string>
+    <string name="aether_carrier_short_only">only</string>
+    <string name="aether_carrier_hint">Inside: the tunnel carries it. Around: it carries the tunnel. Only: it runs alone.</string>
+    <string name="aether_psiphon_mode_auto_hint">Tries CDN fronting first, then direct.</string>
+    <string name="aether_psiphon_mode_cdn_hint">Through a CDN edge.</string>
+    <string name="aether_psiphon_mode_direct_hint">Straight to Psiphon\'s servers.</string>
+    <string name="aether_psiphon_mode_cdn">CDN fronting</string>
+    <string name="aether_psiphon_mode_direct">Direct</string>
+    <string name="aether_cdn_ips_hint">Your own CDN addresses, comma-separated.</string>
+    <string name="aether_cdn_sni_hint">Used with your own CDN addresses.</string>
+    <string name="aether_cdn_sets_hint">Edge lists the fronting scan tries.</string>
+    <string name="aether_region_hint">ISO codes, e.g. DE or DE,NL.</string>
+    <string name="aether_bridges_first">Bridges first</string>
+    <string name="aether_bridges_never">Never</string>
+    <string name="aether_bridges_own">Profile\'s own</string>
+    <string name="aether_bridges_hint">Bridges get Tor through where it is blocked.</string>
+    <string name="aether_bridges_own_hint">One per line, as torrc writes them.</string>
+    <string name="aether_relays_only">Relays only</string>
+    <string name="aether_relays_off">bridgedb only</string>
+    <string name="aether_cdn_cloudflare" translatable="false">Cloudflare</string>
+    <string name="aether_cdn_fastly" translatable="false">Fastly</string>
+    <string name="aether_cdn_cloudfront" translatable="false">CloudFront</string>
+    <string name="aether_cdn_akamai" translatable="false">Akamai</string>
+    <string name="aether_cdn_bunny" translatable="false">Bunny</string>
+    <string name="aether_cdn_vercel" translatable="false">Vercel</string>
+    <string name="aether_cdn_github" translatable="false">GitHub</string>
+    <string name="aether_cdn_curated">Curated</string>
+    <string name="aether_cdn_legacy">Legacy</string>
+    <string name="aether_key_device">Device</string>
+    <string name="aether_key_inner">Inner identity</string>
+    <string name="aether_key_copy">Copy</string>
+    <string name="aether_copied">Copied</string>
+    <string name="aether_reset_title">Reset the WARP key?</string>
+    <string name="aether_reset_message">The saved key is deleted, and the next run registers a new device. The old key cannot be restored.</string>
+    <string name="aether_reset_confirm">Reset key</string>
+    <string name="aether_key_renew_failed">No new key was registered; the previous key is still in place.</string>
+    <string name="aether_log_live">Output</string>
+    <string name="aether_api_overrides">WARP API overrides</string>
+    <string name="aether_api_overrides_hint">Only needed when the API is blocked; blank follows the core.</string>
+    <string name="aether_identity_running">Stop the connection first; the running core holds these files and ports.</string>
+    <string name="aether_scan_command_off">Scanning is off while a command overrides the profile.</string>
+    <string name="aether_scan_no_result">The scan ended without finding a gateway.</string>
+    <string name="aether_carrier_identity_off">A carrier-only profile does not use a WARP key.</string>
+    <string name="aether_carrier_tunnel_off">Tunnel settings are ignored while a carrier runs alone.</string>
+    <string name="aether_discard_title">Discard changes?</string>
+    <string name="aether_discard_message">Your edits have not been saved.</string>
+    <string name="aether_discard_confirm">Discard</string>
+    <string name="aether_discard_keep">Keep editing</string>
+    <string name="aether_save_profile">Save profile</string>
+    <string name="aether_opt_auto">Auto</string>
+    <string name="aether_opt_off">Off</string>
+    <string name="aether_ipv4" translatable="false">IPv4</string>
+    <string name="aether_ipv6" translatable="false">IPv6</string>
+    <string name="aether_ip_both" translatable="false">IPv4 + IPv6</string>
+    <string name="aether_http3" translatable="false">HTTP/3</string>
+    <string name="aether_http2" translatable="false">HTTP/2</string>
+    <string name="aether_none_available">Nothing available</string>
     <string name="menu_item_import_config_manually_mieru">Add Mieru config manually</string>
     <string name="server_lab_mieru_username">Mieru user</string>
     <string name="server_lab_mieru_password">Mieru password</string>
@@ -137,6 +280,8 @@
     <string name="server_lab_carrier_region_auto">Automatic</string>
     <string name="server_lab_carrier_region_search">Search countries</string>
     <string name="server_lab_carrier_region_bad">The region must be a two-letter country code, e.g. DE.</string>
+    <string name="server_lab_carrier_port_custom">Custom port</string>
+    <string name="server_lab_carrier_port_auto_hint">A free port (%1$s) is picked when you save, away from every other listener.</string>
     <string name="server_lab_psiphon_note">Runs Psiphon on its own, without the Aether tunnel. The app dials Psiphon locally, so no server address is needed; the region sets the country it exits from.</string>
     <string name="server_lab_tor_note">Runs Tor on its own, without the Aether tunnel. The app dials Tor locally, so no server address is needed. The core has no option to pick Tor\'s exit country; Psiphon is the one for choosing a country. Bridges help where Tor is blocked.</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
@@ -298,6 +443,7 @@
     <string name="update_banner_dismiss">Dismiss</string>
     <string name="update_banner_update_now">Update</string>
     <string name="toast_failure">Failure</string>
+    <string name="toast_core_too_old">This configuration needs core version %1$s but this app ships %2$s — update the app to use it.</string>
     <string name="toast_none_data">No data available</string>
     <string name="toast_incorrect_protocol">Incorrect protocol</string>
     <string name="toast_decoding_failed">Decoding failed</string>
@@ -625,6 +771,18 @@
     <string name="update_check_pre_release">Check pre-release versions</string>
     <string name="update_checking_for_update">Checking for update…</string>
     <string name="update_no_notes">No release notes for this version</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_downloading_changes">Downloading changes…</string>
+    <string name="update_applying">Applying update…</string>
+    <string name="update_verifying">Verifying update…</string>
+    <string name="update_download_progress">%1$d%% · %2$s / %3$s</string>
+    <string name="update_install_permission_title">Allow app installs</string>
+    <string name="update_install_permission_message">To install the update, allow ArasClient to install unknown apps. You will return to this screen automatically once it is enabled.</string>
+    <string name="update_open_settings">Open settings</string>
+    <string name="update_not_now">Not now</string>
+    <string name="update_download_failed">Download failed. Please try again.</string>
+    <string name="update_install_failed">Could not open the installer. Please try again.</string>
+    <string name="update_no_compatible_apk">No compatible APK was found for this device.</string>
 
 
     <string name="title_policy_group_type">Policy group type</string>

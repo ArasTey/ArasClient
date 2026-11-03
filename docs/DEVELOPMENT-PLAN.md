@@ -1,9 +1,9 @@
 # ArasClient — Development Plan & AI Handoff (Post-1.8.0 Maintenance Round)
 
 > This file is the plan-and-state document for the maintenance round started
-> 2026-10-12. `AI-HANDOFF-BRIEF.md` remains the entry point for build/signing/
+> 2026-10-12. `HANDBOOK.md` remains the deep reference for build/signing/
 > core-repo facts; this file records what THIS round changed and what comes next.
-> Every AI picking this repo up should read the brief first, then this file.
+> Every AI picking this repo up should read the handbook first, then this file.
 
 ---
 

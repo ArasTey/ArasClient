@@ -251,6 +251,15 @@ class ServerAetherActivity : BaseServerActivity() {
         }
     }
 
+    /** The tunnel path names an Aether profile that the user left nameless. */
+    override val remarksRequired: Boolean get() = false
+
+    override fun nameProfile(state: ServerUiState, config: ProfileItem) {
+        if (config.remarks.isBlank()) {
+            config.remarks = uniqueRemarks(AetherFmt.defaultRemarks(config))
+        }
+    }
+
     /**
      * Refuses a profile the core would not take.
      *

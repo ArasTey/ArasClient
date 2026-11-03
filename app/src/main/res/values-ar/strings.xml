@@ -314,6 +314,8 @@
     <string name="title_pref_ui_mode_night">إعدادات وضع واجهة المستخدم ليلاً</string>
     <string name="title_pref_dynamic_color">تفعيل الألوان الديناميكية</string>
     <string name="summary_pref_dynamic_color">يعمل فقط على أندرويد 12+</string>
+    <string name="title_pref_show_free_sub">إظهار مجموعة الاشتراك المجاني</string>
+    <string name="summary_pref_show_free_sub">إظهار تبويب مجموعة «المجاني» على الشاشة الرئيسية. إيقافه يخفي التبويبات فقط ويبقي الإعدادات تتحدث.</string>
     <string name="title_pref_use_hev_tunnel">تمكين ميزة Hev TUN</string>
     <string name="summary_pref_use_hev_tunnel">عند التمكين، سيستخدم TUN ‏hev-socks5-tunnel؛ وإلا فسيستخدم xray-core.</string>
     <string name="title_pref_hev_tunnel_loglevel">مستوى سجل Hev TUN</string>
@@ -450,6 +452,18 @@
     <string name="update_now">التحديث الآن</string>
     <string name="update_check_pre_release">التحقق من الإصدارات التجريبية</string>
     <string name="update_checking_for_update">جارٍ التحقق من وجود تحديث…</string>
+    <string name="update_downloading">جارٍ تنزيل التحديث…</string>
+    <string name="update_downloading_changes">جارٍ تنزيل التغييرات…</string>
+    <string name="update_applying">جارٍ تطبيق التحديث…</string>
+    <string name="update_verifying">جارٍ التحقق من التحديث…</string>
+    <string name="update_download_progress">%1$d%% · %2$s / %3$s</string>
+    <string name="update_install_permission_title">السماح بتثبيت التطبيقات</string>
+    <string name="update_install_permission_message">لتثبيت التحديث، اسمح لـ ArasClient بتثبيت التطبيقات غير المعروفة. ستعود إلى هذه الشاشة تلقائيًا بعد تفعيل الخيار.</string>
+    <string name="update_open_settings">فتح الإعدادات</string>
+    <string name="update_not_now">ليس الآن</string>
+    <string name="update_download_failed">فشل تنزيل التحديث. يرجى المحاولة مجددًا.</string>
+    <string name="update_install_failed">تعذّر فتح المثبّت. يرجى المحاولة مجددًا.</string>
+    <string name="update_no_compatible_apk">لم يتم العثور على ملف APK متوافق مع هذا الجهاز.</string>
 
     <string name="title_policy_group_type">نوع مجموعة السياسات</string>
     <string name="title_policy_group_subscription_id">من مجموعة الاشتراك</string>

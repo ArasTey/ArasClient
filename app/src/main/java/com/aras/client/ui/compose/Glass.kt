@@ -7,14 +7,20 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Shader
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,16 +28,22 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aras.client.R
@@ -136,6 +148,77 @@ fun Modifier.glassPanel(
     .background(fill, shape)
     .border(borderWidth, borderColor, shape)
 
+/**
+ * A card that reads as a real pane of glass: a translucent fill that is a touch
+ * brighter along its top edge as if catching the scene light, a rim whose stroke
+ * fades towards the bottom, and a hairline highlight sitting just inside the top
+ * of that rim. Drawn in one pass behind the content; [strong] lifts the fill for
+ * a surface that must carry dense text over the ambient backdrop.
+ */
+fun Modifier.liquidGlassPanel(
+    palette: GlassPalette,
+    shape: Shape = RoundedCornerShape(18.dp),
+    strong: Boolean = false,
+): Modifier = this.clip(shape).drawBehind {
+    val radius = shape.toCornerRadius(size, density = this)
+    val top = if (palette.isDark) Color(0x23FFFFFF) else Color(0xC8FFFFFF)
+    val bottom = if (palette.isDark) Color(0x0BFFFFFF) else Color(0x92FFFFFF)
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(
+                top.copy(alpha = if (strong) top.alpha * 1.25f else top.alpha),
+                bottom,
+            ),
+            startY = 0f,
+            endY = size.height,
+        ),
+        cornerRadius = radius,
+    )
+    val rimTop = if (palette.isDark) Color(0x38FFFFFF) else Color(0x59B9A78F)
+    val rimBottom = if (palette.isDark) Color(0x12FFFFFF) else Color(0x2BB9A78F)
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(rimTop, rimBottom),
+            startY = 0f,
+            endY = size.height,
+        ),
+        cornerRadius = radius,
+        style = Stroke(width = 0.9.dp.toPx()),
+    )
+    // The light a glass edge catches: a thin bright line under the top rim.
+    drawRoundRect(
+        color = if (palette.isDark) Color(0x1FFFFFFF) else Color(0x66FFFFFF),
+        topLeft = Offset(radius.x * 0.55f, 0.9.dp.toPx()),
+        size = Size(size.width - radius.x * 1.1f, 0.7.dp.toPx()),
+        cornerRadius = CornerRadius(0.7.dp.toPx()),
+    )
+}
+
+private fun Shape.toCornerRadius(size: Size, density: Density): CornerRadius =
+    when (this) {
+        is CornerBasedShape -> CornerRadius(this.topStart.toPx(size, density))
+        else -> CornerRadius(0f)
+    }
+
+/**
+ * The little give a pressed control makes: it sinks a few percent and springs
+ * back when the finger lifts. Feed it the same [interactionSource] the clickable
+ * uses, so one source drives both the ripple and the motion.
+ */
+@Composable
+fun Modifier.pressScale(
+    interactionSource: MutableInteractionSource,
+    pressedScale: Float = 0.97f,
+): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) pressedScale else 1f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 700f),
+        label = "pressScale",
+    )
+    return graphicsLayer { scaleX = scale; scaleY = scale }
+}
+
 /** The corner radius every card shares with the ring drawn around it when picked. */
 val CardCornerRadius: Dp = 16.dp
 
@@ -146,10 +229,18 @@ val CardSelectionStroke: Dp = 1.5.dp
  * The ring around a selected card. It is drawn by a single modifier so every
  * section gets the same stroke, radius and corners, with one colour that stays
  * equally visible along all four edges; the earlier top-to-bottom fade made the
- * bottom corners read as a thinner line. The stroke is inset by half its width:
- * a stroke centred on the clipped edge loses its outer half, and along the arc
- * that half is all the antialiasing leaves visible, so the corners look cut. The
- * radius shrinks by the same inset to stay concentric with the card's clip.
+ * bottom corners read as a thinner line.
+ *
+ * The ring is a filled band, not a stroked path. Stroking the rounded rect keeps
+ * the right width along the four straight sides but loses about a third of its
+ * ink along the middle of each corner arc — measured on device, 3.4px of coverage
+ * on the edges against 2.4px at the bisector — which is the uneven corner the eye
+ * catches. A band is instead drawn as the area between two rounded rects that
+ * share one corner centre, so its width is the inset difference everywhere, on the
+ * arcs exactly as on the straights.
+ *
+ * The band sits a full stroke inside the card's edge so that the clip never
+ * touches it.
  */
 fun Modifier.glassSelectionRing(
     palette: GlassPalette,
@@ -158,14 +249,27 @@ fun Modifier.glassSelectionRing(
 ): Modifier = drawWithContent {
     drawContent()
     val stroke = strokeWidth.toPx()
-    val inset = stroke / 2f
-    drawRoundRect(
-        brush = SolidColor(palette.accent.copy(alpha = 0.9f)),
-        topLeft = Offset(inset, inset),
-        size = Size(size.width - stroke, size.height - stroke),
-        cornerRadius = CornerRadius(cornerRadius.toPx() - inset),
-        style = Stroke(width = stroke)
-    )
+    val inset = stroke
+    val radius = cornerRadius.toPx() - inset
+    val band = Path().apply {
+        fillType = PathFillType.EvenOdd
+        addRoundRect(
+            RoundRect(
+                Rect(Offset(inset, inset), Size(size.width - inset * 2f, size.height - inset * 2f)),
+                CornerRadius(radius)
+            )
+        )
+        addRoundRect(
+            RoundRect(
+                Rect(
+                    Offset(inset + stroke, inset + stroke),
+                    Size(size.width - (inset + stroke) * 2f, size.height - (inset + stroke) * 2f)
+                ),
+                CornerRadius(radius - stroke)
+            )
+        )
+    }
+    drawPath(band, palette.accent.copy(alpha = 0.9f))
 }
 
 /** Ambient backdrop: drawn in code — soft scene light, vignette and film grain. */

@@ -111,7 +111,7 @@ class AetherFmtTest {
         // Blank ones leave the link without the parameters, and a config without
         // any gains no api query at all.
         assertEquals(
-            "198.51.100.7:443?protocol=wg&scan=balanced&ip=v4#Aether",
+            "198.51.100.7:443?protocol=wg&scan=balanced&ip=v4#Aether%20%3E%20wg",
             AetherFmt.toUri(
                 AetherFmt.parse("aether://198.51.100.7:443?protocol=wg&scan=balanced&ip=v4")!!.apply {
                     aetherApiAddress = ""
@@ -337,7 +337,22 @@ class AetherFmtTest {
         val exported = AetherFmt.toUri(config)
 
         assertTrue("an empty fragment is not a name", !exported.endsWith("#"))
-        assertTrue(exported.contains("#Aether"))
+        assertEquals("Aether > wg", AetherFmt.defaultRemarks(config))
+        assertTrue(
+            "the name should be the path the traffic takes: $exported",
+            exported.endsWith("#Aether%20%3E%20wg"),
+        )
+    }
+
+    @Test
+    fun `a nameless profile is named for every carrier in its path`() {
+        fun name(link: String) = AetherFmt.defaultRemarks(AetherFmt.parse(link)!!)
+
+        assertEquals("Aether > masq > psiphon", name("aether://198.51.100.9:2408?protocol=masque&psiphon=chain"))
+        assertEquals("Aether > psiphon > masq", name("aether://198.51.100.9:2408?protocol=masque&psiphon=reverse"))
+        assertEquals("Aether > masq > tor", name("aether://198.51.100.9:2408?protocol=masque&tor=chain"))
+        assertEquals("Aether > psiphon", name("aether://198.51.100.9:2408?protocol=masque&psiphon=only"))
+        assertEquals("Aether > gool", name("aether://198.51.100.9:2408?protocol=gool"))
     }
 
     @Test

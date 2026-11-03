@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.dto.entities.SubscriptionItem
+import com.aras.client.extension.withLatinDigits
 import com.aras.client.handler.MmkvManager
 import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.glassPanel
@@ -439,7 +440,9 @@ private fun expiryLabel(expireAt: Long, now: Long = System.currentTimeMillis()):
     val expiry = Instant.ofEpochMilli(millis).atZone(zone)
     val today = Instant.ofEpochMilli(now).atZone(zone)
     val pattern = if (expiry.year == today.year) "d MMM" else "d MMM yyyy"
-    val date = DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(expiry)
+    val date = DateTimeFormatter.ofPattern(pattern, Locale.getDefault())
+        .format(expiry)
+        .withLatinDigits()
     if (millis <= now) return date
     return "$date · ${expirySummary(millis, now)}"
 }
@@ -470,5 +473,5 @@ private fun formatBytes(bytes: Long): String {
         unit++
     }
     return if (unit == 0) "${value.toLong()} ${units[unit]}"
-    else String.format("%.1f %s", value, units[unit])
+    else String.format(Locale.ROOT, "%.1f %s", value, units[unit])
 }

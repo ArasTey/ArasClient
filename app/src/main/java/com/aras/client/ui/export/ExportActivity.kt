@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aras.client.R
+import com.aras.client.extension.withLatinDigits
 import com.aras.client.ui.base.BaseComponentActivity
 import com.aras.client.ui.compose.AppTopBar
 import com.aras.client.ui.compose.NavigationBarsSpacer
@@ -227,7 +228,7 @@ private fun SummaryHeader(state: ExportUiState) {
                     R.string.export_summary_subtitle,
                     state.selectedCount,
                     state.groups.size
-                ),
+                ).withLatinDigits(),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.85f)
             )
@@ -416,13 +417,13 @@ private fun ExportGroupCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = if (group.selectedGuids.isEmpty())
+                    text = (if (group.selectedGuids.isEmpty())
                         stringResource(R.string.export_config_count, group.configs.size)
                     else
                         stringResource(
                             R.string.export_config_count_selected,
                             group.selectedGuids.size, group.configs.size
-                        ),
+                        )).withLatinDigits(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -520,7 +521,7 @@ private fun ExportBottomBar(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.export_action, selectedCount))
+                Text(stringResource(R.string.export_action, selectedCount).withLatinDigits())
             }
         }
         NavigationBarsSpacer()

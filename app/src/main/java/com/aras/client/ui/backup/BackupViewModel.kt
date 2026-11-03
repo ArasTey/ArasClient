@@ -167,7 +167,7 @@ class BackupViewModel(application: Application) : BaseViewModel(application) {
     private fun backupConfigurationToCache(cacheDir: File, appName: String): Pair<Boolean, String> {
         val dateFormatted = SimpleDateFormat(
             "yyyy-MM-dd-HH-mm-ss",
-            Locale.getDefault()
+            Locale.ROOT
         ).format(System.currentTimeMillis())
         val folderName = "${appName}_$dateFormatted"
         val backupDir = cacheDir.absolutePath + "/$folderName"

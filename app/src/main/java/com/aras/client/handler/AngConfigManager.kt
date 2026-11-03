@@ -265,6 +265,7 @@ object AngConfigManager {
             if (count <= 0) {
                 count = parseBatchConfig(server, subid, append)
             }
+            var minCore: String? = null
             if (count <= 0) {
                 // Subscriptions routinely base64-wrap their payload; the raw text
                 // was already tried, so the decoded copy gets the custom-config pass.
@@ -272,6 +273,9 @@ object AngConfigManager {
             }
             if (count <= 0) {
                 count = parseCustomConfigServer(server, subid, append)
+            }
+            if (count > 0) {
+                minCore = CustomFmt.minCoreVersionRequired(server)
             }
             if (count <= 0 && server != null && server.contains("[Interface]") && server.contains("[Peer]")) {
                 count = parseCustomConfigServer(
@@ -285,7 +289,7 @@ object AngConfigManager {
             if (newSubIds.isEmpty()) {
                 newSubIds = parseBatchSubscription(Utils.decode(server))
             }
-            BatchImportResult(configCount = count, newSubscriptionIds = newSubIds)
+            BatchImportResult(configCount = count, newSubscriptionIds = newSubIds, minCoreVersion = minCore)
         } catch (e: ProfileStorageException) {
             LogUtil.e(AppConfig.TAG, "Failed to store imported profiles", e)
             BatchImportResult()
@@ -339,14 +343,23 @@ object AngConfigManager {
 
             // Parse all configs first (no I/O during parsing)
             val configs = mutableListOf<ProfileItem>()
+            var skipped = 0
             val links = when {
-                isClashYaml -> com.aras.client.fmt.ClashYamlFmt.toLinks(servers)
+                isClashYaml -> com.aras.client.fmt.ClashYamlFmt.toLinks(servers).also {
+                    skipped = it.skipped
+                }.links
                 isSingboxJson -> com.aras.client.fmt.SingboxFmt.toLinks(servers)
                 else ->
                 servers.lineSequence()
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                     .toList()
+            }
+            if (skipped > 0) {
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "Subscription import skipped $skipped proxies the core cannot dial"
+                )
             }
             links.distinct()
                 .reversed()
@@ -687,7 +700,8 @@ object AngConfigManager {
                 LogUtil.i(AppConfig.TAG, "Subscription updated: ${latest.remarks}, $count configs")
                 return SubscriptionUpdateResult(
                     configCount = count,
-                    successCount = 1
+                    successCount = 1,
+                    minCoreVersion = CustomFmt.minCoreVersionRequired(configText)
                 )
             } else {
                 // Got response but no valid configs parsed

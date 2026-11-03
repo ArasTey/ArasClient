@@ -149,7 +149,7 @@ class BackupActivity : HelperBaseComponentActivity() {
     private fun backupViaLocal() {
         val dateFormatted = SimpleDateFormat(
             "yyyy-MM-dd-HH-mm-ss",
-            Locale.getDefault()
+            Locale.ROOT
         ).format(System.currentTimeMillis())
         val defaultFileName = "${getString(R.string.app_name)}_${dateFormatted}.zip"
 

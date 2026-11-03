@@ -15,6 +15,9 @@ enum class AetherProtocol(val type: String) {
     /** Whether MASQUE carries the tunnel, which then uses the MASQUE transport, fragmentation and key. */
     val overMasque: Boolean get() = this == MASQUE || this == MIM
 
+    /** The tunnel as a generated profile name spells it: the core's word, but short. */
+    val shortName: String get() = if (this == MASQUE) "masq" else type
+
     /** Whether the tunnel is two hops, an outer and an inner one, in place of one endpoint. */
     val twoHops: Boolean get() = this == GOOL || this == MIM
 
@@ -29,7 +32,7 @@ enum class AetherTransport(val type: String) {
     HTTP2("h2");
 
     companion object {
-        fun fromString(type: String?) = entries.find { it.type == type } ?: HTTP3
+        fun fromString(type: String?) = entries.find { it.type == type } ?: HTTP2
     }
 }
 

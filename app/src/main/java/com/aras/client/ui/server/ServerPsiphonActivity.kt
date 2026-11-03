@@ -34,11 +34,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.aras.client.R
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.EConfigType
+import com.aras.client.fmt.CarrierFmt
+import com.aras.client.ui.compose.CarrierPortField
 import com.aras.client.ui.compose.FlagIcon
 import com.aras.client.ui.compose.FormDropdownField
 import com.aras.client.ui.compose.FormTextField
@@ -54,21 +55,22 @@ class ServerPsiphonActivity : BaseServerActivity() {
 
     override val serverConfigType: EConfigType = EConfigType.PSIPHON
 
+    // Whether this save filled the listen port itself, which is what the name says.
+    private var listenPortWasAuto = false
+
     @Composable
     override fun ScreenContent() {
         val uiState = rememberSaveable(saver = ServerUiState.Saver) {
             ServerUiState.from(initialConfig = initialConfig).apply {
                 configType = EConfigType.PSIPHON
-                // The carrier runs on its own listener, so it gets a free port up front
-                // rather than sharing the app default with every other carrier profile.
-                if (aetherListenPort.isBlank()) aetherListenPort = pickCarrierListenPort()
             }
         }
 
         ServerEditorScaffold(
             title = "Psiphon",
             onSaveClick = {
-                if (uiState.aetherListenPort.isBlank()) {
+                listenPortWasAuto = uiState.aetherListenPort.isBlank()
+                if (listenPortWasAuto) {
                     uiState.aetherListenPort = pickCarrierListenPort()
                 }
                 saveServer(uiState)
@@ -89,11 +91,10 @@ class ServerPsiphonActivity : BaseServerActivity() {
                 options = stringArrayResource(R.array.aether_psiphon_modes).toList(),
                 onValueChange = { uiState.aetherPsiphonMode = it },
             )
-            FormTextField(
-                stringResource(R.string.server_lab_aether_listen_port),
-                uiState.aetherListenPort,
-                { uiState.aetherListenPort = it },
-                keyboardType = KeyboardType.Number
+            CarrierPortField(
+                value = uiState.aetherListenPort,
+                onValueChange = { uiState.aetherListenPort = it },
+                pickAuto = { pickCarrierListenPort() },
             )
             Text(
                 stringResource(R.string.server_lab_psiphon_note),
@@ -101,6 +102,18 @@ class ServerPsiphonActivity : BaseServerActivity() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+
+    /**
+     * A Psiphon profile has no address to check and its name is optional — a blank
+     * one is filled in after every check passes.
+     */
+    override fun validateBasicConfig(state: ServerUiState): Boolean = true
+
+    override fun nameProfile(state: ServerUiState, config: ProfileItem) {
+        if (config.remarks.isBlank()) {
+            config.remarks = uniqueRemarks(CarrierFmt.defaultRemarks(config, listenPortWasAuto))
         }
     }
 

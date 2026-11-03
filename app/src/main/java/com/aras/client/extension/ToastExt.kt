@@ -15,7 +15,7 @@ import com.aras.client.ui.compose.ToastType
 fun Context.toast(message: Int) {
     val text = getString(message)
     dispatchMessage(text, ToastType.NORMAL) {
-        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -26,7 +26,7 @@ fun Context.toast(message: Int) {
  */
 fun Context.toast(message: CharSequence) {
     dispatchMessage(message, ToastType.NORMAL) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -38,7 +38,7 @@ fun Context.toast(message: CharSequence) {
 fun Context.toastSuccess(message: Int) {
     val text = getString(message)
     dispatchMessage(text, ToastType.SUCCESS) {
-        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -49,7 +49,7 @@ fun Context.toastSuccess(message: Int) {
  */
 fun Context.toastSuccess(message: CharSequence) {
     dispatchMessage(message, ToastType.SUCCESS) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -61,7 +61,7 @@ fun Context.toastSuccess(message: CharSequence) {
 fun Context.toastError(message: Int) {
     val text = getString(message)
     dispatchMessage(text, ToastType.ERROR) {
-        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -72,7 +72,7 @@ fun Context.toastError(message: Int) {
  */
 fun Context.toastError(message: CharSequence) {
     dispatchMessage(message, ToastType.ERROR) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -84,7 +84,7 @@ fun Context.toastError(message: CharSequence) {
 fun Context.toastInfo(message: Int) {
     val text = getString(message)
     dispatchMessage(text, ToastType.INFO) {
-        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -95,7 +95,7 @@ fun Context.toastInfo(message: Int) {
  */
 fun Context.toastInfo(message: CharSequence) {
     dispatchMessage(message, ToastType.INFO) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -111,14 +111,15 @@ private inline fun dispatchMessage(
     message: CharSequence,
     type: ToastType,
     long: Boolean = false,
-    crossinline fallback: () -> Unit
+    crossinline fallback: (CharSequence) -> Unit
 ) {
+    val text = message.toString().withLatinDigits()
     val handledBySnackbar = AppSnackbarManager.show(
-        message = message,
+        message = text,
         type = type,
         long = long
     )
     if (!handledBySnackbar) {
-        runOnMain { fallback() }
+        runOnMain { fallback(text) }
     }
 }

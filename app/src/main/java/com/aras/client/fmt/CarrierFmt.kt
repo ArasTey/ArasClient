@@ -1,5 +1,6 @@
 package com.aras.client.fmt
 
+import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.AetherPsiphon
 import com.aras.client.enums.AetherPsiphonMode
@@ -76,12 +77,19 @@ object CarrierFmt : FmtBase() {
         return "?$queryText#${Utils.encodeURIComponent(remarks)}"
     }
 
-    /** The name a profile is given when it has none of its own. */
-    fun defaultRemarks(config: ProfileItem): String =
-        if (config.configType == EConfigType.TOR) {
-            "Tor"
-        } else {
-            val region = config.aetherPsiphonRegion?.takeIf { it.isNotBlank() }
-            if (region == null) "Psiphon" else "Psiphon $region"
-        }
+    /**
+     * The name a profile is given when it has none of its own: the carrier, the
+     * region it pins when it pins one, and the port it listens on — the settings
+     * that actually tell two such profiles apart. [autoPort] says the app chose
+     * that port rather than the user.
+     */
+    fun defaultRemarks(config: ProfileItem, autoPort: Boolean = false): String {
+        val port = AetherFmt.listenPortOf(config.aetherListenPort)
+            ?: AppConfig.PORT_AETHER_SOCKS.toInt()
+        return listOfNotNull(
+            if (config.configType == EConfigType.TOR) "Tor" else "Psiphon",
+            config.aetherPsiphonRegion?.takeIf { it.isNotBlank() },
+            if (autoPort) "auto port $port" else "port $port",
+        ).joinToString(" ")
+    }
 }

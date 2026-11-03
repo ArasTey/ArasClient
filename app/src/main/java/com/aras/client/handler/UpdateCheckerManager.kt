@@ -14,7 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object UpdateCheckerManager {
-    suspend fun checkForUpdate(includePreRelease: Boolean = false): CheckUpdateResult = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(
+        includePreRelease: Boolean = false,
+        installedVersion: String? = null,
+        installedAbi: String? = null
+    ): CheckUpdateResult = withContext(Dispatchers.IO) {
         val url = if (includePreRelease) {
             AppConfig.APP_API_URL
         } else {
@@ -62,18 +66,36 @@ object UpdateCheckerManager {
         )
 
         return@withContext if (compareVersions(latestVersion, BuildConfig.VERSION_NAME) > 0) {
-            val downloadUrl = getDownloadUrl(latestRelease, Build.SUPPORTED_ABIS[0])
+            val asset = pickApkAsset(latestRelease)
+                ?: throw IllegalStateException("No compatible APK found")
+            val apkSha256 = asset.digest.toSha256()
+            // A patch is only offered when the rebuilt APK can be verified against
+            // the published digest, so a bad or foreign APK can never be installed.
+            val patch = if (apkSha256 != null && !isFdroidBuild()) {
+                pickPatchAsset(latestRelease, latestVersion, installedVersion, installedAbi)
+                    ?.takeIf { it.digest.toSha256() != null }
+            } else {
+                null
+            }
             CheckUpdateResult(
                 hasUpdate = true,
                 latestVersion = latestVersion,
                 releaseNotes = latestRelease.body,
-                downloadUrl = downloadUrl,
+                downloadUrl = asset.browserDownloadUrl,
+                downloadFileName = asset.name,
+                downloadSha256 = apkSha256,
+                patchUrl = patch?.browserDownloadUrl,
+                patchFileName = patch?.name,
+                patchSha256 = patch?.digest.toSha256(),
                 isPreRelease = latestRelease.prerelease
             )
         } else {
             CheckUpdateResult(hasUpdate = false)
         }
     }
+
+    private fun isFdroidBuild(): Boolean =
+        BuildConfig.APPLICATION_ID.contains("fdroid", ignoreCase = true)
 
     private fun compareVersions(version1: String, version2: String): Int {
         // Compare all numeric segments so suffixed tags like "2.3.2-P1" work:
@@ -90,20 +112,48 @@ object UpdateCheckerManager {
         return 0
     }
 
-    private fun getDownloadUrl(release: GitHubRelease, abi: String): String {
+    private fun pickApkAsset(release: GitHubRelease): GitHubRelease.Asset? {
         val fDroid = "fdroid"
-
-        val assetsByAbi = release.assets.filter {
-            (it.name.contains(abi, true))
+        val isFdroidBuild = BuildConfig.APPLICATION_ID.contains(fDroid, ignoreCase = true)
+        val apks = release.assets.filter {
+            it.name.endsWith(".apk", ignoreCase = true) &&
+                it.name.contains(fDroid, ignoreCase = true) == isFdroidBuild
         }
 
-        val asset = if (BuildConfig.APPLICATION_ID.contains(fDroid, ignoreCase = true)) {
-            assetsByAbi.firstOrNull { it.name.contains(fDroid) }
-        } else {
-            assetsByAbi.firstOrNull { !it.name.contains(fDroid) }
+        // Prefer the device's primary ABI, then any supported ABI, then a universal APK.
+        for (abi in Build.SUPPORTED_ABIS) {
+            apks.firstOrNull { it.name.contains(abi, ignoreCase = true) }?.let { return it }
         }
-
-        return asset?.browserDownloadUrl
-            ?: throw IllegalStateException("No compatible APK found")
+        return apks.firstOrNull { it.name.contains("universal", ignoreCase = true) }
     }
+
+    /**
+     * Patch assets are named `ArasClient_<newVersion>_<abi>_from_<installedVersion>.patch`,
+     * so the ABI and starting version have to match the installed app exactly.
+     */
+    internal fun pickPatchAsset(
+        release: GitHubRelease,
+        latestVersion: String?,
+        installedVersion: String?,
+        installedAbi: String?
+    ): GitHubRelease.Asset? {
+        if (latestVersion.isNullOrBlank() || installedVersion.isNullOrBlank() || installedAbi.isNullOrBlank()) {
+            return null
+        }
+        val prefix = "arasclient_${latestVersion}_".lowercase()
+        val suffix = "_from_${installedVersion}.patch".lowercase()
+        return release.assets.firstOrNull { asset ->
+            val name = asset.name.lowercase()
+            name.startsWith(prefix) &&
+                name.endsWith(suffix) &&
+                name.length > prefix.length + suffix.length &&
+                name.substring(prefix.length, name.length - suffix.length) == installedAbi.lowercase()
+        }
+    }
+
+    private fun String?.toSha256(): String? =
+        this?.removePrefix("sha256:")
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf { digest -> digest.length == 64 && digest.all { it in '0'..'9' || it in 'a'..'f' } }
 }

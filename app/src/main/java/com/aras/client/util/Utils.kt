@@ -498,7 +498,11 @@ object Utils {
      * @param ts timestamp in milliseconds or null
      * @param pattern SimpleDateFormat pattern, default "yyyy-MM-dd HH:mm"
      */
-    fun formatTimestamp(ts: Long?, pattern: String = "yyyy-MM-dd HH:mm", locale: Locale = Locale.getDefault()): String {
+    fun formatTimestamp(
+        ts: Long?,
+        pattern: String = "yyyy-MM-dd HH:mm",
+        locale: Locale = Locale.ROOT
+    ): String {
         if (ts == null || ts <= 0L) return ""
         return try {
             val sdf = SimpleDateFormat(pattern, locale)

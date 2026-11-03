@@ -273,8 +273,6 @@ These components allow the Android client, native networking layer and proxy cor
 
 Documentation for working on the codebase itself:
 
-- **`AI-HANDOFF-BRIEF.md`** — entry point: build commands, release signing, core
-  repo layout, and the traps. Read this first.
 - **`HANDBOOK.md`** — deep reference for maintenance and release workflows.
 - **`docs/DEVELOPMENT-PLAN.md`** — rolling plan: what the current maintenance
   round changed, what is verified, and what is still open.

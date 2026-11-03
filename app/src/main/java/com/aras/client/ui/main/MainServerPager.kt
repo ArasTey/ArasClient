@@ -1,5 +1,11 @@
 package com.aras.client.ui.main
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,9 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -58,9 +66,12 @@ import com.aras.client.dto.LocateTarget
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.dto.entities.ServersCache
 import com.aras.client.enums.AetherProtocol
+import com.aras.client.enums.AetherPsiphon
+import com.aras.client.enums.AetherTor
 import com.aras.client.enums.EConfigType
 import com.aras.client.extension.isComplexType
 import com.aras.client.extension.nullIfBlank
+import com.aras.client.extension.withLatinDigits
 import com.aras.client.handler.AngConfigManager
 import com.aras.client.handler.FreeSubManager
 import com.aras.client.handler.ArasExportImportManager
@@ -116,6 +127,7 @@ fun GroupPagerPage(
         mainViewModel.serversForGroup(groupId)
     }
     val servers by serverFlow.collectAsStateWithLifecycle()
+    val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
     val canReorder = groupId.isNotEmpty() &&
             !FreeSubManager.isFreeSubId(groupId) &&
             searchQuery.isEmpty()
@@ -141,6 +153,7 @@ fun GroupPagerPage(
         scrollToTopTick = scrollToTopTick,
         lazyListStates = lazyListStates,
         lazyGridStates = lazyGridStates,
+        testingGuids = uiState.testingGuids,
         onSelectServer = onSelectServer,
         onEditServer = onEditServer,
         onShareServer = onShareServer,
@@ -167,6 +180,7 @@ private fun ServerListPage(
     scrollToTopTick: Int,
     lazyListStates: MutableMap<String, LazyListState>,
     lazyGridStates: MutableMap<String, LazyGridState>,
+    testingGuids: Set<String>,
     onSelectServer: (String) -> Unit,
     onEditServer: (String, ProfileItem) -> Unit,
     onShareServer: (String, ProfileItem) -> Unit,
@@ -207,6 +221,7 @@ private fun ServerListPage(
                         selectedGuid = selectedGuid,
                         subscriptionId = subscriptionId,
                         doubleColumnDisplay = true,
+                        isTesting = serverCache.guid in testingGuids,
                         onSelectServer = onSelectServer,
                         onEditServer = onEditServer,
                         onShareServer = onShareServer,
@@ -263,6 +278,7 @@ private fun ServerListPage(
                                 serverCache = serverCache,
                                 selectedGuid = selectedGuid,
                                 subscriptionId = subscriptionId,
+                                isTesting = serverCache.guid in testingGuids,
                                 onSelectServer = onSelectServer,
                                 onEditServer = onEditServer,
                                 onShareServer = onShareServer,
@@ -277,6 +293,7 @@ private fun ServerListPage(
                         serverCache = serverCache,
                         selectedGuid = selectedGuid,
                         subscriptionId = subscriptionId,
+                        isTesting = serverCache.guid in testingGuids,
                         onSelectServer = onSelectServer,
                         onEditServer = onEditServer,
                         onShareServer = onShareServer,
@@ -356,6 +373,7 @@ private fun ServerItemRow(
     serverCache: ServersCache,
     selectedGuid: String?,
     subscriptionId: String,
+    isTesting: Boolean,
     onSelectServer: (String) -> Unit,
     onEditServer: (String, ProfileItem) -> Unit,
     onShareServer: (String, ProfileItem) -> Unit,
@@ -411,6 +429,7 @@ private fun ServerItemRow(
             isSelected = serverCache.guid == selectedGuid,
             subscriptionRemarks = subRemarks,
             doubleColumnDisplay = false,
+            isTesting = isTesting,
             onClick = { onSelectServer(serverCache.guid) },
             onShare = { onShareServer(serverCache.guid, profile) },
             onEdit = { onEditServer(serverCache.guid, profile) },
@@ -428,6 +447,7 @@ private fun ServerItemColumn(
     selectedGuid: String?,
     subscriptionId: String,
     doubleColumnDisplay: Boolean,
+    isTesting: Boolean,
     onSelectServer: (String) -> Unit,
     onEditServer: (String, ProfileItem) -> Unit,
     onShareServer: (String, ProfileItem) -> Unit,
@@ -481,6 +501,7 @@ private fun ServerItemColumn(
             isSelected = serverCache.guid == selectedGuid,
             subscriptionRemarks = subRemarks,
             doubleColumnDisplay = doubleColumnDisplay,
+            isTesting = isTesting,
             onClick = { onSelectServer(serverCache.guid) },
             onEdit = { onEditServer(serverCache.guid, profile) },
             onShare = { onShareServer(serverCache.guid, profile) },
@@ -525,7 +546,8 @@ fun ServerListItem(
     modifier: Modifier = Modifier,
     dragModifier: Modifier = Modifier,
     isProtected: Boolean = false,
-    countryIso: String? = null
+    countryIso: String? = null,
+    isTesting: Boolean = false
 ) {
     val showDelayChips = remember {
         MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_DELAY_CHIPS, true)
@@ -533,7 +555,7 @@ fun ServerListItem(
     val testResult = if (testDelayMillis == 0L || !showDelayChips) {
         ""
     } else {
-        stringResource(R.string.server_test_delay_value, testDelayMillis)
+        stringResource(R.string.server_test_delay_value, testDelayMillis).withLatinDigits()
     }
     val selectedStateDescription = if (isSelected) {
         stringResource(R.string.acc_selected_server)
@@ -548,6 +570,9 @@ fun ServerListItem(
         SolidColor(MaterialTheme.colorScheme.surfaceContainerLow)
     }
     val pingColor = if (testDelayMillis < 0L) palette.pingBad else palette.pingGood
+    // `isTesting` is now this card's own round, so a neighbour that has never been
+    // measured keeps its gauge instead of pulsing along.
+    val pinging = isTesting && testDelayMillis == 0L
     // An aether card names its tunnel and its exit, not just the protocol, so
     // its chip takes the warm accent that marks the tunnels apart.
     val typeTint = if (configTypeName == EConfigType.AETHER.name) palette.amber else palette.accent
@@ -555,13 +580,10 @@ fun ServerListItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .semantics {
-                if (selectedStateDescription != null) {
-                    stateDescription = selectedStateDescription
-                }
-            }
-            .clip(cardShape)
-            .background(cardBrush)
+            // The ring is chained before the clip on purpose: inside the clipped
+            // layer its outer half sits on the clip boundary, and the corner arc
+            // is the only place that boundary is curved, so the ring reads as
+            // thinner around the four corners than along the edges.
             .then(
                 if (isSelected) {
                     Modifier.glassSelectionRing(palette)
@@ -569,6 +591,13 @@ fun ServerListItem(
                     Modifier
                 }
             )
+            .semantics {
+                if (selectedStateDescription != null) {
+                    stateDescription = selectedStateDescription
+                }
+            }
+            .clip(cardShape)
+            .background(cardBrush)
             .clickable(onClick = onClick)
             .then(dragModifier)
             .padding(start = 10.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
@@ -699,12 +728,61 @@ fun ServerListItem(
                     CircularActionIcon(R.drawable.ic_delete_24dp, stringResource(R.string.acc_delete), onRemove)
                 }
             }
-            // Single-server test button under the delete icon
-            CircularActionIcon(
-                R.drawable.ic_speedtest_24dp,
-                stringResource(R.string.title_test_single),
-                onTest,
-                tint = palette.accent
+            // Single-server test button under the delete icon; it pulses only while
+            // this card's own measurement runs, so a press clearly did something.
+            if (pinging) {
+                IconButton(
+                    onClick = onTest,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                ) {
+                    PingingDots(
+                        color = palette.amber,
+                        contentDescription = stringResource(R.string.connection_test_testing)
+                    )
+                }
+            } else {
+                CircularActionIcon(
+                    R.drawable.ic_speedtest_24dp,
+                    stringResource(R.string.title_test_single),
+                    onTest,
+                    // The same warm accent the subscription bar's speed-test icon
+                    // carries, so the two are recognised as one action.
+                    tint = palette.amber
+                )
+            }
+        }
+    }
+}
+
+/** Three dots pulsing in turn: the "measuring this config's delay" sign. */
+@Composable
+private fun PingingDots(color: Color, contentDescription: String) {
+    val transition = rememberInfiniteTransition(label = "pinging")
+    val dots = List(3) { index ->
+        transition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 380, delayMillis = index * 190, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pingDot$index",
+        )
+    }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics { this.contentDescription = contentDescription },
+    ) {
+        dots.forEach { alpha ->
+            Box(
+                Modifier
+                    .size(4.5.dp)
+                    .graphicsLayer { this.alpha = alpha.value }
+                    .clip(CircleShape)
+                    .background(color)
             )
         }
     }
@@ -732,13 +810,33 @@ private fun CircularActionIcon(
     }
 }
 
-internal fun getProtocolDescription(profile: ProfileItem): String {
+@Composable
+internal fun getProtocolDescription(profile: ProfileItem): String =
+    protocolDescription(profile, stringResource(R.string.aether_carrier_short_only))
+
+/** [getProtocolDescription] without the string lookup, so the labels can be checked without a composition. */
+internal fun protocolDescription(profile: ProfileItem, onlyLabel: String): String {
     if (profile.configType == EConfigType.AETHER) {
-        // An aether card says what the tunnel is and where it leaves, since
-        // "AETHER" alone names neither the protocol nor the exit profile.
+        // An aether card names the whole path the traffic takes — the carrier around
+        // the tunnel, the tunnel itself, the carrier inside it — since "AETHER" alone
+        // names none of that, and the exit profile when one is set.
         val protocol = profile.aetherProtocol?.takeIf { it.isNotBlank() }
             ?.let { AetherProtocol.fromString(it).name }
-        val head = listOfNotNull(profile.configType.name, protocol).joinToString(" / ")
+        val tunnel = listOfNotNull(profile.configType.name, protocol).joinToString(" / ")
+        val psiphon = AetherPsiphon.fromString(profile.aetherPsiphon)
+        val tor = AetherTor.fromString(profile.aetherTor)
+        val path = when {
+            psiphon == AetherPsiphon.ONLY -> listOf("PSIPHON", onlyLabel)
+            tor == AetherTor.ONLY -> listOf("TOR", onlyLabel)
+            else -> buildList {
+                if (tor == AetherTor.REVERSE) add("TOR")
+                if (psiphon == AetherPsiphon.REVERSE) add("PSIPHON")
+                add(tunnel)
+                if (psiphon == AetherPsiphon.CHAIN) add("PSIPHON")
+                if (tor == AetherTor.CHAIN) add("TOR")
+            }
+        }
+        val head = path.joinToString(" > ")
         val exit = profile.aetherExitNode?.trim().orEmpty()
         return if (exit.isEmpty()) head else "$head → $exit"
     }

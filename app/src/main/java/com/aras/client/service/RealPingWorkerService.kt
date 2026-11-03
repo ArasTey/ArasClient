@@ -5,6 +5,7 @@ import com.aras.client.AppConfig
 import com.aras.client.core.CoreConfigContextBuilder
 import com.aras.client.core.CoreConfigManager
 import com.aras.client.core.CoreNativeManager
+import com.aras.client.core.CoreServiceManager
 import com.aras.client.core.HelperProcessSupport
 import com.aras.client.dto.RealPingEvent
 import com.aras.client.enums.EConfigType
@@ -132,6 +133,14 @@ class RealPingWorkerService(
         val retFailure = PingResult(-1L)
 
         val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
+        // The profile the tunnel is running right now is measured through that tunnel —
+        // the same instance and endpoints the bottom bar uses, so the card and the bar
+        // cannot disagree. The fresh instance the probe builds keeps only the outbounds,
+        // which is a different set of decisions than the live tunnel makes.
+        if (guid == MmkvManager.getSelectServer()) {
+            val live = CoreServiceManager.measureLiveTunnelDelay()
+            if (live >= 0) return PingResult(live)
+        }
         val chain = CoreConfigContextBuilder.resolveChainProfiles(context, guid)
 
         val configResult = CoreConfigManager.getXrayConfig4Speedtest(context, guid)
@@ -173,14 +182,30 @@ class RealPingWorkerService(
     }
 
     private fun measureOnce(content: String): PingResult {
-        val info = CoreNativeManager.measureOutboundDelayWithInfo(
-            content,
-            SettingsManager.getDelayTestUrl(),
-            MmkvManager.decodeSettingsString(AppConfig.PREF_IP_API_URL)
-                .takeIf { !it.isNullOrBlank() }
-                ?: AppConfig.IP_API_URL,
-        ) ?: return PingResult(-1L)
-        return PingResult(info.getDelay(), info.getCountry(), info.getIP())
+        val ipApiUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_IP_API_URL)
+            .takeIf { !it.isNullOrBlank() }
+            ?: AppConfig.IP_API_URL
+        for (url in delayTestUrls()) {
+            val info = CoreNativeManager.measureOutboundDelayWithInfo(content, url, ipApiUrl)
+                ?: continue
+            if (info.getDelay() >= 0) {
+                return PingResult(info.getDelay(), info.getCountry(), info.getIP())
+            }
+        }
+        return PingResult(-1L)
+    }
+
+    /**
+     * The endpoints to probe, in order. The connected bottom-bar measure already falls
+     * back to the second one; the card probe asked only the first, so a profile whose
+     * first endpoint is the one being interfered with read -1 on the card while the bar
+     * read a delay for the same tunnel.
+     */
+    private fun delayTestUrls(): List<String> {
+        val primary = SettingsManager.getDelayTestUrl()
+        return listOfNotNull(primary, SettingsManager.getDelayTestUrl(second = true))
+            .filter { it.isNotBlank() }
+            .distinct()
     }
 
     /**

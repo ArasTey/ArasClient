@@ -42,7 +42,7 @@ object AetherFmt : FmtBase() {
         val queryParam = if (uri.rawQuery.isNullOrEmpty()) emptyMap() else getQueryParam(uri)
         val protocol = AetherProtocol.fromString(queryParam["protocol"])
 
-        config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty()).ifEmpty { "Aether" }
+        config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty())
         config.aetherProtocol = protocol.type
         config.aetherTransport = AetherTransport.fromString(queryParam["transport"]).type
         config.aetherFingerprint = queryParam["fingerprint"]
@@ -90,6 +90,10 @@ object AetherFmt : FmtBase() {
             config.server = endpoint?.host
             config.serverPort = endpoint?.port?.toString()
         }
+
+        // A link that names nothing is named for the path its traffic takes, which
+        // is only known once every setting above is in place.
+        if (config.remarks.isBlank()) config.remarks = defaultRemarks(config)
 
         return config
     }
@@ -346,13 +350,26 @@ object AetherFmt : FmtBase() {
     private fun commaList(text: String?): String? =
         text?.split(Regex("[,\\s]+"))?.filter { it.isNotEmpty() }?.joinToString(",")?.ifEmpty { null }
 
-    /** The name a profile is given when it has none of its own. */
+    /**
+     * The name a profile is given when it has none of its own: the path its traffic
+     * takes, hop by hop, in the order it takes them. Two settings that differ are
+     * named differently, which is what a made-up word never did.
+     */
     fun defaultRemarks(config: ProfileItem): String {
-        val where = config.server?.takeIf { it.isNotBlank() }
-            ?: config.aetherWiwOuter?.takeIf { it.isNotBlank() }
-            ?: return "Aether"
-        val protocol = AetherProtocol.fromString(config.aetherProtocol).type
-        return "Aether $protocol ${where.substringBeforeLast(':')}"
+        val protocol = AetherProtocol.fromString(config.aetherProtocol)
+        val psiphon = AetherPsiphon.fromString(config.aetherPsiphon)
+        val tor = AetherTor.fromString(config.aetherTor)
+        val hops = buildList {
+            add("Aether")
+            if (tor == AetherTor.REVERSE) add("tor")
+            if (psiphon == AetherPsiphon.REVERSE) add("psiphon")
+            if (psiphon == AetherPsiphon.ONLY) add("psiphon")
+            if (tor == AetherTor.ONLY) add("tor")
+            if (psiphon != AetherPsiphon.ONLY && tor != AetherTor.ONLY) add(protocol.shortName)
+            if (psiphon == AetherPsiphon.CHAIN) add("psiphon")
+            if (tor == AetherTor.CHAIN) add("tor")
+        }
+        return hops.joinToString(" > ")
     }
 
     /** The loopback port [text] names for the core to listen on, null when it names none. */

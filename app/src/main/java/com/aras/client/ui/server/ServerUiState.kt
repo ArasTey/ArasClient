@@ -9,6 +9,8 @@ import com.aras.client.AppConfig.REALITY
 import com.aras.client.AppConfig.WIREGUARD_LOCAL_ADDRESS_V4
 import com.aras.client.AppConfig.WIREGUARD_LOCAL_MTU
 import com.aras.client.dto.entities.ProfileItem
+import com.aras.client.enums.AetherProtocol
+import com.aras.client.enums.AetherIpVersion
 import com.aras.client.enums.AetherPsiphon
 import com.aras.client.enums.AetherTor
 import com.aras.client.enums.EConfigType
@@ -62,11 +64,11 @@ class ServerUiState(
     xdriveSecrets: String = "",
     xdriveExtra: String = "",
     aetherProtocol: String = "wg",
-    aetherTransport: String = "h3",
+    aetherTransport: String = "h2",
     aetherFingerprint: String = "",
     aetherScanMode: String = "balanced",
     aetherObfuscation: String = "auto",
-    aetherIpVersion: String = "v4",
+    aetherIpVersion: String = AetherIpVersion.DUAL.type,
     aetherWiwOuter: String = "",
     aetherWiwInner: String = "",
     aetherFragment: Boolean = false,
@@ -228,12 +230,16 @@ class ServerUiState(
         // A Psiphon or Tor profile is the carrier alone: it names no server of its
         // own, and its carrier runs in only mode whatever the other fields say.
         val isCarrierOnly = configType.isCarrierOnly
+        // A gool or mim tunnel dials two hops of its own, so the single-endpoint
+        // fields stay empty; a wg or masque tunnel goes the other way round.
+        val isTwoHopAether = configType == EConfigType.AETHER &&
+            AetherProtocol.fromString(aetherProtocol).twoHops
 
         return initialConfig.copy(
             configType = configType,
             remarks = remarks,
-            server = if (isCarrierOnly) null else address,
-            serverPort = if (isCarrierOnly) null else port,
+            server = if (isCarrierOnly || isTwoHopAether) null else address,
+            serverPort = if (isCarrierOnly || isTwoHopAether) null else port,
             password = password,
             method = when {
                 isVmess || isShadowsocks -> method
@@ -287,8 +293,8 @@ class ServerUiState(
             aetherScanMode = aetherScanMode,
             aetherObfuscation = aetherObfuscation,
             aetherIpVersion = aetherIpVersion,
-            aetherWiwOuter = aetherWiwOuter.nullIfBlank(),
-            aetherWiwInner = aetherWiwInner.nullIfBlank(),
+            aetherWiwOuter = if (isTwoHopAether) aetherWiwOuter.nullIfBlank() else null,
+            aetherWiwInner = if (isTwoHopAether) aetherWiwInner.nullIfBlank() else null,
             aetherFragment = aetherFragment,
             aetherFragmentSize = aetherFragmentSize.nullIfBlank(),
             aetherFragmentDelay = aetherFragmentDelay.nullIfBlank(),
@@ -413,11 +419,11 @@ class ServerUiState(
                 xdriveSecrets = initialConfig.xdriveSecrets ?: "",
                 xdriveExtra = initialConfig.xdriveExtra ?: "",
                 aetherProtocol = initialConfig.aetherProtocol ?: "wg",
-                aetherTransport = initialConfig.aetherTransport ?: "h3",
+                aetherTransport = initialConfig.aetherTransport ?: "h2",
                 aetherFingerprint = initialConfig.aetherFingerprint ?: "",
                 aetherScanMode = initialConfig.aetherScanMode ?: "balanced",
                 aetherObfuscation = initialConfig.aetherObfuscation ?: "auto",
-                aetherIpVersion = initialConfig.aetherIpVersion ?: "v4",
+                aetherIpVersion = initialConfig.aetherIpVersion ?: AetherIpVersion.DUAL.type,
                 aetherWiwOuter = initialConfig.aetherWiwOuter ?: "",
                 aetherWiwInner = initialConfig.aetherWiwInner ?: "",
                 aetherFragment = initialConfig.aetherFragment == true,
