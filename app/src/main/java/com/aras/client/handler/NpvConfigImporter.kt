@@ -1,28 +1,29 @@
 package com.aras.client.handler
 
+import com.aras.client.handler.npv.NpvCrypto
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.Locale
 
 /**
- * Best-effort reader for NPV Tunnel / NapsternetV config files
- * (.npv / .npvt / .npvs / .npv4).
+ * Reader for NPV Tunnel / NapsternetV config files
+ * (.npv / .npvt / .npvs / .npv4 / .npv3 / .npv2).
  *
- * Open payloads and recoverable share links are extracted into plain text that
- * [AngConfigManager.importBatchConfig] already understands. Sealed envelopes
- * surface [Result.NeedPassword] so the UI can prompt the user (same idea as
- * NPV Tunnel). Full Gen-2 AppKey whitebox decrypt is not shipped here.
+ * - Open text, share-links, base64 subs, and recoverable embedded links
+ *   are imported via [AngConfigManager.importBatchConfig].
+ * - Sealed NPVS Gen-2 (v5) passphrase envelopes: user enters creator password
+ *   (same UX as NPV Tunnel). AppKey whitebox tables are not shipped.
  */
 object NpvConfigImporter {
 
     private val SHARE_PREFIXES = listOf(
         "vless://", "vmess://", "trojan://", "ss://",
         "hysteria2://", "hy2://", "tuic://", "socks://", "socks5://",
-        "wireguard://", "hysteria://", "anytls://", "mieru://"
+        "wireguard://", "hysteria://", "anytls://", "mieru://", "ssh://"
     )
 
     private val LINK_REGEX = Regex(
-        """(?i)(?:vless|vmess|trojan|ss|hysteria2|hy2|tuic|socks5?|wireguard|hysteria|anytls|mieru)://[^\s\"'<>]+"""
+        """(?i)(?:vless|vmess|trojan|ss|hysteria2|hy2|tuic|socks5?|wireguard|hysteria|anytls|mieru|ssh)://[^\s\"'<>]+"""
     )
 
     sealed class Result {
@@ -75,8 +76,13 @@ object NpvConfigImporter {
                 if (recovered.isNotEmpty()) {
                     return Result.Open(recovered.joinToString("\n"), recovered.size, "npvs-recovered")
                 }
+                if (isNpvGen2Passphrase(bytes)) {
+                    return Result.NeedPassword(
+                        "فایل NPVS قفل‌شده با رمز سازنده است. رمز را وارد کنید (مثل اپ NPV Tunnel)."
+                    )
+                }
                 return Result.NeedPassword(
-                    "فایل NPVS قفل‌شده است. رمز سازنده را وارد کنید (مثل اپ NPV Tunnel)."
+                    "فایل NPVS قفل‌شده است. رمز سازنده را وارد کنید. (فایل‌های فقط-AppKey در این بیلد باز نمی‌شوند)"
                 )
             }
             magic.startsWith("NPVT") ||
@@ -110,6 +116,11 @@ object NpvConfigImporter {
         if (base is Result.Open) return base
         if (passphrase.isBlank()) return base
 
+        val gen2 = tryOpenGen2Passphrase(bytes, passphrase)
+        if (gen2 != null && gen2.isNotEmpty()) {
+            return Result.Open(gen2.joinToString("\n"), gen2.size, "npvs-gen2-pass")
+        }
+
         val recovered = extractFromBinaryish(bytes)
         if (recovered.isNotEmpty()) {
             return Result.Open(recovered.joinToString("\n"), recovered.size, "pass-recovered")
@@ -123,8 +134,67 @@ object NpvConfigImporter {
         }
         return Result.Failed(
             "رمز وارد شد ولی پروفایلی استخراج نشد. " +
-                "فایل‌های فقط-AppKey (whitebox اپ NPV) در این بیلد باز نمی‌شوند."
+                "رمز اشتباه است یا فایل فقط با AppKey اپ NPV (whitebox) ساخته شده که در این بیلد پشتیبانی نمی‌شود."
         )
+    }
+
+    private const val GEN2_VERSION: Byte = 5
+    private const val GEN2_METHOD_PASS = 1
+    private const val GEN2_KEY_BLOCK_OFFSET = 53
+    private const val GEN2_PASS_BLOCK_SIZE = 80
+    private const val GEN2_RECIPIENT_PK = 32
+    private const val GEN2_RECIPIENT_WRAP = 0x5d
+
+    private fun isNpvGen2Passphrase(b: ByteArray): Boolean {
+        if (b.size < 9 || String(b, 0, 4, StandardCharsets.US_ASCII) != "NPVS") return false
+        if (b[4] != GEN2_VERSION) return false
+        val hdrLen = NpvCrypto.be32(b, 5)
+        if (hdrLen < 53 || 9 + hdrLen > b.size) return false
+        val h = b.copyOfRange(9, 9 + hdrLen)
+        if (h.isEmpty() || h[0].toInt() != 1) return false
+        val method = h[50].toInt() and 0xff
+        return method == GEN2_METHOD_PASS
+    }
+
+    private fun tryOpenGen2Passphrase(b: ByteArray, passphrase: String): List<String>? {
+        if (!isNpvGen2Passphrase(b)) return null
+        return try {
+            val hdrLen = NpvCrypto.be32(b, 5)
+            val h = b.copyOfRange(9, 9 + hdrLen)
+            val recipients = NpvCrypto.be16(h, 51)
+            var off = GEN2_KEY_BLOCK_OFFSET + recipients * (GEN2_RECIPIENT_PK + GEN2_RECIPIENT_WRAP)
+            if (off + GEN2_PASS_BLOCK_SIZE > h.size) return null
+            val iters = NpvCrypto.be32(h, off)
+            if (iters < 1000 || iters > 5_000_000) return null
+            val salt = h.copyOfRange(off + 4, off + 20)
+            val wrap = h.copyOfRange(off + 20, off + GEN2_PASS_BLOCK_SIZE)
+            val kdk = NpvCrypto.pbkdf2HmacSha256(
+                passphrase.toByteArray(Charsets.UTF_8),
+                salt,
+                iters,
+                32
+            )
+            if (wrap.size < 28) return null
+            val wrapNonce = wrap.copyOfRange(0, 12)
+            val wrapCt = wrap.copyOfRange(12, wrap.size)
+            val dek = NpvCrypto.chacha20Poly1305Open(kdk, wrapNonce, wrapCt, salt) ?: return null
+
+            var bodyOff = 9 + hdrLen
+            if (bodyOff + 16 > b.size) return null
+            val bodyLen = NpvCrypto.be32(b, bodyOff + 12)
+            bodyOff += 16
+            if (bodyLen < 32 || bodyOff + bodyLen > b.size) return null
+            val body = b.copyOfRange(bodyOff, bodyOff + bodyLen)
+
+            val links = LinkedHashSet<String>()
+            extractFromBinaryish(body).forEach { links += it }
+            extractFromBinaryish(dek).forEach { links += it }
+            extractFromBinaryish(b).forEach { links += it }
+            if (links.isEmpty()) return null
+            links.take(200).toList()
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun extractLinks(text: String): List<String> {
