@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_action_disconnect">Disconnect</string>
+    <string name="notification_action_restart">Restart</string>
+    <string name="radar_notif_title_connecting">RADAR · Connecting…</string>
+    <string name="radar_notif_title_connected">RADAR · Tunnel active</string>
+    <string name="radar_notif_subtitle_starting">Preparing secure tunnel</string>
+    <string name="radar_notif_status_starting">Starting VPN service…</string>
+    <string name="radar_notif_status_active">Tunnel verified · traffic flowing</string>
+    <string name="radar_notif_profile_unknown">Selected profile</string>
+    <string name="radar_notif_profile_line">Node · %1$s</string>
+    <string name="radar_notif_subtitle_profile_ping">%1$s · %2$s</string>
+    <string name="radar_notif_subtitle_profile">%1$s · connected</string>
+</resources>
