@@ -42,8 +42,9 @@ adb logcat -c
 adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity
 sleep 3
 
-echo "Launching the Telegram offline client screen."
-adb shell am start -n com.RDR.vpn/com.aras.client.ui.telegram.TelegramActivity
+echo "Enabling the exported Telegram launcher alias for an authorized emulator launch."
+adb shell pm enable com.RDR.vpn/com.aras.client.ui.telegram.TelegramLauncherAlias
+adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.telegram.TelegramLauncherAlias
 sleep 8
 adb logcat -d -v threadtime > "$LOG_FILE"
 
