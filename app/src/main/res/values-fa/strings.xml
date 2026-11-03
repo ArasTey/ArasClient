@@ -4,8 +4,6 @@
     <string name="title_pref_app_icon">آیکون برنامه</string>
     <string name="app_icon_default">پیش‌فرض</string>
     <string name="app_icon_calculator">ماشین‌حساب</string>
-    <string name="app_icon_telegram">تلگرام</string>
-    <string name="telegram_launcher_label">تلگرام</string>
     <string name="app_widget_name">اتصال / قطع</string>
     <string name="app_tile_name">Radar VPN: اتصال / قطع</string>
     <string name="app_tile_first_use">برای اولین استفاده از این قابلیت، لطفاً ابتدا از داخل برنامه یک سرور اضافه کنید</string>
