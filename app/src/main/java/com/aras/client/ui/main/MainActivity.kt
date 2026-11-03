@@ -271,6 +271,7 @@ class MainActivity : HelperBaseComponentActivity() {
                             toastError(R.string.toast_failure)
                         }
                     }
+                    // Keep config repair as a separate screen; do not alter VPN state.
                     MainAction.OpenConfigRepair -> startActivity(Intent(this, ConfigRepairActivity::class.java))
                     MainAction.RestartService -> LauncherManager.restartServiceOrStart(this, ::requestServiceStart)
                     MainAction.LocateSelectedServer -> mainViewModel.triggerLocateSelectedServer()
