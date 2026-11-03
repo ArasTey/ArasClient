@@ -93,6 +93,14 @@
                 <data android:mimeType="application/octet-stream" />
                 <data android:pathPattern=".*\\.RDR" />
                 <data android:pathPattern=".*\\.rdr" />
+                <data android:pathPattern=".*\\.npv" />
+                <data android:pathPattern=".*\\.npvt" />
+                <data android:pathPattern=".*\\.npvs" />
+                <data android:pathPattern=".*\\.npv4" />
+                <data android:pathPattern=".*\\.NPV" />
+                <data android:pathPattern=".*\\.NPVT" />
+                <data android:pathPattern=".*\\.NPVS" />
+                <data android:pathPattern=".*\\.NPV4" />
             </intent-filter>
 
             <meta-data
@@ -433,72 +441,19 @@
             android:enabled="true"
             android:exported="true"
             android:foregroundServiceType="specialUse"
-            android:icon="@drawable/ic_speedtest_24dp"
-            android:label="@string/app_quick_connect_tile_name"
+            android:icon="@drawable/ic_stat_name"
+            android:label="@string/app_tile_name"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:process=":RunSoArasDaemon">
             <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
             </intent-filter>
             <meta-data
                 android:name="android.service.quicksettings.ACTIVE_TILE"
-                android:value="true" />
-            <meta-data
-                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
                 android:value="true" />
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="tile" />
         </service>
-
-        <!-- =====================Tasker===================== -->
-        <activity
-            android:name=".ui.shortcut.TaskerActivity"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher">
-            <intent-filter>
-                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
-            </intent-filter>
-        </activity>
-
-        <receiver
-            android:name=".receiver.TaskerReceiver"
-            android:exported="true"
-            android:process=":RunSoArasDaemon"
-            tools:ignore="ExportedReceiver">
-            <intent-filter>
-                <action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING" />
-            </intent-filter>
-        </receiver>
-        <!-- =====================Tasker===================== -->
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge">
-
-            <meta-data
-                android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup"
-                tools:node="remove" />
-
-        </provider>
-
-        <service
-            android:name="androidx.work.multiprocess.RemoteWorkManagerService"
-            android:exported="false"
-            android:process=":bg" />
-
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.cache"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/cache_paths" />
-        </provider>
-
     </application>
-
 </manifest>
