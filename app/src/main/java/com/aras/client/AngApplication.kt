@@ -12,7 +12,7 @@ import com.aras.client.util.LogUtil
 import com.aras.client.handler.SettingsManager
 import com.aras.client.ui.compose.ThemeManager
 
-class AngApplication : Application() {
+class AngApplication : Application(), Configuration.Provider {
     companion object {
         lateinit var application: AngApplication
     }
@@ -26,9 +26,10 @@ class AngApplication : Application() {
         application = this
     }
 
-    private val workManagerConfiguration: Configuration = Configuration.Builder()
-        .setDefaultProcessName("${ANG_PACKAGE}:bg")
-        .build()
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setDefaultProcessName("${ANG_PACKAGE}:bg")
+            .build()
 
     /**
      * Initializes the application.
@@ -39,9 +40,6 @@ class AngApplication : Application() {
         MmkvManager.initialize(this)
 
         AppLocaleManager.initialize(this)
-
-        // Initialize WorkManager with the custom configuration
-        WorkManager.initialize(this, workManagerConfiguration)
 
         // Ensure critical preference defaults are present in MMKV early
         SettingsManager.initApp(this)
