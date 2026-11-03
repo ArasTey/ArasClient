@@ -63,24 +63,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            set -eu
-            APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"
-            if [ -z "$APK" ]; then
-              APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
-            fi
-            test -n "$APK"
-            adb install -r "$APK"
-            adb logcat -c
-            adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity
-            sleep 20
-            adb logcat -d -v threadtime > radar-launch-logcat.txt
-            if adb shell pidof com.RDR.vpn >/dev/null 2>&1; then
-              echo "RADAR main process is still running after launch."
-            else
-              echo "RADAR process exited after launch. Recent fatal logs:"
-              grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' radar-launch-logcat.txt || true
-              exit 1
-            fi
+            set -eu; APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"; if [ -z "$APK" ]; then APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"; fi; test -n "$APK"; adb install -r "$APK"; adb logcat -c; adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity; sleep 20; adb logcat -d -v threadtime > radar-launch-logcat.txt; if adb shell pidof com.RDR.vpn >/dev/null 2>&1; then echo "RADAR main process is still running after launch."; else echo "RADAR process exited after launch. Recent fatal logs:"; grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' radar-launch-logcat.txt || true; exit 1; fi
 
       - name: Upload launch diagnostics and APK
         if: always()
