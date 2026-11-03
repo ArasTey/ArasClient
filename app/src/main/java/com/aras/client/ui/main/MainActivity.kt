@@ -46,6 +46,7 @@ import com.aras.client.ui.export.ArascPasswordDialog
 import com.aras.client.ui.export.ExportActivity
 import com.aras.client.ui.logcat.LogcatActivity
 import com.aras.client.ui.perappproxy.PerAppProxyActivity
+import com.aras.client.ui.repair.ConfigRepairActivity
 import com.aras.client.ui.routing.RoutingSettingActivity
 import com.aras.client.ui.server.ProfileEditorResult
 import com.aras.client.ui.server.ServerAetherActivity
@@ -270,6 +271,7 @@ class MainActivity : HelperBaseComponentActivity() {
                             toastError(R.string.toast_failure)
                         }
                     }
+                    MainAction.OpenConfigRepair -> startActivity(Intent(this, ConfigRepairActivity::class.java))
                     MainAction.RestartService -> LauncherManager.restartServiceOrStart(this, ::requestServiceStart)
                     MainAction.LocateSelectedServer -> mainViewModel.triggerLocateSelectedServer()
                     is MainAction.SelectServer -> setSelectServer(action.guid)
