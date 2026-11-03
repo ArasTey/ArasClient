@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,33 +13,32 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.aras.client.radar.sense.NetworkAtmosphere
+import com.aras.client.radar.sense.RadarSenseEngine
+import com.aras.client.radar.sense.RadarSenseReport
+import com.aras.client.radar.sense.SenseProbe
 import com.aras.client.ui.compose.AppTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.InetAddress
-import java.net.URL
 
-private data class DpiProbeResult(
-    val host: String,
-    val dnsMs: Long?,
-    val httpsMs: Long?,
-    val httpCode: Int?,
-    val detail: String
-)
-
-/** Diagnostic only: DNS and certificate-validated HTTPS checks; failures alone do not prove DPI. */
+/**
+ * Radar Sense UI — on-device network atmosphere scan.
+ * Multi-vector classification and protocol strategy hints.
+ * Does not alter VPN state.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 class DpiTestActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,56 +46,52 @@ class DpiTestActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 var running by remember { mutableStateOf(false) }
-                var summary by remember { mutableStateOf("آزمایش، DNS و HTTPS شبکهٔ فعلی را بررسی می‌کند. برای ارزیابی مسیر VPN، ابتدا به کانفیگ موردنظر وصل شو.") }
-                val results = remember { mutableStateListOf<DpiProbeResult>() }
-                Scaffold(topBar = { TopAppBar(title = { Text("آزمایش تشخیصی DPI") }) }) { padding ->
+                var report by remember { mutableStateOf<RadarSenseReport?>(null) }
+                var error by remember { mutableStateOf<String?>(null) }
+
+                Scaffold(topBar = { TopAppBar(title = { Text("Radar Sense · حس رادار") }) }) { padding ->
                     Column(
-                        Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+                        Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            "این بررسی، پاسخ DNS و اتصال HTTPS استاندارد با اعتبارسنجی گواهی را مقایسه می‌کند. نتیجه فقط نشانهٔ احتمالی اختلال است و DPI را به‌تنهایی اثبات نمی‌کند.",
+                            "اسکن چندبرداری روی دستگاه: DNS، TCP، HTTPS و UDP/443. " +
+                                "جوّ شبکه را دسته‌بندی می‌کند و استک پیشنهادی می‌دهد. " +
+                                "نتیجه اثبات حقوقی DPI نیست — سیگنال عملی برای انتخاب پروتکل است.",
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Button(
                             enabled = !running,
-                            onClick = { results.clear(); running = true; summary = "در حال آزمایش مقصدهای عمومی…" }
-                        ) { Text("شروع آزمایش DPI") }
-                        if (running) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(summary, style = MaterialTheme.typography.titleSmall)
-                        results.forEach { result ->
-                            Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(result.host, style = MaterialTheme.typography.titleMedium)
-                                    Text("DNS: " + (result.dnsMs?.let { "$it ms" } ?: "ناموفق/نامشخص"))
-                                    Text("HTTPS: " + (result.httpsMs?.let { "$it ms" } ?: "ناموفق") +
-                                        " · HTTP: " + (result.httpCode?.toString() ?: "—"))
-                                    Text(result.detail, style = MaterialTheme.typography.bodySmall)
-                                }
+                            onClick = {
+                                report = null
+                                error = null
+                                running = true
                             }
+                        ) { Text(if (report == null) "شروع Radar Sense" else "اسکن دوباره") }
+
+                        if (running) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                            Text("در حال نمونه‌برداری از جوّ شبکه…", style = MaterialTheme.typography.bodySmall)
                         }
+
+                        error?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        report?.let { SenseReportCard(it) }
                     }
                 }
+
                 LaunchedEffect(running) {
                     if (!running) return@LaunchedEffect
                     try {
-                        val probes = listOf(
-                            "www.cloudflare.com" to "https://www.cloudflare.com/cdn-cgi/trace",
-                            "www.google.com" to "https://www.google.com/generate_204",
-                            "www.wikipedia.org" to "https://www.wikipedia.org/"
-                        )
-                        val checked = withContext(Dispatchers.IO) {
-                            probes.map { (host, url) -> async(Dispatchers.IO) { probe(host, url) } }.awaitAll()
-                        }
-                        results.addAll(checked)
-                        val failed = checked.count { it.httpsMs == null }
-                        summary = when {
-                            failed == 0 -> "هر سه مقصد HTTPS پاسخ دادند؛ در این آزمایش نشانهٔ واضحی از اختلال دیده نشد."
-                            failed == checked.size -> "همهٔ مقصدها ناموفق بودند؛ اینترنت، DNS، زمان دستگاه یا محدودیت شبکه را بررسی کن. این نتیجه به‌تنهایی اثبات DPI نیست."
-                            else -> "$failed از ${checked.size} مقصد HTTPS ناموفق بود؛ تفاوت پاسخ‌ها می‌تواند نشانهٔ اختلال مسیر یا محدودیت شبکه باشد، اما علت قطعی نیست."
-                        }
+                        report = RadarSenseEngine.scan()
                     } catch (e: Exception) {
-                        summary = "آزمایش کامل نشد: " + (e.message ?: "خطای شبکه")
+                        error = "اسکن کامل نشد: " + (e.message ?: "خطای ناشناخته")
                     } finally {
                         running = false
                     }
@@ -103,41 +99,75 @@ class DpiTestActivity : ComponentActivity() {
             }
         }
     }
+}
 
-    private fun probe(host: String, url: String): DpiProbeResult {
-        var dnsMs: Long? = null
-        var httpsMs: Long? = null
-        var code: Int? = null
-        var detail = "پاسخ معتبر دریافت شد."
-        try {
-            val dnsStart = System.nanoTime()
-            InetAddress.getAllByName(host)
-            dnsMs = (System.nanoTime() - dnsStart) / 1_000_000L
-        } catch (e: Exception) {
-            detail = "حل نام DNS ناموفق بود: " + (e.message ?: e.javaClass.simpleName)
-            return DpiProbeResult(host, null, null, null, detail)
-        }
-        val connection = try {
-            (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 5_000
-                readTimeout = 5_000
-                requestMethod = "GET"
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "RadarVPN-Network-Diagnostics")
-            }
-        } catch (e: Exception) {
-            return DpiProbeResult(host, dnsMs, null, null, "ساخت درخواست HTTPS ناموفق بود.")
-        }
-        try {
-            val start = System.nanoTime()
-            code = connection.responseCode
-            httpsMs = (System.nanoTime() - start) / 1_000_000L
-            if (code !in 200..399) detail = "پاسخ HTTP غیرمنتظره است؛ لزوماً به معنی DPI نیست."
-        } catch (e: Exception) {
-            detail = "اتصال HTTPS/TLS ناموفق بود: " + (e.message ?: e.javaClass.simpleName)
-        } finally {
-            connection.disconnect()
-        }
-        return DpiProbeResult(host, dnsMs, httpsMs, code, detail)
+@Composable
+private fun SenseReportCard(report: RadarSenseReport) {
+    val tone = when (report.atmosphere) {
+        NetworkAtmosphere.CLEAR -> Color(0xFF00A86B)
+        NetworkAtmosphere.TURBULENT -> Color(0xFFD4A017)
+        NetworkAtmosphere.HEAVY_FILTER -> Color(0xFFE85D4C)
+        NetworkAtmosphere.OFFLINE -> Color(0xFFB00020)
+        NetworkAtmosphere.UNKNOWN -> MaterialTheme.colorScheme.onSurface
     }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("جوّ شبکه: " + atmosphereLabel(report.atmosphere), color = tone, style = MaterialTheme.typography.titleMedium)
+            Text(report.summaryFa, style = MaterialTheme.typography.bodyMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Metric("امتیاز", report.score.toString())
+                Metric("زمان", report.elapsedMs.toString() + " ms")
+                Metric("اثر انگشت", report.fingerprint)
+            }
+        }
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("استراتژی پیشنهادی", style = MaterialTheme.typography.titleSmall)
+            Text("اصلی: " + report.hint.primary, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "جایگزین: " + report.hint.alternatives.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(report.hint.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+
+    Text("جزئیات پروب‌ها", style = MaterialTheme.typography.titleSmall)
+    report.probes.forEach { probe -> ProbeRow(probe) }
+}
+
+@Composable
+private fun ProbeRow(probe: SenseProbe) {
+    val color = if (probe.ok) Color(0xFF00A86B) else MaterialTheme.colorScheme.error
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(probe.label + " · " + probe.category.uppercase(), style = MaterialTheme.typography.titleSmall)
+            Text(
+                (if (probe.ok) "OK" else "FAIL") +
+                    (probe.latencyMs?.let { " · $it ms" } ?: ""),
+                color = color,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(probe.detail, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun Metric(label: String, value: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        Text(value, style = MaterialTheme.typography.titleSmall)
+    }
+}
+
+private fun atmosphereLabel(a: NetworkAtmosphere): String = when (a) {
+    NetworkAtmosphere.CLEAR -> "باز / CLEAR"
+    NetworkAtmosphere.TURBULENT -> "ناپایدار / TURBULENT"
+    NetworkAtmosphere.HEAVY_FILTER -> "فیلتر سنگین / HEAVY"
+    NetworkAtmosphere.OFFLINE -> "آفلاین / OFFLINE"
+    NetworkAtmosphere.UNKNOWN -> "نامشخص"
 }
