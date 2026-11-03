@@ -1,0 +1,94 @@
+name: RADAR Android launch smoke test
+
+on:
+  push:
+    branches: [not-SIGNAL/NOT-NET]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK available on hosted runners
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Use installed compile SDK for CI validation
+        run: sed -i 's/compileSdk = 37/compileSdk = 36/' app/build.gradle.kts
+
+      - name: Create temporary CI signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore ci-temporary.keystore \
+            -storepass ci-temporary-password \
+            -keypass ci-temporary-password \
+            -alias ci-temporary \
+            -keyalg RSA -keysize 2048 -validity 2 \
+            -dname "CN=Temporary CI Build, OU=CI, O=G-ST-VPN, L=CI, ST=CI, C=US"
+          cat > keystore.properties <<'EOF'
+          storeFile=ci-temporary.keystore
+          storePassword=ci-temporary-password
+          keyAlias=ci-temporary
+          keyPassword=ci-temporary-password
+          EOF
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble debug APK and unit tests
+        run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest -x :app:checkDebugAarMetadata
+
+      - name: Install and launch on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -eu
+            APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | grep -i 'universal' | head -n 1 || true)"
+            if [ -z "$APK" ]; then
+              APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
+            fi
+            test -n "$APK"
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am start -W -n com.RDR.vpn/com.aras.client.ui.main.MainActivity
+            sleep 20
+            adb logcat -d -v threadtime > radar-launch-logcat.txt
+            if adb shell pidof com.RDR.vpn >/dev/null 2>&1; then
+              echo "RADAR main process is still running after launch."
+            else
+              echo "RADAR process exited after launch. Recent fatal logs:"
+              grep -A 50 -B 10 -E 'FATAL EXCEPTION|AndroidRuntime|Fatal signal' radar-launch-logcat.txt || true
+              exit 1
+            fi
+
+      - name: Upload launch diagnostics and APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-launch-smoke-diagnostics
+          path: |
+            radar-launch-logcat.txt
+            app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+          retention-days: 7
