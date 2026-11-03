@@ -40,7 +40,7 @@ object TelegramCredentialsStore {
 
     fun load(context: Context): Credentials? = runCatching {
         val packed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_CREDENTIALS, null) ?: return null
+            .getString(KEY_CREDENTIALS, null) ?: error("No Telegram API credentials saved")
         val parts = packed.split(":", limit = 2)
         require(parts.size == 2)
         val iv = Base64.decode(parts[0], Base64.NO_WRAP)
