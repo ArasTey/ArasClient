@@ -270,12 +270,10 @@ fun SettingsScreen(
                     entries = listOf(
                         stringResource(R.string.app_icon_default),
                         stringResource(R.string.app_icon_calculator),
-                        stringResource(R.string.app_icon_telegram)
                     ),
                     values = listOf(
                         LauncherIconManager.MODE_DEFAULT,
                         LauncherIconManager.MODE_CALCULATOR,
-                        LauncherIconManager.MODE_TELEGRAM
                     ),
                     selectedValue = uiIconMode,
                     onSelected = {
