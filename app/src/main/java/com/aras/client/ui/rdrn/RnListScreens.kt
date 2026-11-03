@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.sp
 import com.aras.client.R
 import com.aras.client.ui.main.MainAction
 
-/** Tab 3 — config list in the Neon style. Selecting/testing use the app's own actions; "Manage" opens the full list. */
 @Composable
 fun RnConfigsScreen(
     servers: List<RnServer>,
@@ -94,6 +93,10 @@ fun RnConfigsScreen(
                     ).forEach { (label, action) ->
                         DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { addOpen = false; onAction(action) })
                     }
+                    DropdownMenuItem(
+                        text = { Text("تعمیرگاه کانفیگ") },
+                        onClick = { addOpen = false; onAction(MainAction.OpenConfigRepair) }
+                    )
                 }
             }
         }
@@ -163,7 +166,6 @@ private fun ConfigRow(s: RnServer, selected: Boolean, onClick: () -> Unit, onTes
     }
 }
 
-/** Tab 4 — configs grouped by country, with region tabs. Tapping selects the fastest config of that country. */
 @Composable
 fun RnCountryScreen(
     servers: List<RnServer>,
