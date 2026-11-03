@@ -169,7 +169,7 @@ object NpvConfigImporter {
             val salt = h.copyOfRange(off + 4, off + 20)
             val wrap = h.copyOfRange(off + 20, off + GEN2_PASS_BLOCK_SIZE)
             val kdk = NpvCrypto.pbkdf2HmacSha256(
-                passphrase.toByteArray(Charsets.UTF_8),
+                passphrase.toByteArray(StandardCharsets.UTF_8),
                 salt,
                 iters,
                 32
