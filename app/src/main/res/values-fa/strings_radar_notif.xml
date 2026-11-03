@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_action_disconnect">قطع اتصال</string>
+    <string name="notification_action_restart">راه‌اندازی مجدد</string>
+    <string name="radar_notif_title_connecting">RADAR · در حال اتصال…</string>
+    <string name="radar_notif_title_connected">RADAR · تونل فعال</string>
+    <string name="radar_notif_subtitle_starting">در حال آماده‌سازی تونل امن</string>
+    <string name="radar_notif_status_starting">راه‌اندازی سرویس VPN…</string>
+    <string name="radar_notif_status_active">تونل تأیید شد · ترافیک در جریان</string>
+    <string name="radar_notif_profile_unknown">پروفایل انتخاب‌شده</string>
+    <string name="radar_notif_profile_line">گره · %1$s</string>
+    <string name="radar_notif_subtitle_profile_ping">%1$s · %2$s</string>
+    <string name="radar_notif_subtitle_profile">%1$s · متصل</string>
+</resources>
