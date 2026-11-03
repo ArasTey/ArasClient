@@ -1,49 +1,34 @@
-# RADAR VPN — Config Finder
+# RADAR VPN — Config Finder (Top-20 DPI + Real-oriented)
 
 ## Scope
-This module is isolated under `com.aras.client.radar.config` and used by
-`RadarConfigActivity`. It does not change the VPN service, profile persistence,
-connection manager, subscription updater, routing, or other application features.
+Isolated under `com.aras.client.radar.config` and used by `RadarConfigActivity`.
+Does not change VPN service, profile persistence, connection manager, or routing.
+
+## Goals
+- Prefer configs more likely to survive modern DPI (Reality, Hysteria2, TUIC, XHTTP, Amnezia-style).
+- Wide multi-source discovery with source quality bonuses.
+- TCP reachability on a quality-biased pool.
+- Rank by combined score (DPI + latency; realPing when available).
+- Expose only the **Top 20** reachable configs per search.
+- One-click import of Top 20 for real core (Real Ping) testing in the main app.
 
 ## Pipeline
-1. Discover public feeds from a curated repository catalog.
-2. Read each repository default branch and bounded recursive Git tree.
-3. Fetch a small, size-limited set of likely subscription/config files.
-4. Extract direct links or decode Base64 subscription payloads.
-5. Parse supported URI schemes and validate host/port syntax, including VMess JSON and bracketed IPv6.
-6. Deduplicate by normalized endpoint identity, independent of provider remark.
-7. Resolve DNS and run two bounded TCP samples against public addresses only.
-8. Enrich country information through the app's existing GeoIP cache.
-9. Rank reachable endpoints by measured TCP latency and expose protocol/country filters.
-10. Import only on explicit user action; the existing app core test/connection flow remains authoritative.
+1. Discover public feeds from a curated, DPI-oriented source catalog (direct feeds preferred).
+2. Parse supported URI schemes (VLESS, VMess, Trojan, SS, Hysteria2, TUIC, …).
+3. Assign **dpiScore** (0–200) from protocol, Reality/XTLS/XHTTP markers, ports, source quality.
+4. Keep a limited high-score pool (~180) for probing.
+5. DNS + bounded concurrent TCP samples (public addresses only).
+6. Compute **rankScore** = dpiScore × 1.4 + latency score (+ bonus if realPingMs present).
+7. Sort reachable results by rankScore and keep **Top 20**.
+8. User imports one config or the whole Top-20 set for real core testing.
 
-## Important distinction
-TCP reachability is only a preliminary network signal. It does not prove TLS,
-Reality, authentication, transport negotiation, or successful proxy traffic.
-The UI labels it TCP-only and hands candidates to the existing RADAR VPN server
-list for the app's real profile/core test.
+## Real Ping
+TCP is only a pre-filter. Full Real Ping (core handshake + delay) runs after import via the existing main-app RealPingWorkerService path. Ranking already prefers lower latency and can incorporate `realPingMs` when measured.
 
-## Reliability controls
-- One failed repository does not abort other sources.
+## Reliability
+- One failed repository does not abort others.
 - Per-source fetch/parse counts and errors are displayed.
-- Repository/file counts, response sizes and network timeouts are bounded.
-- Candidate probing is concurrent but bounded.
-- Private, loopback, link-local, multicast and selected reserved IP ranges are not probed.
-- Duplicate entries are collapsed across sources.
-- Probe results use an in-memory cache (success 3 minutes, failure 45 seconds).
+- File sizes, tree depth and concurrent probes are bounded.
+- Private / loopback / reserved ranges are never probed.
+- Probe results use a short in-memory cache.
 - Stopping the scan cancels the coroutine pipeline.
-- Candidate URIs are not persisted by this module.
-
-## Source catalog
-The catalog includes repositories previously selected for RADAR VPN:
-miladtahanian/V2RayScrapeByCountry, SoliSpirit/v2ray-configs,
-Delta-Kronecker/V2ray-Config, Danialsamadi/v2go, morpheusadam/v2ray-config,
-MatinGhanbari/v2ray-configs, 0xRadikal/Free-v2ray-Configs,
-drmikecrypto/PulseConfigs, and rtwo2/FastNodes. Existing sources from the first
-implementation remain as fallbacks. Repository contents and public endpoints
-can change, so source diagnostics are part of the feature.
-
-## Validation
-Unit tests cover direct links, Base64 subscriptions, VMess JSON, IPv6 endpoint
-syntax, invalid ports/schemes, and duplicate identity. The dedicated Android
-debug workflow runs unit tests and assembles a debug APK for this branch.
