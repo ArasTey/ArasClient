@@ -969,4 +969,7 @@
     <string name="monitor_battery_full">Full</string>
     <string name="monitor_battery_not_charging">Not charging</string>
 
+    <string name="title_ui_experience">App interface</string>
+    <string name="ui_experience_radar">RADAR Classic</string>
+    <string name="ui_experience_zx">ZX UI</string>
 </resources>
