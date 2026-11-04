@@ -515,7 +515,15 @@ class MainActivity : HelperBaseComponentActivity() {
             if (uri == null) return@launchFileChooser
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val name = uri.lastPathSegment
+                    val name = contentResolver.query(
+                        uri,
+                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null,
+                        null,
+                        null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    } ?: uri.lastPathSegment
                     val data = contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     if (data == null) {
                         withContext(Dispatchers.Main) { toastError(R.string.toast_failure) }
