@@ -123,6 +123,9 @@ class RadarConfigActivity : ComponentActivity() {
                                     Button(enabled = !scanning, onClick = {
                                         results.clear()
                                         sourceReports.clear()
+                                        // A manual scan means fresh reachability, not a cached result
+                                        // from a previous network or an earlier source refresh.
+                                        RadarConfigProbeCache.clear()
                                         top20Ready = false
                                         radar?.clearBlips()
                                         scanning = true
