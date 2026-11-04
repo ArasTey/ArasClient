@@ -58,11 +58,12 @@ data class AuroraRadarContact(
     val tested: Boolean = true
 )
 
+@Composable
 private fun AuroraLinkState.accent(): Color = when (this) {
-    AuroraLinkState.OFF -> Color(0xFF77827F)
-    AuroraLinkState.CONNECTING -> Color(0xFFFFC56E)
-    AuroraLinkState.CONNECTED -> Color(0xFF55FFC0)
-    AuroraLinkState.DANGER -> Color(0xFFFF5369)
+    AuroraLinkState.OFF -> MaterialTheme.colorScheme.outline
+    AuroraLinkState.CONNECTING -> MaterialTheme.colorScheme.secondary
+    AuroraLinkState.CONNECTED -> MaterialTheme.colorScheme.primary
+    AuroraLinkState.DANGER -> MaterialTheme.colorScheme.error
 }
 
 @Composable
@@ -70,17 +71,22 @@ fun AuroraGlassCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .background(
                 brush = Brush.linearGradient(
-                    listOf(Color(0xFF192923), Color(0xFF0C1212), Color(0xFF0A0F0E))
+                    listOf(
+                        scheme.surfaceContainerHigh.copy(alpha = 0.96f),
+                        scheme.surface.copy(alpha = 0.92f),
+                        scheme.surfaceContainerLow.copy(alpha = 0.96f),
+                    )
                 ),
                 shape = RoundedCornerShape(24.dp)
             )
             .border(
                 width = 1.dp,
-                color = Color(0xFF2B4039),
+                color = scheme.outline.copy(alpha = 0.48f),
                 shape = RoundedCornerShape(24.dp)
             )
             .padding(17.dp),
@@ -131,6 +137,8 @@ fun AuroraSentinelRadar(
     selectedContactId: String? = null
 ) {
     val accent = state.accent()
+    val surface = MaterialTheme.colorScheme.surface
+    val background = MaterialTheme.colorScheme.background
     val transition = rememberInfiniteTransition(label = "aurora-radar")
     val sweepAngle by transition.animateFloat(
         initialValue = 0f,
@@ -167,8 +175,8 @@ fun AuroraSentinelRadar(
                 brush = Brush.radialGradient(
                     colors = listOf(
                         accent.copy(alpha = 0.10f),
-                        Color(0xFF0A1510),
-                        Color(0xFF050908)
+                        surface,
+                        background
                     ),
                     center = center,
                     radius = radius
@@ -242,9 +250,9 @@ fun AuroraSentinelRadar(
                     val ping = contact.pingMs
                     val pointColor = when {
                         !contact.tested -> Color(0xFFFFC56E)
-                        !contact.profileResponding -> Color(0xFFFF5369)
-                        ping == null || ping < 0 -> Color(0xFFFF5369)
-                        else -> Color(0xFF55FFC0)
+                        !contact.profileResponding -> MaterialTheme.colorScheme.error
+                        ping == null || ping < 0 -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.primary
                     }
                     val radial = if (ping == null || ping < 0) {
                         0.91f
@@ -273,7 +281,7 @@ fun AuroraSentinelRadar(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = centerLabel,
-                color = if (state == AuroraLinkState.OFF) Color(0xFFFF5369) else accent,
+                color = if (state == AuroraLinkState.OFF) MaterialTheme.colorScheme.error else accent,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = FontFamily.Monospace,
@@ -282,7 +290,7 @@ fun AuroraSentinelRadar(
             Spacer(Modifier.height(5.dp))
             Text(
                 text = centerSubtitle,
-                color = Color(0xFF91A39A),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 8.sp,
                 letterSpacing = 0.7.sp
             )
