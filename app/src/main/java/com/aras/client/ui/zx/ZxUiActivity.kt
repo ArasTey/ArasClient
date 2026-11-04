@@ -177,7 +177,6 @@ class ZxUiActivity : HelperBaseComponentActivity() {
     override fun ScreenContent() {
         ZxUiScreen(
             viewModel = mainViewModel,
-            onExit = { selectUiExperience("radar") },
             onSelectExperience = ::selectUiExperience,
             onSelectServer = ::selectServer,
             onOpen = { activity -> startActivity(Intent(this, activity)) },
@@ -198,7 +197,6 @@ private enum class ZxTab(val label: String, val marker: String) {
 @Composable
 private fun ZxUiScreen(
     viewModel: MainViewModel,
-    onExit: () -> Unit,
     onOpen: (Class<out android.app.Activity>) -> Unit,
     onSelectServer: (String) -> Unit,
     onOpenPsiphonCdn: () -> Unit,
@@ -229,7 +227,7 @@ private fun ZxUiScreen(
     Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)) {
                     ZxTab.entries.forEach { item ->
                         NavigationBarItem(
                             selected = tab == item,
@@ -322,6 +320,7 @@ private fun ZxUiScreen(
                                 }
                             }
                         },
+                        modifier = Modifier.weight(1f),
                         label = "zx-tab-transition",
                     ) { page ->
                         when (page) {
@@ -375,16 +374,6 @@ private fun ZxUiScreen(
                         }
                     }
                 }
-                Text(
-                    "بازگشت به رابط RADAR",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 78.dp, end = 20.dp)
-                        .clickable(onClick = onExit)
-                        .padding(6.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelSmall,
-                )
             }
         }
 }
@@ -438,7 +427,7 @@ private fun ZxHomePage(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(30.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.86f)),
         ) {
             Column(
                 modifier = Modifier
@@ -755,7 +744,7 @@ private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit, onMan
         ZxQuickTile("تغییر DNS", "مدیریت DNS محلی", Modifier.fillMaxWidth()) { onOpen(DnsChangerActivity::class.java) }
         ZxQuickTile("اسکنر DNS", "پیدا کردن و بررسی Resolverها", Modifier.fillMaxWidth()) { onOpen(DnsScannerActivity::class.java) }
         ZxQuickTile("Psiphon CDN", "ساخت پروفایل مستقل سایفون", Modifier.fillMaxWidth(), onPsiphonCdn)
-        ZxQuickTile("مدیریت و افزودن کانفیگ", "QR، فایل، کلیپ‌بورد، لینک و اشتراک‌ها", Modifier.fillMaxWidth(), onManageConfigs)
+        ZxQuickTile("واردکردن کانفیگ و NPV", "QR، فایل .rdr و NPV، کلیپ‌بورد و لینک اشتراک", Modifier.fillMaxWidth(), onManageConfigs)
     }
 }
 
