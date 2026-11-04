@@ -120,6 +120,26 @@ class AetherFlagTest {
     }
 
     @Test
+    fun `standalone Psiphon CDN does not require a WARP gateway`() {
+        val arguments = AetherCoreManager.buildArguments(
+            profile {
+                aetherPsiphon = "only"
+                aetherPsiphonMode = "cdn"
+                aetherPsiphonRegion = "DE"
+                aetherPsiphonCdnIps = "1.2.3.4"
+                aetherPsiphonCdnSni = "front.example"
+            },
+            port = 10819,
+        )
+        assertOnlyAcceptedFlags(arguments)
+        assertTrue("--psiphon-only" in arguments)
+        assertTrue("--protocol" !in arguments)
+        assertTrue("DE" in arguments)
+        assertTrue("1.2.3.4" in arguments)
+        assertTrue("front.example" in arguments)
+    }
+
+    @Test
     fun `a tor profile emits only accepted flags`() {
         assertOnlyAcceptedFlags(
             AetherCoreManager.buildArguments(
