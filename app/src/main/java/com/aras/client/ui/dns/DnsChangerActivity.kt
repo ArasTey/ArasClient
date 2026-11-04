@@ -49,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aras.client.core.LauncherManager
@@ -68,6 +69,7 @@ class DnsChangerActivity : BaseComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DnsChangerScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val profiles = remember {
         mutableStateListOf<DnsProfile>().apply {
@@ -249,7 +251,7 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
                         } else {
                             DnsChangerStore.activate(DnsProfile(selectedName ?: "Custom DNS", primary, secondary))
                             if (CoreServiceManager.isRunning()) {
-                                runCatching { LauncherManager.restartService(this@DnsChangerActivity) }
+                                runCatching { LauncherManager.restartService(context) }
                                 notice = "DNS selected and the active Radar tunnel is restarting"
                             } else {
                                 showStandaloneInfo = true

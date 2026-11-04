@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import androidx.compose.material3.TextButton
 import com.aras.client.ui.radar.RadarConfigActivity
+import com.aras.client.ui.dns.DnsChangerActivity
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.painterResource
@@ -50,6 +51,10 @@ fun MainTopBar(
             onAction = { action ->
                 showImportMenu = false
                 onAction(action)
+            },
+            onOpenDnsChanger = {
+                showImportMenu = false
+                context.startActivity(Intent(context, DnsChangerActivity::class.java))
             }
         )
         TextButton(onClick = {

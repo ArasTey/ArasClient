@@ -94,9 +94,13 @@ object DnsChangerStore {
 
     fun isIpAddress(value: String): Boolean = runCatching {
         if (value.isBlank() || value.any { it.isWhitespace() }) return false
-        val address = InetAddress.getByName(value)
-        address.hostAddress.equals(value, ignoreCase = true) ||
-            (address.hostAddress.substringBefore('%') == value.substringBefore('%'))
+        if (value.contains(':')) {
+            if (!value.matches(Regex("[0-9a-fA-F:.%]+"))) return false
+            InetAddress.getByName(value).address.size == 16
+        } else {
+            val parts = value.split('.')
+            parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 && it.isNotEmpty() }
+        }
     }.getOrDefault(false)
 }
 
@@ -105,7 +109,7 @@ object DnsLatencyProbe {
     fun test(server: String, timeoutMs: Int = 1800): Long {
         require(DnsChangerStore.isIpAddress(server)) { "Invalid DNS IP address" }
         val id = Random.nextInt(0, 65536)
-        val query = ByteArray(12 + 2 + 4 + 4).apply {
+        val query = ByteArray(12 + 13 + 4).apply {
             this[0] = (id shr 8).toByte()
             this[1] = id.toByte()
             this[2] = 0x01
