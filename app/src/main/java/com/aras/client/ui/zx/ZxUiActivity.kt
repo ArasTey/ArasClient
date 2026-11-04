@@ -1,6 +1,9 @@
 package com.aras.client.ui.zx
 
 import android.content.Intent
+import android.net.VpnService
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -54,9 +57,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aras.client.AngApplication
+import com.aras.client.AppConfig
+import com.aras.client.R
+import com.aras.client.core.LauncherManager
+import com.aras.client.enums.PermissionType
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.handler.MmkvManager
-import com.aras.client.ui.base.BaseComponentActivity
+import com.aras.client.handler.SettingsManager
+import com.aras.client.extension.toast
+import com.aras.client.ui.base.HelperBaseComponentActivity
 import com.aras.client.ui.main.MainAction
 import com.aras.client.ui.main.MainRepository
 import com.aras.client.ui.main.MainViewModel
@@ -65,9 +74,44 @@ import com.aras.client.ui.monitor.LiveMonitorActivity
 import com.aras.client.ui.radar.RadarConfigActivity
 import com.aras.client.ui.repair.ConfigRepairActivity
 import com.aras.client.ui.dns.DnsChangerActivity
+import com.aras.client.ui.dns.DnsScannerActivity
+import com.aras.client.ui.main.MainActivity
 import com.aras.client.ui.settings.SettingsActivity
 
-class ZxUiActivity : BaseComponentActivity() {
+class ZxUiActivity : HelperBaseComponentActivity() {
+    private val requestVpnPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) startVpnService()
+        }
+
+    private fun toggleVpnConnection() {
+        if (mainViewModel.uiState.value.isRunning) {
+            LauncherManager.stopService(this)
+            return
+        }
+        if (!SettingsManager.isVpnMode()) {
+            startVpnService()
+            return
+        }
+        val permissionIntent = VpnService.prepare(this)
+        if (permissionIntent == null) startVpnService()
+        else requestVpnPermission.launch(permissionIntent)
+    }
+
+    private fun startVpnService() {
+        if (mainViewModel.uiState.value.selectedGuid.isNullOrBlank()) {
+            toast(R.string.title_file_chooser)
+            return
+        }
+        val start = { LauncherManager.startService(this) }
+        if (Build.VERSION.SDK_INT >= 37 &&
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)
+        ) {
+            checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK, start)
+        } else {
+            start()
+        }
+    }
     private val mainViewModel: MainViewModel by viewModels {
         MainViewModel.Factory(application, MainRepository(application as AngApplication))
     }
@@ -207,7 +251,7 @@ private fun ZxUiScreen(
                             ZxTab.Home -> ZxHomePage(
                                 isRunning = state.isRunning,
                                 profile = selectedProfile,
-                                onToggle = { viewModel.onAction(MainAction.ToggleService) },
+                                onToggle = ::toggleVpnConnection,
                                 onServers = { tab = ZxTab.Servers },
                                 onMap = { onOpen(ConnectionMapActivity::class.java) },
                                 onMonitor = { onOpen(LiveMonitorActivity::class.java) },
@@ -220,7 +264,7 @@ private fun ZxUiScreen(
                                 onGroup = { viewModel.onAction(MainAction.SelectGroup(it)) },
                                 onServer = { viewModel.onAction(MainAction.SelectServer(it)) },
                             )
-                            ZxTab.Tools -> ZxToolsPage(onOpen)
+                            ZxTab.Tools -> ZxToolsPage(onOpen) { onOpen(MainActivity::class.java) }
                             ZxTab.Settings -> Unit
                         }
                     }
@@ -399,7 +443,7 @@ private fun ZxServersPage(
 }
 
 @Composable
-private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit) {
+private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit, onManageConfigs: () -> Unit) {
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -410,6 +454,8 @@ private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit) {
         ZxQuickTile("رادار کانفیگ", "کشف و بررسی کانفیگ‌ها", Modifier.fillMaxWidth()) { onOpen(RadarConfigActivity::class.java) }
         ZxQuickTile("تعمیر کانفیگ", "بررسی و اصلاح پروفایل", Modifier.fillMaxWidth()) { onOpen(ConfigRepairActivity::class.java) }
         ZxQuickTile("تغییر DNS", "مدیریت DNS محلی", Modifier.fillMaxWidth()) { onOpen(DnsChangerActivity::class.java) }
+        ZxQuickTile("اسکنر DNS", "پیدا کردن و بررسی Resolverها", Modifier.fillMaxWidth()) { onOpen(DnsScannerActivity::class.java) }
+        ZxQuickTile("مدیریت و افزودن کانفیگ", "QR، فایل، کلیپ‌بورد، لینک و اشتراک‌ها", Modifier.fillMaxWidth(), onManageConfigs)
     }
 }
 
