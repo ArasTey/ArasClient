@@ -31,16 +31,17 @@ object RootShell {
     private fun exec(command: String, timeoutSeconds: Long = 30): Result {
         var process: Process? = null
         return try {
-            process = ProcessBuilder("su", "-c", command)
+            val started = ProcessBuilder("su", "-c", command)
                 .redirectErrorStream(true)
                 .start()
+            process = started
 
             // Drain stdout concurrently so a verbose root command cannot fill the pipe
             // and deadlock before it exits. Keep the reader daemonized for timeout safety.
             val output = StringBuilder()
             val reader = Thread({
                 try {
-                    process.inputStream.bufferedReader().useLines { lines ->
+                    started.inputStream.bufferedReader().useLines { lines ->
                         lines.forEach { line ->
                             synchronized(output) {
                                 if (output.isNotEmpty()) output.append('\n')
@@ -61,7 +62,7 @@ object RootShell {
             var exitCode: Int? = null
             while (System.nanoTime() < deadline) {
                 exitCode = try {
-                    process.exitValue()
+                    started.exitValue()
                 } catch (_: IllegalThreadStateException) {
                     null
                 }
@@ -70,7 +71,7 @@ object RootShell {
                     Thread.sleep(50)
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
-                    runCatching { process.destroy() }
+                    runCatching { started.destroy() }
                     return Result(-1, synchronized(output) { output.toString() })
                 }
             }
