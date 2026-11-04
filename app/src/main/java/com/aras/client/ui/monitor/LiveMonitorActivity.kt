@@ -144,7 +144,7 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 Cipher.getInstance("AES/GCM/NoPadding").provider?.name ?: "Unavailable"
             }.getOrDefault("Unavailable")
 
-            sample = MonitorSample(cpu, ramMb, battery, current, temp, thermal, headroom, threads, uptime, provider)
+            sample = MonitorSample(\n                cpu, ramMb, battery, current, temp, thermal, headroom, threads, uptime,\n                context.getString(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) R.string.monitor_process_uptime else R.string.monitor_session_uptime),\n                provider\n            )
             cpuHistory.add(cpu)
             ramHistory.add(ramMb)
             while (cpuHistory.size > 120) cpuHistory.removeAt(0)
@@ -174,12 +174,12 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
             } else {
                 item {
                     MetricCard(stringResource(R.string.monitor_cpu), String.format(Locale.getDefault(), "%.1f%%", current.cpu)) {
-                        HistoryChart(cpuHistory.toList(), 100f, "%")
+                        HistoryChart(cpuHistory.toList(), 100f)
                     }
                 }
                 item {
                     MetricCard(stringResource(R.string.monitor_ram), String.format(Locale.getDefault(), "%.1f MB", current.ramMb)) {
-                        HistoryChart(ramHistory.toList(), (ramHistory.maxOrNull() ?: 1f).coerceAtLeast(1f), "MB")
+                        HistoryChart(ramHistory.toList(), (ramHistory.maxOrNull() ?: 1f).coerceAtLeast(1f))
                     }
                 }
                 item {
@@ -196,7 +196,7 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 }
                 item {
                     MetricCard(stringResource(R.string.monitor_process), stringResource(R.string.monitor_threads, current.threads)) {
-                        Text(stringResource(R.string.monitor_uptime, current.uptime))
+                        Text(stringResource(R.string.monitor_uptime, current.uptimeLabel, current.uptime))
                         Text(stringResource(R.string.monitor_process_note))
                     }
                 }
@@ -227,7 +227,7 @@ private fun MetricCard(title: String, value: String, content: @Composable () -> 
 }
 
 @Composable
-private fun HistoryChart(values: List<Float>, maxValue: Float, unit: String) {
+private fun HistoryChart(values: List<Float>, maxValue: Float) {
     Canvas(Modifier.fillMaxWidth().height(74.dp)) {
         if (values.size < 2) return@Canvas
         val step = size.width / (values.size - 1)
