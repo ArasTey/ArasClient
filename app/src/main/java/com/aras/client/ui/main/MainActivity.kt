@@ -564,6 +564,13 @@ class MainActivity : HelperBaseComponentActivity() {
         }.getOrNull()
     }
 
+    /** Legacy NPVT1 white-box tables, parsed only when an NPVT1 file is selected. */
+    private val npvLegacyTablesJson: String? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        runCatching {
+            assets.open("npv/legacy_whitebox_tables.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrNull()
+    }
+
     private fun importArascFile() {
         launchFileChooser { uri ->
             if (uri == null) return@launchFileChooser
@@ -636,10 +643,11 @@ class MainActivity : HelperBaseComponentActivity() {
     private fun handleNpvAttempt(bytes: ByteArray, fileName: String?, passphrase: String?) {
         lifecycleScope.launch(Dispatchers.IO) {
             val tables = if (NpvConfigImporter.needsGen2Tables(bytes)) npvGen2CompressedTables else null
+            val legacyTables = if (NpvConfigImporter.needsLegacyTables(bytes)) npvLegacyTablesJson else null
             val result = if (passphrase.isNullOrBlank()) {
-                NpvConfigImporter.inspect(bytes, fileName, tables)
+                NpvConfigImporter.inspect(bytes, fileName, tables, legacyTables)
             } else {
-                NpvConfigImporter.inspectWithPassphrase(bytes, passphrase, fileName, tables)
+                NpvConfigImporter.inspectWithPassphrase(bytes, passphrase, fileName, tables, legacyTables)
             }
             withContext(Dispatchers.Main) {
                 when (result) {
