@@ -479,12 +479,6 @@ object AetherCoreManager {
         File(context.applicationInfo.nativeLibraryDir, TRANSPORT_BINARY_NAME)
 
     /**
-     * The settings file laid over Psiphon's built-in configuration.
-     *
-     * Android has no resolver configuration a Linux-built program could read, so
-     * Psiphon is given resolvers of its own for the names it looks up itself.
-     */
-    /**
      * The settings laid over the core's own Psiphon configuration.
      *
      * The resolvers, because Android has no resolver configuration a Linux-built
