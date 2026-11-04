@@ -160,7 +160,7 @@ class ZxUiActivity : HelperBaseComponentActivity() {
             toast(R.string.title_file_chooser)
             return
         }
-        val start = { LauncherManager.startService(this) }
+        val start: () -> Unit = { LauncherManager.startService(this); Unit }
         if (Build.VERSION.SDK_INT >= 37 &&
             MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)
         ) {
