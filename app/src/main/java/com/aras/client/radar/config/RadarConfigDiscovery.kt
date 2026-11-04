@@ -63,7 +63,7 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
 
     private fun fetchTopicSources(): List<SourceSpec> = runCatching {
         val json = JsonParser.parseString(
-            get("https://api.github.com/search/repositories?q=topic%3Av2ray-configs&sort=updated&per_page=8")
+            get("https://api.github.com/search/repositories?q=topic%3Av2ray-config&sort=updated&per_page=8")
         ).asJsonObject
         json.getAsJsonArray("items").mapNotNull { item ->
             val repo = item.asJsonObject
