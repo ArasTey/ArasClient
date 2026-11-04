@@ -54,6 +54,10 @@ class RadarConfigParserTest {
         assertTrue(hysteria?.usesUdpTransport == true)
         assertTrue(tuic?.usesUdpTransport == true)
         assertTrue(vless?.usesUdpTransport == false)
+        val udpCheck = hysteria?.let {
+            RadarConfigCheck(it, RadarProbeStatus.CORE_TEST_REQUIRED, detail = "core test")
+        }
+        assertTrue(udpCheck?.isImportable == true)
     }
 
     @Test

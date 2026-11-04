@@ -96,11 +96,11 @@ class RadarConfigActivity : ComponentActivity() {
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
-                                    "کشف چندمنبعی + امتیاز ضد DPI + تست TCP → فقط ۲۰ تای برتر",
+                                    "کشف چندمنبعی + فیلتر ضد DPI + بررسی متناسب با TCP و UDP → ۲۰ گزینه برتر",
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
-                                    "امتیاز Reality / Hysteria2 / TUIC / XHTTP بالاتر است. TCP فقط برای پروتکل‌های TCP بررسی می‌شود؛ کانفیگ‌های UDP/QUIC پس از بررسی DNS برای تست واقعی هسته نگه داشته می‌شوند.",
+                                    "Reality / Hysteria2 / TUIC / XHTTP اولویت دارند. کانفیگ‌های TCP با اتصال TCP و کانفیگ‌های UDP/QUIC با بررسی DNS ارزیابی می‌شوند؛ تأیید نهایی با تست واقعی هسته است.",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -156,7 +156,7 @@ class RadarConfigActivity : ComponentActivity() {
                                         results.count { it.tcpReachable }.toString(),
                                         Color(0xFF00A86B)
                                     )
-                                    Metric("منابع سالم", sourceReports.count { it.error == null }.toString())
+                                    Metric("منابع پاسخ‌گو", sourceReports.count { it.fetchedFiles > 0 }.toString())
                                 }
                             }
                         }
@@ -286,7 +286,7 @@ class RadarConfigActivity : ComponentActivity() {
                             .take(MAX_CANDIDATES_FOR_PROBE)
 
                         if (preFiltered.isEmpty()) {
-                            message = "کانفیگی استخراج نشد. ممکن است GitHub محدود یا منابع موقتاً قطع باشند."
+                            message = "کانفیگی استخراج نشد. منابع پاسخ‌گو: ${sourceReports.count { it.fetchedFiles > 0 }}/${sourceReports.size}؛ خطاها را در گزارش سلامت منابع ببین."
                         } else {
                             message = "آماده‌سازی ${preFiltered.size} کاندیدای با امتیاز بالا…"
                             GeoIPResolver.refresh(preFiltered.map { it.host }.distinct())
@@ -314,7 +314,7 @@ class RadarConfigActivity : ComponentActivity() {
                                         rankScore = computeRankScore(result)
                                     )
                                     if (ranked.tcpReachable) reachable++
-                                    radar?.addTestedCandidate(ranked.tcpLatencyMs ?: -1L)
+                                    radar?.addTestedCandidate(ranked.tcpLatencyMs ?: ranked.dnsLatencyMs ?: -1L)
                                     probed.add(ranked)
                                     checked++
                                 }
@@ -367,9 +367,9 @@ class RadarConfigActivity : ComponentActivity() {
     }
 
     private fun computeRankScore(check: RadarConfigCheck): Double {
-        if (!check.tcpReachable) return 0.0
+        if (!check.isImportable) return 0.0
         val dpi = check.candidate.dpiScore.toDouble()
-        val latency = (check.realPingMs ?: check.tcpLatencyMs ?: 9999L).toDouble().coerceAtLeast(1.0)
+        val latency = (check.realPingMs ?: check.tcpLatencyMs ?: check.dnsLatencyMs ?: 9999L).toDouble().coerceAtLeast(1.0)
         val latencyScore = (1000.0 / latency).coerceIn(0.0, 100.0)
         val realBonus = if (check.realPingMs != null && check.realPingMs > 0) 25.0 else 0.0
         return dpi * 1.4 + latencyScore + realBonus
