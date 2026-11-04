@@ -90,6 +90,8 @@ import com.aras.client.ui.compose.AuroraLinkState
 import com.aras.client.ui.compose.AuroraSentinelRadar
 import com.aras.client.ui.compose.AuroraStatusPill
 import com.aras.client.ui.compose.ThemeManager
+import com.aras.client.ui.compose.ThemePicker
+import com.aras.client.ui.compose.SettingsListItem
 import com.aras.client.ui.settings.SettingsActivity
 
 class ZxUiActivity : HelperBaseComponentActivity() {
@@ -123,6 +125,14 @@ class ZxUiActivity : HelperBaseComponentActivity() {
             putExtra("presetPsiphonCdn", true)
         }
         profileEditorLauncher.launch(intent)
+    }
+
+    private fun selectUiExperience(value: String) {
+        MmkvManager.encodeSettings(AppConfig.PREF_UI_EXPERIENCE, value)
+        if (value == "radar") {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
     }
 
     private fun selectServer(guid: String) {
@@ -167,7 +177,8 @@ class ZxUiActivity : HelperBaseComponentActivity() {
     override fun ScreenContent() {
         ZxUiScreen(
             viewModel = mainViewModel,
-            onExit = { startActivity(Intent(this, MainActivity::class.java)); finish() },
+            onExit = { selectUiExperience("radar") },
+            onSelectExperience = ::selectUiExperience,
             onSelectServer = ::selectServer,
             onOpen = { activity -> startActivity(Intent(this, activity)) },
             onOpenPsiphonCdn = ::openPsiphonCdnPreset,
@@ -192,10 +203,16 @@ private fun ZxUiScreen(
     onSelectServer: (String) -> Unit,
     onOpenPsiphonCdn: () -> Unit,
     onToggleConnection: () -> Unit,
+    onSelectExperience: (String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val screenTransition by ThemeManager.screenTransition.collectAsState()
     val reduceMotion by ThemeManager.reducedMotionEnabled.collectAsState()
+    val themeMode by ThemeManager.themeMode.collectAsState()
+    val uiTheme by ThemeManager.uiTheme.collectAsState()
+    var selectedExperience by remember {
+        mutableStateOf(MmkvManager.decodeSettingsString(AppConfig.PREF_UI_EXPERIENCE, "zx") ?: "zx")
+    }
     var tab by remember { mutableStateOf(ZxTab.Home) }
 
     LaunchedEffect(viewModel) {
@@ -217,11 +234,7 @@ private fun ZxUiScreen(
                         NavigationBarItem(
                             selected = tab == item,
                             onClick = {
-                                if (item == ZxTab.Settings) {
-                                    onOpen(SettingsActivity::class.java)
-                                } else {
-                                    tab = item
-                                }
+                                tab = item
                             },
                             icon = { Text(item.marker, style = MaterialTheme.typography.titleLarge) },
                             label = { Text(item.label) },
@@ -235,7 +248,11 @@ private fun ZxUiScreen(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.background),
+                            if (uiTheme == "rdrx") {
+                                listOf(Color.Transparent, Color.Transparent, Color.Transparent)
+                            } else {
+                                listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.background)
+                            },
                         ),
                     )
                     .padding(insets),
@@ -335,13 +352,26 @@ private fun ZxUiScreen(
                                 selectedGuid = state.selectedGuid,
                                 onGroup = { viewModel.onAction(MainAction.SelectGroup(it)) },
                                 onServer = onSelectServer,
+                                onManageConfigs = { onOpen(MainActivity::class.java) },
                             )
                             ZxTab.Tools -> ZxToolsPage(
                                 onOpen = onOpen,
                                 onManageConfigs = { onOpen(MainActivity::class.java) },
                                 onPsiphonCdn = onOpenPsiphonCdn,
                             )
-                            ZxTab.Settings -> Unit
+                            ZxTab.Settings -> ZxSettingsPage(
+                                selectedExperience = selectedExperience,
+                                themeMode = themeMode,
+                                screenTransition = screenTransition,
+                                onExperienceSelected = { value ->
+                                    selectedExperience = value
+                                    onSelectExperience(value)
+                                },
+                                onTransitionSelected = ThemeManager::setScreenTransition,
+                                onOpenAdvanced = { onOpen(SettingsActivity::class.java) },
+                                onOpenMap = { onOpen(ConnectionMapActivity::class.java) },
+                                onOpenMonitor = { onOpen(LiveMonitorActivity::class.java) },
+                            )
                         }
                     }
                 }
@@ -582,6 +612,7 @@ private fun ZxServersPage(
     selectedGuid: String?,
     onGroup: (String) -> Unit,
     onServer: (String) -> Unit,
+    onManageConfigs: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("سرورها", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
@@ -604,8 +635,16 @@ private fun ZxServersPage(
                 }
             }
         }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+        if (serverGuids.isEmpty()) {
+            ZxQuickTile(
+                "افزودن اولین کانفیگ",
+                "NPV، QR، فایل، کلیپ‌بورد و لینک اشتراک",
+                Modifier.fillMaxWidth(),
+                onManageConfigs,
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(9.dp),
             contentPadding = PaddingValues(bottom = 20.dp),
         ) {
@@ -637,6 +676,68 @@ private fun ZxServersPage(
                 }
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun ZxSettingsPage(
+    selectedExperience: String,
+    themeMode: String,
+    screenTransition: String,
+    onExperienceSelected: (String) -> Unit,
+    onTransitionSelected: (String) -> Unit,
+    onOpenAdvanced: () -> Unit,
+    onOpenMap: () -> Unit,
+    onOpenMonitor: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(
+            "تنظیمات و شخصی‌سازی",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+        )
+        AuroraGlassCard(Modifier.fillMaxWidth()) {
+            Text(
+                "تم، رنگ و ظاهر",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+            )
+            ThemePicker(
+                selectedValue = themeMode,
+                onSelected = { ThemeManager.setThemeMode(it) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        AuroraGlassCard(Modifier.fillMaxWidth()) {
+            SettingsListItem(
+                title = "رابط اصلی برنامه",
+                entries = listOf("RADAR کلاسیک", "ZX UI"),
+                values = listOf("radar", "zx"),
+                selectedValue = selectedExperience,
+                onSelected = onExperienceSelected,
+            )
+            SettingsListItem(
+                title = "انیمیشن جابه‌جایی صفحه",
+                entries = listOf("محو شدن", "حرکت افقی", "بزرگ‌نمایی"),
+                values = listOf("fade", "slide", "scale"),
+                selectedValue = screenTransition,
+                onSelected = onTransitionSelected,
+            )
+        }
+        ZxQuickTile(
+            "تنظیمات پیشرفته",
+            "تنظیمات کامل اتصال، هسته، DNS و حریم خصوصی",
+            Modifier.fillMaxWidth(),
+            onOpenAdvanced,
+        )
+        ZxQuickTile("نقشه اتصال", "نمایش موقعیت و IP خروجی", Modifier.fillMaxWidth(), onOpenMap)
+        ZxQuickTile("مانیتور زنده", "وضعیت سخت‌افزار و منابع دستگاه", Modifier.fillMaxWidth(), onOpenMonitor)
     }
 }
 
@@ -667,7 +768,7 @@ private fun ZxQuickTile(
 ) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
         shape = RoundedCornerShape(22.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         shadowElevation = 5.dp,
