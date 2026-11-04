@@ -10,7 +10,11 @@ import com.aras.client.enums.AetherProtocol
  * listener; the app's own outbound is a SOCKS hop to that listener. The core therefore
  * holds the credentials, and the profile carries only the settings and the gateway.
  */
-data class AetherCore(val arguments: List<String>) {
+data class AetherCore(
+    val arguments: List<String>,
+    /** Whether this profile supplies the bundled, signature-verified Psiphon server list. */
+    val useBundledPsiphonServerList: Boolean = true,
+) {
 
     /** The loopback port the app dials. */
     val port: Int get() = AetherCoreManager.listenerPortOf(arguments) ?: AetherCoreManager.socksPort
@@ -25,7 +29,8 @@ data class AetherCore(val arguments: List<String>) {
 
     /** This core dialled on [port] instead — a latency test opens its own listener. */
     fun on(port: Int): AetherCore = AetherCore(
-        AetherCoreManager.withListener(arguments, port)
+        AetherCoreManager.withListener(arguments, port),
+        useBundledPsiphonServerList,
     )
 
     companion object {
@@ -40,7 +45,8 @@ data class AetherCore(val arguments: List<String>) {
                     AetherCoreManager.withoutOption(
                         AetherCoreManager.buildArguments(profile, AetherCoreManager.listenPort(profile)),
                         "--log-level",
-                    )
+                    ),
+                    useBundledPsiphonServerList = profile.aetherPsiphonBundledList != false,
                 )
 
         /**
