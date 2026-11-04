@@ -88,6 +88,49 @@ object NpvCrypto {
         return ByteBuffer.wrap(b, off, 4).order(ByteOrder.BIG_ENDIAN).int
     }
 
+    fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int = 32): ByteArray {
+        val actualSalt = if (salt.isNotEmpty()) salt else ByteArray(32)
+        val extract = Mac.getInstance("HmacSHA256").apply {
+            init(SecretKeySpec(actualSalt, "HmacSHA256"))
+        }
+        val prk = extract.doFinal(ikm)
+        val output = ByteArray(length)
+        var previous = ByteArray(0)
+        var offset = 0
+        var counter = 1
+        while (offset < length) {
+            val mac = Mac.getInstance("HmacSHA256").apply {
+                init(SecretKeySpec(prk, "HmacSHA256"))
+            }
+            mac.update(previous)
+            mac.update(info)
+            mac.update(counter.toByte())
+            previous = mac.doFinal()
+            val count = minOf(previous.size, length - offset)
+            System.arraycopy(previous, 0, output, offset, count)
+            offset += count
+            counter++
+        }
+        return output
+    }
+
+    fun be32(b: ByteArray, off: Int): Int {
+        if (off < 0 || off + 4 > b.size) return -1
+        return ByteBuffer.wrap(b, off, 4).order(ByteOrder.BIG_ENDIAN).int
+    }
+
+    fun putBe16(value: Int): ByteArray = byteArrayOf(
+        ((value ushr 8) and 0xff).toByte(),
+        (value and 0xff).toByte()
+    )
+
+    fun putBe32(value: Int): ByteArray = byteArrayOf(
+        ((value ushr 24) and 0xff).toByte(),
+        ((value ushr 16) and 0xff).toByte(),
+        ((value ushr 8) and 0xff).toByte(),
+        (value and 0xff).toByte()
+    )
+
     fun be16(b: ByteArray, off: Int): Int {
         if (off + 2 > b.size) return 0
         return ByteBuffer.wrap(b, off, 2).order(ByteOrder.BIG_ENDIAN).short.toInt() and 0xffff
