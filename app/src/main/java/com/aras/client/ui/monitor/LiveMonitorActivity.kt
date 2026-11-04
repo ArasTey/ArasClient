@@ -43,7 +43,6 @@ import androidx.compose.ui.res.stringResource
 import com.aras.client.R
 import kotlinx.coroutines.delay
 import javax.crypto.Cipher
-import java.util.Locale
 
 class LiveMonitorActivity : BaseComponentActivity() {
     @Composable
@@ -70,6 +69,7 @@ private data class MonitorSample(
 @Composable
 private fun LiveMonitorScreen(onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     var sample by remember { mutableStateOf<MonitorSample?>(null) }
     val cpuHistory = remember { mutableStateListOf<Float>() }
     val ramHistory = remember { mutableStateListOf<Float>() }
@@ -143,7 +143,7 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
             val processStartedAt = Process.getStartElapsedRealtime()
             val elapsed = (SystemClock.elapsedRealtime() - processStartedAt).coerceAtLeast(0L) / 1000
             val uptime = String.format(
-                Locale.getDefault(), "%02d:%02d:%02d",
+                locale, "%02d:%02d:%02d",
                 elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60
             )
             sample = MonitorSample(
@@ -179,12 +179,12 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 item { Text(stringResource(R.string.monitor_collecting), modifier = Modifier.padding(12.dp)) }
             } else {
                 item {
-                    MetricCard(stringResource(R.string.monitor_cpu), String.format(Locale.getDefault(), "%.1f%%", current.cpu)) {
+                    MetricCard(stringResource(R.string.monitor_cpu), String.format(locale, "%.1f%%", current.cpu)) {
                         HistoryChart(cpuHistory.toList(), 100f)
                     }
                 }
                 item {
-                    MetricCard(stringResource(R.string.monitor_ram), String.format(Locale.getDefault(), "%.1f MB", current.ramMb)) {
+                    MetricCard(stringResource(R.string.monitor_ram), String.format(locale, "%.1f MB", current.ramMb)) {
                         HistoryChart(ramHistory.toList(), (ramHistory.maxOrNull() ?: 1f).coerceAtLeast(1f))
                     }
                 }
@@ -192,12 +192,12 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                     MetricCard(stringResource(R.string.monitor_battery), if (current.battery >= 0) "${current.battery}%" else stringResource(R.string.monitor_unavailable)) {
                         Text(stringResource(R.string.monitor_battery_status, current.batteryStatus))
                         Text(stringResource(R.string.monitor_current_value, current.batteryCurrentMa?.let { "$it mA" } ?: stringResource(R.string.monitor_unavailable)))
-                        Text(stringResource(R.string.monitor_temperature_value, current.batteryTempC?.let { String.format(Locale.getDefault(), "%.1f °C", it) } ?: stringResource(R.string.monitor_unavailable)))
+                        Text(stringResource(R.string.monitor_temperature_value, current.batteryTempC?.let { String.format(locale, "%.1f °C", it) } ?: stringResource(R.string.monitor_unavailable)))
                     }
                 }
                 item {
                     MetricCard(stringResource(R.string.monitor_thermal), current.thermalStatus) {
-                        Text(stringResource(R.string.monitor_headroom_value, current.thermalHeadroom?.let { String.format(Locale.getDefault(), "%.2f", it) } ?: stringResource(R.string.monitor_headroom_waiting)))
+                        Text(stringResource(R.string.monitor_headroom_value, current.thermalHeadroom?.let { String.format(locale, "%.2f", it) } ?: stringResource(R.string.monitor_headroom_waiting)))
                         Text(stringResource(R.string.monitor_headroom_hint))
                     }
                 }
