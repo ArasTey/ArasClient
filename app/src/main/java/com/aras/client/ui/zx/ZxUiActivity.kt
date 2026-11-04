@@ -84,6 +84,12 @@ class ZxUiActivity : HelperBaseComponentActivity() {
             if (result.resultCode == RESULT_OK) startVpnService()
         }
 
+    private fun selectServer(guid: String) {
+        val wasRunning = mainViewModel.uiState.value.isRunning
+        mainViewModel.updateSelectedGuid(guid)
+        if (wasRunning) LauncherManager.restartService(this)
+    }
+
     private fun toggleVpnConnection() {
         if (mainViewModel.uiState.value.isRunning) {
             LauncherManager.stopService(this)
@@ -120,7 +126,8 @@ class ZxUiActivity : HelperBaseComponentActivity() {
     override fun ScreenContent() {
         ZxUiScreen(
             viewModel = mainViewModel,
-            onExit = ::finish,
+            onExit = { startActivity(Intent(this, MainActivity::class.java)); finish() },
+            onSelectServer = ::selectServer,
             onOpen = { activity -> startActivity(Intent(this, activity)) },
         )
     }
@@ -138,6 +145,7 @@ private fun ZxUiScreen(
     viewModel: MainViewModel,
     onExit: () -> Unit,
     onOpen: (Class<out android.app.Activity>) -> Unit,
+    onSelectServer: (String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(ZxTab.Home) }
@@ -262,7 +270,7 @@ private fun ZxUiScreen(
                                 serverGuids = serverGuids,
                                 selectedGuid = state.selectedGuid,
                                 onGroup = { viewModel.onAction(MainAction.SelectGroup(it)) },
-                                onServer = { viewModel.onAction(MainAction.SelectServer(it)) },
+                                onServer = onSelectServer,
                             )
                             ZxTab.Tools -> ZxToolsPage(onOpen) { onOpen(MainActivity::class.java) }
                             ZxTab.Settings -> Unit
