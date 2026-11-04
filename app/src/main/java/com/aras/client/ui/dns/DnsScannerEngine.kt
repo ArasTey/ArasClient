@@ -1,0 +1,172 @@
+package com.aras.client.ui.dns
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.SocketTimeoutException
+import java.util.concurrent.Semaphore
+import kotlin.random.Random
+
+data class DnsScanCheck(
+    val name: String,
+    val passed: Boolean,
+    val responseCode: Int?,
+    val latencyMs: Long?,
+    val transport: String,
+    val detail: String,
+)
+
+data class DnsResolverScanResult(
+    val resolver: DnsProfile,
+    val checks: List<DnsScanCheck>,
+) {
+    val passedCount: Int get() = checks.count { it.passed }
+    val isHealthy: Boolean get() = passedCount >= 4 && checks.any { it.name == "A" && it.passed }
+    val averageLatencyMs: Long?
+        get() = checks.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
+}
+
+object DnsScannerEngine {
+    private const val DEFAULT_TIMEOUT_MS = 1800
+    private const val MAX_RESPONSE_BYTES = 4096
+    private val checkTypes = listOf("A" to 1, "AAAA" to 28, "NS" to 2, "TXT" to 16)
+
+    suspend fun scan(
+        resolvers: List<DnsProfile>,
+        timeoutMs: Int = DEFAULT_TIMEOUT_MS,
+        concurrency: Int = 3,
+    ): List<DnsResolverScanResult> {
+        require(timeoutMs in 300..10_000) { "Timeout must be between 300 and 10000 ms" }
+        require(concurrency in 1..8) { "Concurrency must be between 1 and 8" }
+        val gate = Semaphore(concurrency)
+        return coroutineScope {
+            resolvers.distinctBy { it.primary }.map { resolver ->
+                async(Dispatchers.IO) {
+                    gate.acquire()
+                    try {
+                        scanOne(resolver, timeoutMs)
+                    } finally {
+                        gate.release()
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    internal fun buildQuery(id: Int, domain: String, type: Int, edns: Boolean = false): ByteArray {
+        require(id in 0..65535)
+        require(type in 1..65535)
+        val labels = domain.trimEnd('.').split('.')
+        require(labels.isNotEmpty() && labels.all { it.isNotEmpty() && it.length <= 63 })
+        val nameBytes = labels.fold(mutableListOf<Byte>()) { out, label ->
+            val bytes = label.toByteArray(Charsets.US_ASCII)
+            require(bytes.all { (it.toInt() and 0xff) in 0x21..0x7e })
+            out.add(bytes.size.toByte())
+            out.addAll(bytes.toList())
+            out
+        }.apply { add(0) }.toByteArray()
+
+        val header = ByteArray(12)
+        header[0] = (id ushr 8).toByte()
+        header[1] = id.toByte()
+        header[2] = 0x01 // recursion desired
+        header[5] = 0x01 // QDCOUNT
+        if (edns) header[11] = 0x01 // ARCOUNT
+        val question = nameBytes + byteArrayOf((type ushr 8).toByte(), type.toByte(), 0, 1)
+        val opt = if (edns) byteArrayOf(
+            0, 0, 41, 0x04, 0xD0.toByte(), 0, 0, 0, 0, 0, 0
+        ) else byteArrayOf()
+        return header + question + opt
+    }
+
+    internal fun parseResponse(packet: ByteArray, expectedId: Int, expectNxDomain: Boolean = false): Int {
+        require(packet.size >= 12) { "DNS response header is truncated" }
+        val id = ((packet[0].toInt() and 0xff) shl 8) or (packet[1].toInt() and 0xff)
+        require(id == expectedId) { "DNS transaction ID mismatch" }
+        require((packet[2].toInt() and 0x80) != 0) { "Packet is not a DNS response" }
+        val rcode = packet[3].toInt() and 0x0f
+        if (expectNxDomain) {
+            require(rcode == 3) { "Expected NXDOMAIN (3), got $rcode" }
+        } else {
+            require(rcode == 0) { "Resolver returned DNS error code $rcode" }
+        }
+        return rcode
+    }
+
+    private fun scanOne(resolver: DnsProfile, timeoutMs: Int): DnsResolverScanResult {
+        if (!DnsChangerStore.isIpAddress(resolver.primary)) {
+            return DnsResolverScanResult(resolver, listOf(
+                DnsScanCheck("VALIDATION", false, null, null, "none", "Invalid resolver address")
+            ))
+        }
+        val checks = mutableListOf<DnsScanCheck>()
+        for ((label, type) in checkTypes) {
+            checks += runCheck(resolver.primary, label, "example.com", type, timeoutMs, false, false)
+        }
+        checks += runCheck(resolver.primary, "EDNS", "example.com", 1, timeoutMs, true, false)
+        val randomName = "radar-${Random.nextInt(1_000_000, 9_999_999)}.invalid"
+        checks += runCheck(resolver.primary, "NXDOMAIN", randomName, 1, timeoutMs, false, true)
+        return DnsResolverScanResult(resolver, checks)
+    }
+
+    private fun runCheck(
+        server: String,
+        label: String,
+        domain: String,
+        type: Int,
+        timeoutMs: Int,
+        edns: Boolean,
+        expectNxDomain: Boolean,
+    ): DnsScanCheck {
+        val id = Random.nextInt(0, 65536)
+        val query = try { buildQuery(id, domain, type, edns) } catch (e: Exception) {
+            return DnsScanCheck(label, false, null, null, "none", e.message ?: "Invalid query")
+        }
+        val started = System.nanoTime()
+        return try {
+            val address = InetAddress.getByName(server)
+            val udp = DatagramSocket().use { socket ->
+                socket.soTimeout = timeoutMs
+                socket.connect(address, 53)
+                socket.send(DatagramPacket(query, query.size))
+                val buffer = ByteArray(MAX_RESPONSE_BYTES)
+                val response = DatagramPacket(buffer, buffer.size)
+                socket.receive(response)
+                buffer.copyOf(response.length)
+            }
+            val truncated = udp.size >= 4 && (udp[2].toInt() and 0x02) != 0
+            val response = if (truncated) tcpQuery(address, query, timeoutMs) else udp
+            val rcode = parseResponse(response, id, expectNxDomain)
+            val elapsed = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
+            DnsScanCheck(label, true, rcode, elapsed, if (truncated) "TCP" else "UDP", "Response validated")
+        } catch (e: SocketTimeoutException) {
+            DnsScanCheck(label, false, null, null, "UDP", "Timed out")
+        } catch (e: Exception) {
+            DnsScanCheck(label, false, null, null, "UDP", e.message ?: "Probe failed")
+        }
+    }
+
+    private fun tcpQuery(address: InetAddress, query: ByteArray, timeoutMs: Int): ByteArray {
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(address, 53), timeoutMs)
+            socket.soTimeout = timeoutMs
+            val output = DataOutputStream(socket.getOutputStream())
+            output.writeShort(query.size)
+            output.write(query)
+            output.flush()
+            val input = DataInputStream(socket.getInputStream())
+            val length = input.readUnsignedShort()
+            require(length in 12..MAX_RESPONSE_BYTES) { "Invalid TCP DNS response length" }
+            return ByteArray(length).also { input.readFully(it) }
+        }
+    }
+}
