@@ -93,9 +93,9 @@ class NpvConfigImporterTest {
         bytes[1] = 'P'.code.toByte()
         bytes[2] = 'V'.code.toByte()
         bytes[3] = 'S'.code.toByte()
-        bytes[4] = 5
-        bytes[8] = 135
-        bytes[9 + 50] = 2
+        bytes[4] = 5.toByte()
+        bytes[8] = 135.toByte()
+        bytes[9 + 50] = 2.toByte()
 
         val result = NpvConfigImporter.inspect(bytes, "locked.npvs")
         assertTrue(result is NpvConfigImporter.Result.Failed)
