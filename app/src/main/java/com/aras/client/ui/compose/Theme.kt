@@ -236,6 +236,7 @@ object ThemeManager {
     private const val PREF_CULTURAL_PATTERN_INTENSITY = "cultural_pattern_intensity"
     private const val PREF_CULTURAL_REDUCED_MOTION = "cultural_reduced_motion"
     private const val PREF_CULTURAL_PERSIAN_DIGITS = "cultural_persian_digits"
+    private const val PREF_SCREEN_TRANSITION = "pref_screen_transition"
 
     private val _persianDigitsEnabled = MutableStateFlow(
         MmkvManager.decodeSettingsBool(PREF_CULTURAL_PERSIAN_DIGITS, true)
@@ -295,6 +296,18 @@ object ThemeManager {
         _uiTheme.value = safeValue
     }
 
+    private val _screenTransition = MutableStateFlow(
+        MmkvManager.decodeSettingsString(PREF_SCREEN_TRANSITION, "fade")
+            ?.takeIf { it in setOf("fade", "slide", "scale") } ?: "fade"
+    )
+    val screenTransition: StateFlow<String> = _screenTransition.asStateFlow()
+
+    fun setScreenTransition(value: String) {
+        val safeValue = value.takeIf { it in setOf("fade", "slide", "scale") } ?: "fade"
+        MmkvManager.encodeSettings(PREF_SCREEN_TRANSITION, safeValue)
+        _screenTransition.value = safeValue
+    }
+
     private val _dynamicColorEnabled = MutableStateFlow(
         MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, false)
     )
@@ -317,6 +330,8 @@ object ThemeManager {
         } ?: "default"
         _dynamicColorEnabled.value =
             MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, false)
+        _screenTransition.value = MmkvManager.decodeSettingsString(PREF_SCREEN_TRANSITION, "fade")
+            ?.takeIf { it in setOf("fade", "slide", "scale") } ?: "fade"
     }
 }
 
