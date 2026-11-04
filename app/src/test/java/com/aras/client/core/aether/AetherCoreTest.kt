@@ -166,6 +166,21 @@ class AetherCoreTest {
     }
 
     @Test
+    fun `the selected Psiphon server-list source survives profile creation and port changes`() {
+        val core = AetherCore.of(
+            profile {
+                aetherPsiphon = "only"
+                aetherPsiphonBundledList = false
+            }
+        )
+        assertTrue(!core.useBundledPsiphonServerList)
+        assertTrue(!core.on(10999).useBundledPsiphonServerList)
+
+        val defaultCore = AetherCore.of(profile { aetherPsiphon = "only" })
+        assertTrue(defaultCore.useBundledPsiphonServerList)
+    }
+
+    @Test
     fun `a core reports the protocol it dials`() {
         val core = AetherCore(
             AetherCoreManager.buildArguments(profile { aetherProtocol = "masque" }, 10819)
