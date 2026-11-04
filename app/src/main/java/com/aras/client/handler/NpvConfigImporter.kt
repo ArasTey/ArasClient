@@ -14,10 +14,12 @@ import java.util.Locale
  *
  * - Open text, share-links, base64 subs, and recoverable embedded links
  *   are imported via [AngConfigManager.importBatchConfig].
- * - Open NPVO1 JSON exports are traversed and normalized into share links.
- * - Sealed NPVS Gen-2 (v5) passphrase envelopes: user enters creator password.
- * - Encrypted AppKey/legacy NPVT containers are reported accurately when their
- *   required White-Box engine is not present; they are never guessed as plaintext.
+ * - NPVT1 legacy White-Box AES-CTR containers are decrypted locally, including
+ *   all profile chunks; NPVO1 open JSON exports are normalized into share links.
+ * - NPVS v1-v4 AppKey/passphrase and NPVS v5 Gen-2 AppKey/passphrase envelopes
+ *   are opened locally using the matching White-Box tables and authenticated AEAD.
+ * - Recipient/ECDH-wrapped containers require the authorized recipient private key
+ *   and are reported as such rather than treated as password-protected files.
  */
 object NpvConfigImporter {
 
