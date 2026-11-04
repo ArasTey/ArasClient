@@ -1,5 +1,7 @@
 package com.aras.client.ui.main
 
+import androidx.compose.foundation.clickable
+
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import com.aras.client.ui.subscription.SubEditActivity
