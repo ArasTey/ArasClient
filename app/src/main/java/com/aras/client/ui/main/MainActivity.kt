@@ -132,15 +132,17 @@ class MainActivity : HelperBaseComponentActivity() {
         handleSubscriptionNavigation(intent)
         maybeImportRadarConfig(intent)
 
-        // Launch the integrated ZX experience for normal app launches only.
-        // File imports, subscription deep links, notifications and internal
-        // navigation continue to use the original RADAR MainActivity flow.
+        // Respect the user's persistent UI choice. The original RADAR UI remains
+        // the default and stays available; ZX is an independent selectable experience.
+        val selectedExperience = MmkvManager.decodeSettingsString(
+            AppConfig.PREF_UI_EXPERIENCE, "radar"
+        ) ?: "radar"
         val isLauncherEntry = intent?.action == Intent.ACTION_MAIN &&
             intent.categories?.any {
                 it == Intent.CATEGORY_LAUNCHER ||
                     it == Intent.CATEGORY_LEANBACK_LAUNCHER
             } == true
-        if (savedInstanceState == null && isLauncherEntry) {
+        if (savedInstanceState == null && isLauncherEntry && selectedExperience == "zx") {
             startActivity(Intent(this, ZxUiActivity::class.java))
             finish()
             return
