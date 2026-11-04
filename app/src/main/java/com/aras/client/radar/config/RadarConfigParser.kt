@@ -20,17 +20,34 @@ object RadarConfigParser {
 
     fun extract(raw: String, source: String): List<RadarConfigCandidate> {
         if (raw.isBlank()) return emptyList()
-        val direct = linkRegex.findAll(raw)
-            .mapNotNull { parse(it.value.trimEnd(',', ';', ')', ']', '}'), source) }
-            .toList()
-        if (direct.isNotEmpty()) return direct
-        val compact = raw.filterNot(Char::isWhitespace)
-        if (compact.length !in 24..2_000_000) return emptyList()
-        val decoded = decodeBase64(compact) ?: return emptyList()
-        if (decoded == raw || !decoded.contains("://")) return emptyList()
-        return linkRegex.findAll(decoded)
-            .mapNotNull { parse(it.value.trimEnd(',', ';', ')', ']', '}'), source) }
-            .toList()
+
+        // Some feeds mix readable links with base64 blocks or JSON-wrapped
+        // subscriptions. Parse both forms; returning after the first direct link
+        // used to silently discard every encoded entry later in the same feed.
+        val found = LinkedHashMap<String, RadarConfigCandidate>()
+        fun collect(text: String) {
+            linkRegex.findAll(text).forEach { match ->
+                parse(match.value.trimEnd(',', ';', ')', ']', '}'), source)?.let { candidate ->
+                    found.putIfAbsent(candidate.identity, candidate)
+                }
+            }
+        }
+
+        collect(raw)
+        val encodedInputs = buildList {
+            val compact = raw.filterNot(Char::isWhitespace)
+            if (compact.length in 24..2_000_000) add(compact)
+            raw.lineSequence()
+                .map(String::trim)
+                .filter { it.length in 24..2_000_000 && !it.contains("://") }
+                .forEach(::add)
+        }.distinct()
+
+        encodedInputs.forEach { encoded ->
+            val decoded = decodeBase64(encoded) ?: return@forEach
+            if (decoded != raw && decoded.contains("://")) collect(decoded)
+        }
+        return found.values.toList()
     }
 
     fun parse(rawLink: String, source: String): RadarConfigCandidate? {
