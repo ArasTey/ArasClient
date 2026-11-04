@@ -129,6 +129,8 @@ object NpvCrypto {
         val ty: Array<LongArray>,
         val mbl: Array<LongArray>,
         val last: Array<IntArray>,
+        val lastV1: Array<IntArray>,
+        val lastV2: Array<IntArray>,
         val xor: Array<Array<IntArray>>,
     )
 
@@ -152,11 +154,78 @@ object NpvCrypto {
             ty = longRows("tyBoxes"),
             mbl = longRows("mbl"),
             last = intRows("tboxesLast"),
+            lastV1 = intRows("tboxesLastV1"),
+            lastV2 = intRows("tboxesLastV2"),
             xor = xor,
         ).also {
             require(it.shift.size == 16 && it.ty.size == 16 && it.mbl.size == 16 &&
-                it.last.size == 16 && it.xor.size == 96)
+                it.last.size == 16 && it.lastV1.size == 16 && it.lastV2.size == 16 && it.xor.size == 96)
         }
+    }
+
+    /** NPVS v1 AppKey custodian derivation, with both published table generations. */
+    fun npvV1CustodianKdks(salt: ByteArray, tablesJson: String): List<ByteArray> {
+        if (salt.size != 16) return emptyList()
+        val tables = parseLegacyTables(tablesJson)
+        val material = ByteArray(32).also { System.arraycopy(salt, 0, it, 0, 16) }
+        val prefix = "npvtunnel/appkey/v1 ".toByteArray(StandardCharsets.UTF_8)
+        return listOf(tables.lastV1, tables.lastV2).map { lastTable ->
+            val stream = wbCtrWithLast(material.copyOfRange(0, 16), material.copyOfRange(16, 32), lastTable, tables)
+            sha256(prefix + stream)
+        }
+    }
+
+    private fun wbMixWord(group: Int, column: Int, a: Long, b: Long, c: Long, d: Long, xor: Array<Array<IntArray>>): Int {
+        val t = group * 24 + column * 6
+        val hiShift = 28 - column * 8
+        val loShift = 24 - column * 8
+        val p1 = xor[t][((a ushr hiShift) and 15).toInt()][((b ushr hiShift) and 15).toInt()]
+        val p2 = xor[t + 1][((c ushr hiShift) and 15).toInt()][((d ushr hiShift) and 15).toInt()]
+        val p3 = xor[t + 2][((a ushr loShift) and 15).toInt()][((b ushr loShift) and 15).toInt()]
+        val p4 = xor[t + 3][((c ushr loShift) and 15).toInt()][((d ushr loShift) and 15).toInt()]
+        return ((xor[t + 4][p1][p2] shl 4) or xor[t + 5][p3][p4]) and 0xff
+    }
+
+    private fun wbBlockWithLast(input: ByteArray, lastTable: Array<IntArray>, tables: LegacyTables): ByteArray {
+        val state = ByteArray(16) { input[tables.shift[it]] }
+        repeat(4) { group ->
+            val base = group * 4
+            var a = tables.ty[base][state[base].toInt() and 0xff]
+            var b = tables.ty[base + 1][state[base + 1].toInt() and 0xff]
+            var c = tables.ty[base + 2][state[base + 2].toInt() and 0xff]
+            var d = tables.ty[base + 3][state[base + 3].toInt() and 0xff]
+            repeat(4) { column ->
+                state[base + column] = wbMixWord(group, column, a, b, c, d, tables.xor).toByte()
+            }
+            a = tables.mbl[base][state[base].toInt() and 0xff]
+            b = tables.mbl[base + 1][state[base + 1].toInt() and 0xff]
+            c = tables.mbl[base + 2][state[base + 2].toInt() and 0xff]
+            d = tables.mbl[base + 3][state[base + 3].toInt() and 0xff]
+            repeat(4) { column ->
+                state[base + column] = wbMixWord(group, column, a, b, c, d, tables.xor).toByte()
+            }
+        }
+        val shifted = ByteArray(16) { state[tables.shift[it]] }
+        return ByteArray(16) { i -> lastTable[i][shifted[i].toInt() and 0xff].toByte() }
+    }
+
+    private fun wbCtrWithLast(nonce: ByteArray, cipherText: ByteArray, lastTable: Array<IntArray>, tables: LegacyTables): ByteArray {
+        val counter = nonce.copyOf()
+        val output = ByteArray(cipherText.size)
+        var offset = 0
+        while (offset < cipherText.size) {
+            val keyStream = wbBlockWithLast(counter, lastTable, tables)
+            val count = minOf(16, cipherText.size - offset)
+            for (i in 0 until count) {
+                output[offset + i] = (cipherText[offset + i].toInt() xor keyStream[i].toInt()).toByte()
+            }
+            for (i in 15 downTo 0) {
+                counter[i] = ((counter[i].toInt() and 0xff) + 1).toByte()
+                if (counter[i] != 0.toByte()) break
+            }
+            offset += count
+        }
+        return output
     }
 
     private fun decryptLegacyCtr(encrypted: ByteArray, tables: LegacyTables): ByteArray {
