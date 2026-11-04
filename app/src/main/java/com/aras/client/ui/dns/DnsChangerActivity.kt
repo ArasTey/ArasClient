@@ -375,7 +375,7 @@ private fun DnsChangerScreen(onBack: () -> Unit, onConnect: () -> Unit, onDiscon
                     }
                 }
                 Text(
-                    "DNS-only local VPN: DNS packets are sent to the selected resolver; normal game traffic stays on the device's regular internet route. Android allows only one active VPN, so disconnect Radar's main VPN before starting standalone DNS.",
+                    "DNS-only local VPN: standard UDP/53 DNS requests are sent to the selected resolver; normal game traffic stays on the device's regular internet route. Apps with hard-coded DNS or built-in DoH/DoT may bypass this mode, and changing DNS does not guarantee lower game ping. Android allows only one active VPN, so disconnect Radar's main VPN before starting standalone DNS.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
