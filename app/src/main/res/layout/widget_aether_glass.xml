@@ -54,11 +54,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <View
+        <!-- RemoteViews supports ImageView; a generic View is not permitted here. -->
+        <ImageView
             android:id="@+id/aether_status_dot"
             android:layout_width="7dp"
             android:layout_height="7dp"
-            android:background="@drawable/aether_glass_dot_muted" />
+            android:src="@drawable/aether_glass_dot_muted"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/aether_status"
@@ -149,10 +151,12 @@
         android:orientation="horizontal"
         android:background="@drawable/aether_glass_inner_panel">
 
-        <View
+        <!-- TextView is a supported RemoteViews widget and acts as the accent bar. -->
+        <TextView
             android:layout_width="3dp"
             android:layout_height="25dp"
-            android:background="#FF55FFAA" />
+            android:background="#FF55FFAA"
+            android:text="" />
 
         <LinearLayout
             android:layout_width="0dp"
