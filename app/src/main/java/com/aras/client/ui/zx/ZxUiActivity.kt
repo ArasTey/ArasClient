@@ -418,6 +418,100 @@ private fun ZxHomePage(
 }
 
 @Composable
+private fun ZxConnectionPage(
+    isRunning: Boolean,
+    isTesting: Boolean,
+    profile: ProfileItem?,
+    onToggle: () -> Unit,
+    onTest: () -> Unit,
+    onServers: () -> Unit,
+    onMap: () -> Unit,
+    onMonitor: () -> Unit,
+) {
+    val linkState = when {
+        isRunning -> AuroraLinkState.CONNECTED
+        isTesting -> AuroraLinkState.CONNECTING
+        else -> AuroraLinkState.OFF
+    }
+    Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(
+            "وضعیت اتصال",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Box(
+            modifier = Modifier.fillMaxWidth().height(260.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AuroraSentinelRadar(
+                state = linkState,
+                contacts = emptyList(),
+                centerLabel = when {
+                    isRunning -> "CONNECTED"
+                    isTesting -> "TESTING"
+                    else -> "DISCONNECTED"
+                },
+                centerSubtitle = profile?.remarks?.take(24) ?: "NO SERVER SELECTED",
+                modifier = Modifier.size(250.dp),
+            )
+        }
+        AuroraGlassCard(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    profile?.remarks?.takeIf { it.isNotBlank() } ?: "سروری انتخاب نشده",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                AuroraStatusPill(
+                    label = if (isRunning) "ONLINE" else "OFFLINE",
+                    state = linkState,
+                )
+            }
+            Text(
+                profile?.let { listOfNotNull(it.server, it.serverPort).joinToString(":") }
+                    ?.takeIf { it.isNotBlank() } ?: "برای اتصال یک سرور انتخاب کنید",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                profile?.configType?.name ?: "—",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        Button(
+            onClick = onToggle,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(18.dp),
+        ) {
+            Text(if (isRunning) "قطع اتصال VPN" else "اتصال VPN", fontWeight = FontWeight.Bold)
+        }
+        OutlinedButton(
+            onClick = onTest,
+            enabled = profile != null && !isTesting,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+        ) {
+            Text(if (isTesting) "در حال آزمایش…" else "آزمایش سرور انتخاب‌شده")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ZxQuickTile("سرورها", "انتخاب سرور", Modifier.weight(1f), onServers)
+            ZxQuickTile("نقشه اتصال", "موقعیت و خروجی IP", Modifier.weight(1f), onMap)
+        }
+        ZxQuickTile("مانیتور زنده", "CPU، RAM، باتری و دما", Modifier.fillMaxWidth(), onMonitor)
+    }
+}
+
+@Composable
 private fun ZxServersPage(
     groups: List<com.aras.client.dto.GroupMapItem>,
     selectedGroupId: String,
