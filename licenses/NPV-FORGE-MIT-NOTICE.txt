@@ -8,7 +8,8 @@ Copyright (c) 2026 NPV//FORGE Project Contributors
 
 The bundled Gen-2 White-Box table data in:
 app/src/main/assets/npv/gen2_tables.bin.z.b64
-is redistributed under the MIT License. The NPV Gen-2 decoding compatibility
+app/src/main/assets/npv/legacy_whitebox_tables.json
+are redistributed under the MIT License. The NPV Gen-2 decoding compatibility
 work in this repository is an independent Kotlin implementation based on the
 publicly documented format and test vectors from NPV//FORGE.
 
