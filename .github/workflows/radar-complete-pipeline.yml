@@ -1,0 +1,184 @@
+name: RADAR Complete Pipeline
+
+on:
+  push:
+    branches: [not-SIGNAL/NOT-NET]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radar-complete-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-core:
+    name: Build Xray core from pinned source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout application repository
+        uses: actions/checkout@v5
+
+      - name: Checkout Android core bindings
+        uses: actions/checkout@v5
+        with:
+          repository: ArasTey/AndroidLibXrayLite
+          ref: main
+          path: core-bindings
+
+      - name: Checkout pinned Xray core source
+        uses: actions/checkout@v5
+        with:
+          repository: ArasTey/xray-core
+          ref: aras-core-26.10.13
+          path: xray-core-src
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+          cache-dependency-path: core-bindings/go.sum
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          gomobile init
+
+      - name: Download core geo assets
+        run: |
+          set -euo pipefail
+          cd core-bindings
+          curl --fail --location --retry 3 https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geoip.dat -o assets/geoip.dat
+          curl --fail --location --retry 3 https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geosite.dat -o assets/geosite.dat
+
+      - name: Build Android core AAR
+        run: |
+          set -euo pipefail
+          cd core-bindings
+          go mod edit -replace=github.com/xtls/xray-core=../xray-core-src
+          go mod edit -dropreplace=github.com/patterniha/xray-core 2>/dev/null || true
+          go mod tidy
+          gomobile bind -androidapi 24 -trimpath \
+            -ldflags='-s -w -buildid= -checklinkname=0' \
+            -o "$GITHUB_WORKSPACE/aras-core.aar" ./
+
+      - name: Verify required core capabilities
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/aarcheck
+          mkdir -p /tmp/aarcheck
+          cd /tmp/aarcheck
+          unzip -o -q "$GITHUB_WORKSPACE/aras-core.aar" "jni/arm64-v8a/libgojni.so"
+          so=jni/arm64-v8a/libgojni.so
+          count() { strings "$so" | grep -ci "$1" || true; }
+          anytls=$(count anytls)
+          amnezia=$(count amneziawg)
+          stockwg=$(count 'golang.zx2c4.com/wireguard')
+          echo "AnyTLS=$anytls AmneziaWG=$amnezia stock-WireGuard=$stockwg"
+          test "$anytls" -gt 0
+          test "$amnezia" -gt 0
+          test "$stockwg" -eq 0
+
+      - name: Upload built core AAR
+        uses: actions/upload-artifact@v5
+        with:
+          name: radar-core-aar
+          path: aras-core.aar
+          if-no-files-found: error
+          retention-days: 3
+
+  app-validation:
+    name: App build, feature tests and emulator launch
+    needs: build-core
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout application repository
+        uses: actions/checkout@v5
+
+      - name: Download built core AAR
+        uses: actions/download-artifact@v5
+        with:
+          name: radar-core-aar
+          path: core-artifact
+
+      - name: Install core AAR
+        run: |
+          mkdir -p app/libs
+          cp core-artifact/aras-core.aar app/libs/aras-core.aar
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android platform and build tools
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Use hosted Android compile SDK
+        run: sed -i 's/compileSdk = 37/compileSdk = 36/' app/build.gradle.kts
+
+      - name: Verify source contracts for integrated features
+        run: bash .github/scripts/radar-feature-contracts.sh
+
+      - name: Run Kotlin unit tests, lint and build APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :app:assembleDebug
+
+      - name: Verify APK output
+        run: |
+          find app/build/outputs/apk -type f -name '*.apk' -print
+          test -n "$(find app/build/outputs/apk -type f -name '*.apk' -print -quit)"
+
+      - name: Install and launch on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -memory 4096 -cores 2
+          disable-animations: true
+          script: bash .github/scripts/radar-launch-smoke.sh
+
+      - name: Upload APK and launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: radar-complete-validation
+          path: |
+            app/build/outputs/apk/**/*.apk
+            radar-launch-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
