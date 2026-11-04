@@ -127,7 +127,8 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                     .getOrNull()
             } else sample?.thermalHeadroom
             val threads = runCatching { java.io.File("/proc/self/task").list()?.size ?: 0 }.getOrDefault(0)
-            val processStartedAt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {\n                Process.getStartElapsedRealtime()\n            } else monitorStartedAt\n            val elapsed = (SystemClock.elapsedRealtime() - processStartedAt).coerceAtLeast(0L) / 1000
+            val processStartedAt = Process.getStartElapsedRealtime()
+            val elapsed = (SystemClock.elapsedRealtime() - processStartedAt).coerceAtLeast(0L) / 1000
             val uptime = String.format(
                 Locale.getDefault(), "%02d:%02d:%02d",
                 elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60
@@ -136,7 +137,11 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 Cipher.getInstance("AES/GCM/NoPadding").provider?.name ?: "Unavailable"
             }.getOrDefault("Unavailable")
 
-            sample = MonitorSample(\n                cpu, ramMb, battery, current, temp, thermal, headroom, threads, uptime,\n                context.getString(R.string.monitor_process_uptime),\n                provider\n            )
+            sample = MonitorSample(
+                cpu, ramMb, battery, current, temp, thermal, headroom, threads, uptime,
+                context.getString(R.string.monitor_process_uptime),
+                provider
+            )
             cpuHistory.add(cpu)
             ramHistory.add(ramMb)
             while (cpuHistory.size > 120) cpuHistory.removeAt(0)
