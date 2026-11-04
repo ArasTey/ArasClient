@@ -122,6 +122,10 @@ object NpvConfigImporter {
                             "رمزگشایی NPVS v5 با AppKey انجام نشد؛ فایل ممکن است ناقص یا ناسازگار باشد."
                         }
                     )
+                } else if (isNpvGen2Recipient(bytes) || isNpvV1Recipient(bytes)) {
+                    Result.Failed(
+                        "این کانفیگ با کلید خصوصی گیرنده (Recipient/ECDH) قفل شده است؛ برای بازکردن آن کلید خصوصی مجاز همان گیرنده لازم است."
+                    )
                 } else {
                     Result.NeedPassword(
                         "فایل NPVS قفل‌شده با رمز سازنده است. رمز را از سازنده‌ی فایل دریافت و وارد کنید."
@@ -321,6 +325,20 @@ object NpvConfigImporter {
 
     private fun isNpvV1AppKey(bytes: ByteArray): Boolean =
         npvV1Header(bytes)?.has("appKey") == true
+
+    private fun isNpvV1Recipient(bytes: ByteArray): Boolean {
+        val header = npvV1Header(bytes) ?: return false
+        return !header.has("appKey") && !header.has("passphrase") &&
+            (header.getAsJsonArray("recipients")?.size() ?: 0) > 0
+    }
+
+    private fun isNpvGen2Recipient(bytes: ByteArray): Boolean {
+        if (bytes.size < 62 || String(bytes, 0, 4, StandardCharsets.US_ASCII) != "NPVS" || bytes[4] != GEN2_VERSION) return false
+        val headerLength = NpvCrypto.be32(bytes, 5)
+        if (headerLength < 53 || 9L + headerLength > bytes.size) return false
+        val header = bytes.copyOfRange(9, 9 + headerLength)
+        return (header[50].toInt() and 0xff) == 0 && NpvCrypto.be16(header, 51) > 0
+    }
 
     private fun tryOpenNpvV1AppKey(bytes: ByteArray, tablesJson: String): List<String>? {
         val header = npvV1Header(bytes) ?: return null
