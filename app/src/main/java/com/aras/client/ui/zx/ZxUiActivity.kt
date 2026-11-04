@@ -171,6 +171,7 @@ class ZxUiActivity : HelperBaseComponentActivity() {
             onSelectServer = ::selectServer,
             onOpen = { activity -> startActivity(Intent(this, activity)) },
             onOpenPsiphonCdn = ::openPsiphonCdnPreset,
+            onToggleConnection = ::toggleVpnConnection,
         )
     }
 }
@@ -190,6 +191,7 @@ private fun ZxUiScreen(
     onOpen: (Class<out android.app.Activity>) -> Unit,
     onSelectServer: (String) -> Unit,
     onOpenPsiphonCdn: () -> Unit,
+    onToggleConnection: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val screenTransition by ThemeManager.screenTransition.collectAsState()
@@ -310,7 +312,7 @@ private fun ZxUiScreen(
                                 isRunning = state.isRunning,
                                 isTesting = state.isTesting,
                                 profile = selectedProfile,
-                                onToggle = ::toggleVpnConnection,
+                                onToggle = onToggleConnection,
                                 onServers = { tab = ZxTab.Servers },
                                 onConnection = { tab = ZxTab.Connection },
                                 onMap = { onOpen(ConnectionMapActivity::class.java) },
