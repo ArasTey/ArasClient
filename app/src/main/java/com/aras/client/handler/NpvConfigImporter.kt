@@ -51,7 +51,7 @@ object NpvConfigImporter {
         return head.startsWith("NPVS") || head.startsWith("NPVT") || head.startsWith("NPVO")
     }
 
-    fun inspect(bytes: ByteArray, fileName: String? = null): Result {
+    fun inspect(bytes: ByteArray, fileName: String? = null, gen2Tables: ByteArray? = null): Result {
         if (bytes.isEmpty()) return Result.Failed("فایل خالی است.")
 
         val asText = runCatching {
@@ -86,9 +86,17 @@ object NpvConfigImporter {
                         "فایل NPVS قفل‌شده با رمز سازنده است. رمز را وارد کنید (مثل اپ NPV Tunnel)."
                     )
                 }
-                return if (isNpvGen2AppKey(bytes)) {
-                    Result.Failed(
-                        "این NPVS v5 با AppKey رمزگذاری شده است؛ برای بازکردن آن به موتور White-Box نسل ۵ نیاز است. رمز عبور معمولی این فایل را باز نمی‌کند."
+                if (isNpvGen2AppKey(bytes)) {
+                    val opened = gen2Tables?.let { tryOpenGen2AppKey(bytes, it) }
+                    if (!opened.isNullOrEmpty()) {
+                        return Result.Open(opened.joinToString("\n"), opened.size, "npvs-gen2-appkey")
+                    }
+                    return Result.Failed(
+                        if (gen2Tables == null) {
+                            "جداول رمزگشایی White-Box نسل ۵ در دسترس نیستند؛ فایل دست‌نخورده باقی مانده است."
+                        } else {
+                            "رمزگشایی NPVS v5 با AppKey انجام نشد؛ فایل ممکن است ناقص یا ناسازگار باشد."
+                        }
                     )
                 } else {
                     Result.NeedPassword(
@@ -122,8 +130,13 @@ object NpvConfigImporter {
         return Result.Failed("فرمت NPV شناسایی نشد.")
     }
 
-    fun inspectWithPassphrase(bytes: ByteArray, passphrase: String, fileName: String? = null): Result {
-        val base = inspect(bytes, fileName)
+    fun inspectWithPassphrase(
+        bytes: ByteArray,
+        passphrase: String,
+        fileName: String? = null,
+        gen2Tables: ByteArray? = null,
+    ): Result {
+        val base = inspect(bytes, fileName, gen2Tables)
         if (base is Result.Open) return base
         if (passphrase.isBlank()) return base
 
@@ -265,93 +278,121 @@ object NpvConfigImporter {
             val header = b.copyOfRange(9, 9 + headerLength)
             val recipients = NpvCrypto.be16(header, 51)
             val keyBlockOffset = GEN2_KEY_BLOCK_OFFSET + recipients * (GEN2_RECIPIENT_PK + GEN2_RECIPIENT_WRAP)
-            if (keyBlockOffset < GEN2_KEY_BLOCK_OFFSET || keyBlockOffset + GEN2_PASS_BLOCK_SIZE + 4 > header.size) return null
-
+            if (keyBlockOffset + GEN2_PASS_BLOCK_SIZE + 4 > header.size) return null
             val iterations = NpvCrypto.be32(header, keyBlockOffset)
             if (iterations !in 1..2_000_000) return null
             val salt = header.copyOfRange(keyBlockOffset + 4, keyBlockOffset + 20)
             val wrappedKey = header.copyOfRange(keyBlockOffset + 20, keyBlockOffset + GEN2_PASS_BLOCK_SIZE)
             if (salt.size != 16 || wrappedKey.size != 60) return null
-
             val kdk = NpvCrypto.pbkdf2HmacSha256(
                 passphrase.trim().toByteArray(StandardCharsets.UTF_8), salt, iterations, 32
             )
-            val dek = NpvCrypto.chacha20Poly1305Open(
-                kdk, wrappedKey.copyOfRange(0, 12), wrappedKey.copyOfRange(12, wrappedKey.size), salt
-            ) ?: return null
-
-            val metadataLengthOffset = keyBlockOffset + GEN2_PASS_BLOCK_SIZE
-            val metadataLength = NpvCrypto.be32(header, metadataLengthOffset)
-            if (metadataLength < 16 || metadataLengthOffset + 4L + metadataLength > header.size) return null
-            val headerPrefix = header.copyOfRange(0, metadataLengthOffset)
-            val sealedMetadata = header.copyOfRange(metadataLengthOffset + 4, metadataLengthOffset + 4 + metadataLength)
-
-            val bodyOffset = 9 + headerLength
-            if (bodyOffset + 16 > b.size) return null
-            val nonce = b.copyOfRange(bodyOffset, bodyOffset + 12)
-            val bodyLength = NpvCrypto.be32(b, bodyOffset + 12)
-            val encryptedBodyOffset = bodyOffset + 16
-            if (bodyLength < 38 || encryptedBodyOffset.toLong() + bodyLength + 64 > b.size) return null
-            val encryptedBody = b.copyOfRange(encryptedBodyOffset, encryptedBodyOffset + bodyLength)
-
-            val metadataKey = NpvCrypto.hkdfSha256(
-                dek, nonce, "NPVS-v5/metadata".toByteArray(StandardCharsets.UTF_8)
-            )
-            // Authenticate and open the sealed metadata before accepting the payload.
-            NpvCrypto.chacha20Poly1305Open(metadataKey, nonce, sealedMetadata, headerPrefix) ?: return null
-
-            if (
-                encryptedBody[0] != 0x4e.toByte() || encryptedBody[1] != 0x50.toByte() ||
-                encryptedBody[2] != 0x46.toByte() || encryptedBody[3] != 0x01.toByte()
-            ) return null
-            val contentId = encryptedBody.copyOfRange(4, 36)
-            val rowCount = NpvCrypto.be16(encryptedBody, 36)
-            if (rowCount !in 1..4096) return null
-            var offset = 38
-            val fields = LinkedHashMap<Int, ByteArray>()
-            val zeroNonce = ByteArray(12)
-            val fieldPrefix = "NPV-fields-v1/field/".toByteArray(StandardCharsets.UTF_8)
-            val recordPrefix = "NPV-fields-v1/record/".toByteArray(StandardCharsets.UTF_8)
-
-            repeat(rowCount) {
-                if (offset + 6 > encryptedBody.size) return null
-                val sequence = NpvCrypto.be16(encryptedBody, offset)
-                val blobLength = NpvCrypto.be16(encryptedBody, offset + 4)
-                offset += 6
-                if (blobLength < 16 || offset + blobLength > encryptedBody.size) return null
-                val blob = encryptedBody.copyOfRange(offset, offset + blobLength)
-                offset += blobLength
-
-                val plainLength = blobLength - 16
-                val sequenceBytes = NpvCrypto.putBe16(sequence)
-                val info = fieldPrefix + sequenceBytes
-                val fieldKey = NpvCrypto.hkdfSha256(dek, contentId, info)
-                val aad = recordPrefix + contentId + sequenceBytes + NpvCrypto.putBe32(plainLength)
-                val plain = NpvCrypto.chacha20Poly1305Open(fieldKey, zeroNonce, blob, aad)
-                if (plain != null) fields[sequence] = plain
-            }
-
-            val sentinelBytes = fields[0xffff] ?: return null
-            val sentinelJson = runCatching {
-                JsonParser.parseString(String(sentinelBytes, StandardCharsets.UTF_8))
-            }.getOrNull() ?: return null
-            if (!sentinelJson.isJsonObject) return null
-            val configs = sentinelJson.asJsonObject.getAsJsonArray("configs") ?: return null
-            val links = LinkedHashSet<String>()
-            configs.forEach { rawConfig ->
-                val config = substituteNpvFields(rawConfig, fields)
-                links += extractLinks(config.toString())
-                if (config.isJsonObject) {
-                    val obj = config.asJsonObject
-                    obj.get("v2rayProfile")?.takeIf { it.isJsonObject }?.asJsonObject
-                        ?.let { profile -> profileToShareLink(obj, profile)?.let(links::add) }
-                    obj.get("v2rayJson")?.let { links += extractLinks(it.toString()) }
-                }
-            }
-            links.take(200).toList().takeIf { it.isNotEmpty() }
+            openGen2EnvelopeWithKdk(b, header, headerLength, keyBlockOffset + GEN2_PASS_BLOCK_SIZE, salt, wrappedKey, kdk)
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun tryOpenGen2AppKey(b: ByteArray, compressedTables: ByteArray): List<String>? {
+        if (!isNpvGen2AppKey(b)) return null
+        return try {
+            val headerLength = NpvCrypto.be32(b, 5)
+            if (headerLength < 135 || 9L + headerLength > b.size) return null
+            val header = b.copyOfRange(9, 9 + headerLength)
+            val recipients = NpvCrypto.be16(header, 51)
+            val keyBlockOffset = GEN2_KEY_BLOCK_OFFSET + recipients * (GEN2_RECIPIENT_PK + GEN2_RECIPIENT_WRAP)
+            if (keyBlockOffset + 78 + 4 > header.size) return null
+            if (NpvCrypto.be16(header, keyBlockOffset) != 2) return null
+            val salt = header.copyOfRange(keyBlockOffset + 2, keyBlockOffset + 18)
+            val wrappedKey = header.copyOfRange(keyBlockOffset + 18, keyBlockOffset + 78)
+            val a16 = NpvCrypto.npvGen2A16(salt, compressedTables) ?: return null
+            val configId = header.copyOfRange(1, 17)
+            val kdk = NpvCrypto.sha256(
+                "npvtunnel/appkey/v2 ".toByteArray(StandardCharsets.UTF_8) + a16 + configId
+            )
+            openGen2EnvelopeWithKdk(b, header, headerLength, keyBlockOffset + 78, salt, wrappedKey, kdk)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun openGen2EnvelopeWithKdk(
+        bytes: ByteArray,
+        header: ByteArray,
+        headerLength: Int,
+        metadataLengthOffset: Int,
+        salt: ByteArray,
+        wrappedKey: ByteArray,
+        kdk: ByteArray,
+    ): List<String>? {
+        if (wrappedKey.size != 60 || salt.size != 16) return null
+        val dek = NpvCrypto.chacha20Poly1305Open(
+            kdk, wrappedKey.copyOfRange(0, 12), wrappedKey.copyOfRange(12, wrappedKey.size), salt
+        ) ?: return null
+        val metadataLength = NpvCrypto.be32(header, metadataLengthOffset)
+        if (metadataLength < 16 || metadataLengthOffset + 4L + metadataLength > header.size) return null
+        val headerPrefix = header.copyOfRange(0, metadataLengthOffset)
+        val sealedMetadata = header.copyOfRange(metadataLengthOffset + 4, metadataLengthOffset + 4 + metadataLength)
+
+        val bodyOffset = 9 + headerLength
+        if (bodyOffset + 16 > bytes.size) return null
+        val nonce = bytes.copyOfRange(bodyOffset, bodyOffset + 12)
+        val bodyLength = NpvCrypto.be32(bytes, bodyOffset + 12)
+        val encryptedBodyOffset = bodyOffset + 16
+        if (bodyLength < 38 || encryptedBodyOffset.toLong() + bodyLength + 64 > bytes.size) return null
+        val encryptedBody = bytes.copyOfRange(encryptedBodyOffset, encryptedBodyOffset + bodyLength)
+
+        val metadataKey = NpvCrypto.hkdfSha256(
+            dek, nonce, "NPVS-v5/metadata".toByteArray(StandardCharsets.UTF_8)
+        )
+        if (NpvCrypto.chacha20Poly1305Open(metadataKey, nonce, sealedMetadata, headerPrefix) == null) return null
+
+        if (
+            encryptedBody[0] != 0x4e.toByte() || encryptedBody[1] != 0x50.toByte() ||
+            encryptedBody[2] != 0x46.toByte() || encryptedBody[3] != 0x01.toByte()
+        ) return null
+        val contentId = encryptedBody.copyOfRange(4, 36)
+        val rowCount = NpvCrypto.be16(encryptedBody, 36)
+        if (rowCount !in 1..4096) return null
+        var offset = 38
+        val fields = LinkedHashMap<Int, ByteArray>()
+        val zeroNonce = ByteArray(12)
+        val fieldPrefix = "NPV-fields-v1/field/".toByteArray(StandardCharsets.UTF_8)
+        val recordPrefix = "NPV-fields-v1/record/".toByteArray(StandardCharsets.UTF_8)
+
+        repeat(rowCount) {
+            if (offset + 6 > encryptedBody.size) return null
+            val sequence = NpvCrypto.be16(encryptedBody, offset)
+            val blobLength = NpvCrypto.be16(encryptedBody, offset + 4)
+            offset += 6
+            if (blobLength < 16 || offset + blobLength > encryptedBody.size) return null
+            val blob = encryptedBody.copyOfRange(offset, offset + blobLength)
+            offset += blobLength
+            val plainLength = blobLength - 16
+            val sequenceBytes = NpvCrypto.putBe16(sequence)
+            val fieldKey = NpvCrypto.hkdfSha256(dek, contentId, fieldPrefix + sequenceBytes)
+            val aad = recordPrefix + contentId + sequenceBytes + NpvCrypto.putBe32(plainLength)
+            NpvCrypto.chacha20Poly1305Open(fieldKey, zeroNonce, blob, aad)?.let { fields[sequence] = it }
+        }
+
+        val sentinelBytes = fields[0xffff] ?: return null
+        val sentinelJson = runCatching {
+            JsonParser.parseString(String(sentinelBytes, StandardCharsets.UTF_8))
+        }.getOrNull() ?: return null
+        if (!sentinelJson.isJsonObject) return null
+        val configs = sentinelJson.asJsonObject.getAsJsonArray("configs") ?: return null
+        val links = LinkedHashSet<String>()
+        configs.forEach { rawConfig ->
+            val config = substituteNpvFields(rawConfig, fields)
+            links += extractLinks(config.toString())
+            if (config.isJsonObject) {
+                val obj = config.asJsonObject
+                obj.get("v2rayProfile")?.takeIf { it.isJsonObject }?.asJsonObject
+                    ?.let { profile -> profileToShareLink(obj, profile)?.let(links::add) }
+                obj.get("v2rayJson")?.let { links += extractLinks(it.toString()) }
+            }
+        }
+        return links.take(200).toList().takeIf { it.isNotEmpty() }
     }
 
     private fun substituteNpvFields(value: JsonElement, fields: Map<Int, ByteArray>): JsonElement {
