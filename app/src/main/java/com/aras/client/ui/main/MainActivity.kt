@@ -547,6 +547,15 @@ class MainActivity : HelperBaseComponentActivity() {
     @Volatile private var pendingNpvBytes: ByteArray? = null
     @Volatile private var pendingNpvName: String? = null
 
+    /** Compressed White-Box table shipped locally; no network access or config upload. */
+    private val npvGen2CompressedTables: ByteArray? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        runCatching {
+            assets.open("npv/gen2_tables.bin.z.b64").bufferedReader(Charsets.US_ASCII).use { reader ->
+                java.util.Base64.getDecoder().decode(reader.readText())
+            }
+        }.getOrNull()
+    }
+
     private fun importArascFile() {
         launchFileChooser { uri ->
             if (uri == null) return@launchFileChooser
@@ -618,10 +627,11 @@ class MainActivity : HelperBaseComponentActivity() {
 
     private fun handleNpvAttempt(bytes: ByteArray, fileName: String?, passphrase: String?) {
         lifecycleScope.launch(Dispatchers.IO) {
+            val tables = if (NpvConfigImporter.needsGen2Tables(bytes)) npvGen2CompressedTables else null
             val result = if (passphrase.isNullOrBlank()) {
-                NpvConfigImporter.inspect(bytes, fileName)
+                NpvConfigImporter.inspect(bytes, fileName, tables)
             } else {
-                NpvConfigImporter.inspectWithPassphrase(bytes, passphrase, fileName)
+                NpvConfigImporter.inspectWithPassphrase(bytes, passphrase, fileName, tables)
             }
             withContext(Dispatchers.Main) {
                 when (result) {
