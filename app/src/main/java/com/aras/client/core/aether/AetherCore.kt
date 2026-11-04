@@ -40,7 +40,9 @@ data class AetherCore(
          * or its settings as arguments on its listen port.
          */
         fun of(profile: ProfileItem): AetherCore =
-            profile.aetherCommand?.takeIf { it.isNotBlank() }?.let(::ofCommand)
+            profile.aetherCommand?.takeIf { it.isNotBlank() }
+                ?.let(::ofCommand)
+                ?.let { it.copy(useBundledPsiphonServerList = profile.aetherPsiphonBundledList != false) }
                 ?: AetherCore(
                     AetherCoreManager.withoutOption(
                         AetherCoreManager.buildArguments(profile, AetherCoreManager.listenPort(profile)),
