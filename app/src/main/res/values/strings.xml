@@ -926,7 +926,7 @@
     <string name="monitor_headroom_hint">Headroom is sampled every 10 seconds where supported by Android.</string>
     <string name="monitor_process">Process</string>
     <string name="monitor_threads">%1$d threads</string>
-    <string name="monitor_uptime">Process uptime: %1$s</string>
+    <string name="monitor_uptime">%1$s: %2$s</string>
     <string name="monitor_process_note">CPU and RAM values refer to RADAR VPN, not total device usage.</string>
     <string name="monitor_crypto">Cryptography provider</string>
     <string name="monitor_crypto_note">Provider availability is shown; Android does not expose a reliable generic flag for hardware acceleration.</string>
@@ -956,5 +956,9 @@
     <string name="map_disclaimer">Locations are estimated from public IP addresses, not GPS. IP lookup sends your public IP to ipwho.is. The route is illustrative, not the physical path taken by packets.</string>
     <string name="map_origin_marker">Origin network</string>
     <string name="map_exit_marker">VPN exit</string>
+
+
+    <string name="monitor_process_uptime">Process uptime</string>
+    <string name="monitor_session_uptime">Monitor session uptime (process start time unavailable)</string>
 
 </resources>
