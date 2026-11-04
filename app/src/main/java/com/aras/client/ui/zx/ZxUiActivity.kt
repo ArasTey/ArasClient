@@ -6,7 +6,14 @@ import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
@@ -80,6 +87,7 @@ import com.aras.client.ui.compose.AuroraGlassCard
 import com.aras.client.ui.compose.AuroraLinkState
 import com.aras.client.ui.compose.AuroraSentinelRadar
 import com.aras.client.ui.compose.AuroraStatusPill
+import com.aras.client.ui.compose.ThemeManager
 import com.aras.client.ui.settings.SettingsActivity
 
 class ZxUiActivity : HelperBaseComponentActivity() {
@@ -153,6 +161,8 @@ private fun ZxUiScreen(
     onSelectServer: (String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val screenTransition by ThemeManager.screenTransition.collectAsState()
+    val reduceMotion by ThemeManager.reducedMotionEnabled.collectAsState()
     var tab by remember { mutableStateOf(ZxTab.Home) }
 
     LaunchedEffect(viewModel) {
@@ -247,7 +257,23 @@ private fun ZxUiScreen(
                         }
                     }
 
-                    Crossfade(targetState = tab, label = "zx-tab-transition") { page ->
+                    AnimatedContent(
+                        targetState = tab,
+                        transitionSpec = {
+                            if (reduceMotion) {
+                                fadeIn(tween(80)) togetherWith fadeOut(tween(80))
+                            } else {
+                                when (screenTransition) {
+                                    "slide" -> slideInHorizontally { it / 8 } + fadeIn() togetherWith
+                                        slideOutHorizontally { -it / 8 } + fadeOut()
+                                    "scale" -> scaleIn(initialScale = 0.96f) + fadeIn() togetherWith
+                                        scaleOut(targetScale = 0.96f) + fadeOut()
+                                    else -> fadeIn(tween(220)) togetherWith fadeOut(tween(180))
+                                }
+                            }
+                        },
+                        label = "zx-tab-transition",
+                    ) { page ->
                         when (page) {
                             ZxTab.Home -> ZxHomePage(
                                 isRunning = state.isRunning,
