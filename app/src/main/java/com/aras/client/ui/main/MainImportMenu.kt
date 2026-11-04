@@ -94,12 +94,21 @@ internal fun serverMenuActions(
 }
 
 @Composable
-fun ImportMenuContent(onAction: (MainAction) -> Unit, onOpenDnsChanger: () -> Unit = {}) {
+fun ImportMenuContent(
+    onAction: (MainAction) -> Unit,
+    onOpenDnsChanger: () -> Unit = {},
+    onOpenPsiphonCdn: () -> Unit = {},
+) {
     var showProtocolMenu by remember { mutableStateOf(false) }
 
     DropdownMenuItem(
         text = { Text("DNS CHANGER") },
         onClick = onOpenDnsChanger
+    )
+
+    DropdownMenuItem(
+        text = { Text("Psiphon CDN") },
+        onClick = onOpenPsiphonCdn
     )
 
     DropdownMenuItem(
