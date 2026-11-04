@@ -148,6 +148,7 @@ fun SettingsScreen(
     }
     var uiModeNight by rememberMmkvString(AppConfig.PREF_UI_MODE_NIGHT, "0")
     var uiExperience by rememberMmkvString(AppConfig.PREF_UI_EXPERIENCE, "radar")
+    var screenTransition by rememberMmkvString("pref_screen_transition", "fade")
     var dynamicColor by rememberMmkvBool(AppConfig.PREF_DYNAMIC_COLOR, true)
 
     var uiIconMode by remember {
@@ -337,6 +338,16 @@ fun SettingsScreen(
                     onSelected = {
                         uiModeNight = it
                         ThemeManager.setThemeMode(it)
+                    }
+                )
+                SettingsListItem(
+                    title = "انیمیشن جابه‌جایی صفحه",
+                    entries = listOf("محو شدن", "حرکت افقی", "بزرگ‌نمایی"),
+                    values = listOf("fade", "slide", "scale"),
+                    selectedValue = screenTransition,
+                    onSelected = {
+                        screenTransition = it
+                        ThemeManager.setScreenTransition(it)
                     }
                 )
             }
