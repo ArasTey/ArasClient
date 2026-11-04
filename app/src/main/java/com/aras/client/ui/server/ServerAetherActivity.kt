@@ -75,7 +75,16 @@ class ServerAetherActivity : BaseServerActivity() {
     override fun ScreenContent() {
         val scope = rememberCoroutineScope()
         val uiState = rememberSaveable(saver = ServerUiState.Saver) {
-            ServerUiState.from(initialConfig = initialConfig)
+            ServerUiState.from(initialConfig = initialConfig).apply {
+                if (intent.getBooleanExtra("presetPsiphonCdn", false) && initialConfig == null) {
+                    remarks = "Psiphon CDN"
+                    aetherProtocol = "wg"
+                    aetherPsiphon = "only"
+                    aetherPsiphonMode = "cdn"
+                    aetherPsiphonBundledList = true
+                    aetherPsiphonRegion = ""
+                }
+            }
         }.apply {
             configType = EConfigType.AETHER
         }
@@ -315,10 +324,11 @@ class ServerAetherActivity : BaseServerActivity() {
                 state.aetherPsiphonCdnSets,
                 { state.aetherPsiphonCdnSets = it },
             )
-            FormTextField(
-                stringResource(R.string.server_lab_aether_psiphon_region),
-                state.aetherPsiphonRegion,
-                { state.aetherPsiphonRegion = it },
+            FormDropdownField(
+                label = stringResource(R.string.server_lab_aether_psiphon_region),
+                value = state.aetherPsiphonRegion.ifBlank { "auto" },
+                options = listOf("auto") + java.util.Locale.getISOCountries().sorted(),
+                onValueChange = { state.aetherPsiphonRegion = if (it == "auto") "" else it },
             )
             FormToggleField(
                 label = stringResource(R.string.server_lab_aether_psiphon_bundled),
