@@ -99,7 +99,7 @@ object DnsChangerStore {
             InetAddress.getByName(value).address.size == 16
         } else {
             val parts = value.split('.')
-            parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 && it.isNotEmpty() }
+            parts.size == 4 && parts.all { part -> part.isNotEmpty() && part.toIntOrNull()?.let { it in 0..255 } == true }
         }
     }.getOrDefault(false)
 }

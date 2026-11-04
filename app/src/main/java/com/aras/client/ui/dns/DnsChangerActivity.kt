@@ -129,7 +129,7 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
                             Text(if (DnsChangerStore.isEnabled()) "DNS profile selected" else "Choose your resolver", fontWeight = FontWeight.Bold)
                             Text(
                                 if (DnsChangerStore.isEnabled()) "${primary}  ${secondary}".trim()
-                                else "Set DNS without importing a VPN configuration",
+                                else "Custom resolver profiles for the Radar VPN tunnel",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -262,13 +262,13 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
                 ) {
                     Icon(Icons.Rounded.PlayArrow, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
-                    Text("CONNECT / APPLY DNS")
+                    Text("APPLY DNS TO VPN TUNNEL")
                 }
                 if (DnsChangerStore.isEnabled()) {
                     TextButton(
                         onClick = {
                             DnsChangerStore.deactivate()
-                            if (CoreServiceManager.isRunning()) LauncherManager.restartService(this@DnsChangerActivity)
+                            if (CoreServiceManager.isRunning()) LauncherManager.restartService(context)
                             notice = "DNS override disabled"
                         },
                         modifier = Modifier.fillMaxWidth()
