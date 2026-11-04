@@ -288,10 +288,8 @@ object NpvConfigImporter {
             if (kdf != "pbkdf2-hmac-sha256") return null
             val iterations = wrapInfo.get("iters")?.asInt ?: return null
             if (iterations !in 1..2_000_000) return null
-            val salt = decodeBase64(wrapInfo.get("salt")?.asString ?: "")?.toByteArray(StandardCharsets.ISO_8859_1)
-                ?: return null
-            val wrapped = decodeBase64(wrapInfo.get("wrap")?.asString ?: "")?.toByteArray(StandardCharsets.ISO_8859_1)
-                ?: return null
+            val salt = decodeBase64Bytes(wrapInfo.get("salt")?.asString ?: "") ?: return null
+            val wrapped = decodeBase64Bytes(wrapInfo.get("wrap")?.asString ?: "") ?: return null
             if (salt.size != 16 || wrapped.size != 60) return null
             val headerLength = NpvCrypto.be32(bytes, 5)
             val headerRaw = bytes.copyOfRange(9, 9 + headerLength)
@@ -570,6 +568,14 @@ object NpvConfigImporter {
     private fun looksLikeBase64(s: String): Boolean {
         if (s.length < 40) return false
         return s.all { it.isLetterOrDigit() || it == '+' || it == '/' || it == '=' || it == '-' || it == '_' }
+    }
+
+    private fun decodeBase64Bytes(value: String): ByteArray? {
+        val normalized = value.trim().replace('-', '+').replace('_', '/')
+        val pad = (4 - normalized.length % 4) % 4
+        return runCatching {
+            Base64.getDecoder().decode(normalized + "=".repeat(pad))
+        }.getOrNull()
     }
 
     private fun decodeBase64(value: String): String? {
