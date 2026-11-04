@@ -6,7 +6,6 @@ import com.aras.client.root.RootManager.refresh
 import com.aras.client.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 /**
  * Detects whether the device grants root (`su`) access.
@@ -46,14 +45,32 @@ object RootManager {
             val process = ProcessBuilder("su", "-c", "id -u")
                 .redirectErrorStream(true)
                 .start()
-            val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
-            val finished = process.waitFor(10, TimeUnit.SECONDS)
-            if (!finished) {
-                process.destroy()
+            // Do not read the stream before checking the deadline: readText() can
+            // block indefinitely if a broken su implementation keeps stdout open.
+            val deadline = System.nanoTime() + 10_000_000_000L
+            var exitCode: Int? = null
+            while (System.nanoTime() < deadline) {
+                exitCode = try {
+                    process.exitValue()
+                } catch (_: IllegalThreadStateException) {
+                    null
+                }
+                if (exitCode != null) break
+                try {
+                    Thread.sleep(50)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    runCatching { process.destroy() }
+                    return false
+                }
+            }
+            if (exitCode == null) {
+                runCatching { process.destroy() }
                 LogUtil.w(AppConfig.TAG, "RootManager: su probe timed out")
                 return false
             }
-            val isRoot = process.exitValue() == 0 && output.lineSequence().lastOrNull()?.trim() == "0"
+            val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+            val isRoot = exitCode == 0 && output.lineSequence().lastOrNull()?.trim() == "0"
             LogUtil.i(AppConfig.TAG, "RootManager: root available = $isRoot")
             isRoot
         } catch (e: Exception) {
