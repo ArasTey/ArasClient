@@ -63,8 +63,8 @@ class ConnectionMapActivity : ComponentActivity() {
 private fun ConnectionMapScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var origin by remember { mutableStateOf<IpPlace?>(null) }
-    var exit by remember { mutableStateOf<IpPlace?>(null) }
+    var origin by remember { mutableStateOf(readSavedPlace(context, "origin")) }
+    var exit by remember { mutableStateOf(readSavedPlace(context, "exit")) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var mapView by remember { mutableStateOf<WebView?>(null) }
@@ -90,7 +90,13 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
             try {
                 val place = withContext(Dispatchers.IO) { lookupPublicIpPlace() }
                 val vpnActive = isVpnTransportActive(context)
-                if (vpnActive) exit = place else origin = place
+                if (vpnActive) {
+                    exit = place
+                    savePlace(context, "exit", place)
+                } else {
+                    origin = place
+                    savePlace(context, "origin", place)
+                }
                 refreshMap()
             } catch (exception: Exception) {
                 error = exception.message ?: context.getString(R.string.map_lookup_failed)
@@ -159,6 +165,32 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
     }
 }
 
+
+private fun savePlace(context: Context, key: String, place: IpPlace) {
+    val json = JSONObject()
+        .put("ip", place.ip)
+        .put("city", place.city)
+        .put("country", place.country)
+        .put("latitude", place.latitude)
+        .put("longitude", place.longitude)
+        .toString()
+    context.getSharedPreferences("vpn_connection_map", Context.MODE_PRIVATE)
+        .edit().putString(key, json).apply()
+}
+
+private fun readSavedPlace(context: Context, key: String): IpPlace? = runCatching {
+    val raw = context.getSharedPreferences("vpn_connection_map", Context.MODE_PRIVATE)
+        .getString(key, null) ?: return null
+    val json = JSONObject(raw)
+    IpPlace(
+        ip = json.optString("ip", ""),
+        city = json.optString("city", ""),
+        country = json.optString("country", ""),
+        latitude = json.getDouble("latitude"),
+        longitude = json.getDouble("longitude")
+    )
+}.getOrNull()
+
 private fun isVpnTransportActive(context: Context): Boolean {
     val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     val network = manager.activeNetwork ?: return false
@@ -205,6 +237,8 @@ private val MAP_HTML = """
 <style>
 html,body,#map{height:100%;width:100%;margin:0;background:#101820}
 .leaflet-container{background:#101820}
+.animated-route{stroke-dasharray:8 10;animation:route-flow 1.2s linear infinite}
+@keyframes route-flow{to{stroke-dashoffset:-18}}
 </style>
 </head>
 <body>
@@ -230,7 +264,7 @@ window.setConnectionPoints=function(olat,olon,elat,elon){
   exitMarker=L.marker(p).addTo(map).bindPopup('VPN exit');
  }
  if(points.length===2){
-  route=L.polyline(points,{color:'#31d6b0',weight:3,dashArray:'8 10'}).addTo(map);
+  route=L.polyline(points,{color:'#31d6b0',weight:3,className:'animated-route'}).addTo(map);
   map.fitBounds(route.getBounds().pad(0.25));
  }else if(points.length===1){map.setView(points[0],5);}
 };
