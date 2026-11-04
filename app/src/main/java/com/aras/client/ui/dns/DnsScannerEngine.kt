@@ -168,7 +168,10 @@ object DnsScannerEngine {
                 throw error
             }
             val elapsed = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
-            DnsScanCheck(label, true, rcode, elapsed, if (truncated) "TCP" else "UDP", "Response validated")
+            DnsScanCheck(
+                label, true, rcode, elapsed, if (truncated) "TCP" else "UDP",
+                if (expectNxDomain) "NXDOMAIN as expected; this does not rule out DPI" else "Response validated"
+            )
         } catch (e: SocketTimeoutException) {
             DnsScanCheck(label, false, null, null, "UDP", "Timed out")
         } catch (e: Exception) {
