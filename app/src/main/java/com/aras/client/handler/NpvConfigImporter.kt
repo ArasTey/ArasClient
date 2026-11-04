@@ -251,14 +251,40 @@ object NpvConfigImporter {
         val user = value("password")
         if (user.isBlank()) return null
         val query = linkedMapOf("type" to network, "security" to security)
+        value("flow").takeIf(String::isNotBlank)?.let { query["flow"] = it }
         when (network) {
-            "ws", "httpupgrade", "xhttp" -> {
+            "ws" -> {
                 value("path").takeIf(String::isNotBlank)?.let { query["path"] = it }
                 value("host").takeIf(String::isNotBlank)?.let { query["host"] = it }
             }
-            "grpc" -> value("serviceName").takeIf(String::isNotBlank)?.let { query["serviceName"] = it }
+            "grpc" -> {
+                value("serviceName").takeIf(String::isNotBlank)?.let { query["serviceName"] = it }
+                value("mode").takeIf(String::isNotBlank)?.let { query["mode"] = it }
+                value("authority").takeIf(String::isNotBlank)?.let { query["authority"] = it }
+            }
+            "kcp" -> {
+                value("headerType").takeIf(String::isNotBlank)?.let { query["headerType"] = it }
+                value("seed").takeIf(String::isNotBlank)?.let { query["seed"] = it }
+            }
+            "quic" -> {
+                value("key").takeIf(String::isNotBlank)?.let { query["key"] = it }
+                value("headerType").takeIf(String::isNotBlank)?.let { query["headerType"] = it }
+            }
+            "xhttp", "httpupgrade" -> {
+                value("path").takeIf(String::isNotBlank)?.let { query["path"] = it }
+                value("host").takeIf(String::isNotBlank)?.let { query["host"] = it }
+                value("xhttpMode", value("mode")).takeIf(String::isNotBlank)?.let { query["mode"] = it }
+                value("xhttpExtra").takeIf(String::isNotBlank)?.let { query["extra"] = it }
+            }
+            "tcp", "raw" -> {
+                val header = value("headerType")
+                if (header.isNotBlank() && header != "none") {
+                    query["headerType"] = header
+                    value("host").takeIf(String::isNotBlank)?.let { query["host"] = it }
+                    value("path").takeIf(String::isNotBlank)?.let { query["path"] = it }
+                }
+            }
         }
-        value("flow").takeIf(String::isNotBlank)?.let { query["flow"] = it }
         if (security == "tls") {
             value("sni").takeIf(String::isNotBlank)?.let { query["sni"] = it }
             value("fingerPrint").takeIf(String::isNotBlank)?.let { query["fp"] = it }
@@ -296,7 +322,8 @@ object NpvConfigImporter {
                     "v" to "2", "ps" to name, "add" to server, "port" to port.toString(),
                     "id" to user, "aid" to value("alterId", "0"), "scy" to value("method", "auto"),
                     "net" to network, "type" to "none", "host" to value("host"), "path" to value("path"),
-                    "tls" to if (security == "tls") "tls" else "", "sni" to value("sni")
+                    "tls" to if (security == "tls") "tls" else "", "sni" to value("sni"),
+                    "fp" to value("fingerPrint"), "alpn" to value("alpn"), "flow" to value("flow")
                 )
                 val json = com.google.gson.Gson().toJson(vmess)
                 "vmess://" + Base64.getEncoder().encodeToString(json.toByteArray(StandardCharsets.UTF_8))
