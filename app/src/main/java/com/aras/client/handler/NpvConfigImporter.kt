@@ -45,6 +45,8 @@ object NpvConfigImporter {
             lower.endsWith(".npv3") || lower.endsWith(".npv2")
     }
 
+    fun needsGen2Tables(bytes: ByteArray): Boolean = isNpvGen2AppKey(bytes)
+
     fun hasNpvMagic(bytes: ByteArray): Boolean {
         if (bytes.size < 4) return false
         val head = String(bytes, 0, minOf(5, bytes.size), StandardCharsets.US_ASCII)
