@@ -37,6 +37,8 @@ import com.aras.client.handler.SettingsChangeManager
 import com.aras.client.root.RootManager
 import com.aras.client.ui.base.BaseComponentActivity
 import com.aras.client.ui.monitor.LiveMonitorActivity
+import com.aras.client.ui.main.MainActivity
+import com.aras.client.ui.zx.ZxUiActivity
 import com.aras.client.ui.map.ConnectionMapActivity
 import com.aras.client.ui.compose.AppTopBar
 import com.aras.client.ui.compose.CollapsiblePreferenceGroupHeader
@@ -145,6 +147,7 @@ fun SettingsScreen(
         )
     }
     var uiModeNight by rememberMmkvString(AppConfig.PREF_UI_MODE_NIGHT, "0")
+    var uiExperience by rememberMmkvString(AppConfig.PREF_UI_EXPERIENCE, "radar")
     var dynamicColor by rememberMmkvBool(AppConfig.PREF_DYNAMIC_COLOR, true)
 
     var uiIconMode by remember {
@@ -227,6 +230,25 @@ fun SettingsScreen(
                 onExpandedChange = { uiSettingsExpanded = it }
             )
             if (uiSettingsExpanded) {
+                SettingsListItem(
+                    title = "رابط کاربری برنامه",
+                    entries = listOf("RADAR کلاسیک", "ZX UI"),
+                    values = listOf("radar", "zx"),
+                    selectedValue = uiExperience,
+                    onSelected = { value ->
+                        uiExperience = value
+                        val destination = if (value == "zx") {
+                            ZxUiActivity::class.java
+                        } else {
+                            MainActivity::class.java
+                        }
+                        context.startActivity(
+                            Intent(context, destination).addFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            )
+                        )
+                    }
+                )
                 SettingsSwitchItem(
                     title = stringResource(R.string.title_pref_speed_enabled),
                     summary = stringResource(R.string.summary_pref_speed_enabled),
