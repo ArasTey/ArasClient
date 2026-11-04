@@ -322,7 +322,7 @@ private fun ZxUiScreen(
                                 isRunning = state.isRunning,
                                 isTesting = state.isTesting,
                                 profile = selectedProfile,
-                                onToggle = ::toggleVpnConnection,
+                                onToggle = onToggleConnection,
                                 onTest = { viewModel.testCurrentServerRealPing() },
                                 onServers = { tab = ZxTab.Servers },
                                 onMap = { onOpen(ConnectionMapActivity::class.java) },
