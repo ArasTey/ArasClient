@@ -577,7 +577,7 @@ class DnsChangerVpnService : VpnService() {
             this, 0, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val stopIntent = Intent(this, DnsVpnService::class.java).apply {
+        val stopIntent = Intent(this, DnsChangerVpnService::class.java).apply {
             action = ACTION_STOP
         }
         val pendingStopIntent = PendingIntent.getService(
