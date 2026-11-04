@@ -156,12 +156,11 @@ class DnsChangerVpnService : VpnService() {
             for (server in servers) {
                 try {
                     val addr = InetAddress.getByName(server)
-                    if (addr is java.net.Inet4Address) {
-                        builder.addDnsServer(server)
-                        builder.addRoute(server, 32)
-                    } else if (addr is java.net.Inet6Address) {
-                        builder.addDnsServer(server)
-                        builder.addRoute(server, 128)
+                    // Only the synthetic resolver addresses are routed into this TUN.
+                    // Upstream resolver sockets are protected and sent over the underlying network.
+                    // Avoid routing the resolver's entire IP, which could capture unrelated game traffic.
+                    if (addr !is java.net.Inet4Address && addr !is java.net.Inet6Address) {
+                        continue
                     }
                 } catch (e: Exception) {
                 }
