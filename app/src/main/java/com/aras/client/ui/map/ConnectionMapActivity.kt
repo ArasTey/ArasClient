@@ -223,11 +223,11 @@ window.setConnectionPoints=function(olat,olon,elat,elon){
  const points=[];
  if(olat!==null && olon!==null){
   const p=[olat,olon]; points.push(p);
-  originMarker=L.marker(p).addTo(map).bindPopup('${'Origin network'}');
+  originMarker=L.marker(p).addTo(map).bindPopup('Origin network');
  }
  if(elat!==null && elon!==null){
   const p=[elat,elon]; points.push(p);
-  exitMarker=L.marker(p).addTo(map).bindPopup('${'VPN exit'}');
+  exitMarker=L.marker(p).addTo(map).bindPopup('VPN exit');
  }
  if(points.length===2){
   route=L.polyline(points,{color:'#31d6b0',weight:3,dashArray:'8 10'}).addTo(map);
