@@ -47,6 +47,16 @@ class RadarConfigParserTest {
     }
 
     @Test
+    fun classifiesUdpAndQuicProtocolsForCoreTesting() {
+        val hysteria = RadarConfigParser.parse("hysteria2://secret@example.com:443#h2", "fixture")
+        val tuic = RadarConfigParser.parse("tuic://secret@example.com:443#tuic", "fixture")
+        val vless = RadarConfigParser.parse("vless://id@example.com:443#vless", "fixture")
+        assertTrue(hysteria?.usesUdpTransport == true)
+        assertTrue(tuic?.usesUdpTransport == true)
+        assertTrue(vless?.usesUdpTransport == false)
+    }
+
+    @Test
     fun rejectsInvalidPortsAndUnknownSchemes() {
         assertNull(RadarConfigParser.parse("vless://id@example.com:70000", "fixture"))
         assertNull(RadarConfigParser.parse("unknown://id@example.com:443", "fixture"))

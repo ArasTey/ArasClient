@@ -4,7 +4,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 
-/** TCP pre-check only. It never labels a TCP handshake as a verified VPN tunnel. */
+/** TCP is a pre-check only; UDP/QUIC protocols are passed to the real core for validation. */
 object RadarConfigProbe {
     fun check(candidate: RadarConfigCandidate): RadarConfigCheck {
         val dnsStart = System.nanoTime()
@@ -14,15 +14,34 @@ object RadarConfigProbe {
             return RadarConfigCheck(candidate, RadarProbeStatus.DNS_FAILED, detail = "DNS lookup failed")
         }
         val dnsMs = elapsedMs(dnsStart)
-        if (addresses.isEmpty()) return RadarConfigCheck(candidate, RadarProbeStatus.DNS_FAILED, dnsLatencyMs = dnsMs, detail = "No DNS address")
-        if (addresses.any(::isNonPublicAddress)) {
-            return RadarConfigCheck(candidate, RadarProbeStatus.PRIVATE_ADDRESS, dnsLatencyMs = dnsMs, detail = "Private or reserved address; probe skipped")
+        if (addresses.isEmpty()) {
+            return RadarConfigCheck(candidate, RadarProbeStatus.DNS_FAILED, dnsLatencyMs = dnsMs, detail = "No DNS address")
+        }
+
+        // Do not reject a hostname just because one DNS answer is private if another is public.
+        val publicAddresses = addresses.filterNot(::isNonPublicAddress)
+        if (publicAddresses.isEmpty()) {
+            return RadarConfigCheck(
+                candidate, RadarProbeStatus.PRIVATE_ADDRESS,
+                dnsLatencyMs = dnsMs,
+                detail = "Private or reserved address; probe skipped"
+            )
+        }
+
+        if (candidate.usesUdpTransport) {
+            return RadarConfigCheck(
+                candidate = candidate,
+                status = RadarProbeStatus.CORE_TEST_REQUIRED,
+                dnsLatencyMs = dnsMs,
+                detail = "DNS resolved; UDP/QUIC cannot be verified by TCP. Import and run the real core test.",
+                resolvedIp = publicAddresses.first().hostAddress
+            )
         }
 
         var lastError: Exception? = null
         var successfulAddress: InetAddress? = null
         val samples = mutableListOf<Long>()
-        for (address in addresses) {
+        for (address in publicAddresses) {
             repeat(TCP_ATTEMPTS) {
                 val tcpStart = System.nanoTime()
                 try {
@@ -69,7 +88,9 @@ object RadarConfigProbe {
         return false
     }
 
-    private fun elapsedMs(startNanos: Long): Long = ((System.nanoTime() - startNanos) / 1_000_000L).coerceAtLeast(0L)
+    private fun elapsedMs(startNanos: Long): Long =
+        ((System.nanoTime() - startNanos) / 1_000_000L).coerceAtLeast(0L)
+
     private const val TCP_TIMEOUT_MS = 1_800
     private const val TCP_ATTEMPTS = 2
 }

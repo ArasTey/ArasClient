@@ -1,17 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <!-- Debug-only entry point for emulator smoke tests. Never packaged in release APKs. -->
-        <activity-alias
-            android:name=".ui.telegram.TelegramSmokeLauncherAlias"
-            android:targetActivity=".ui.telegram.TelegramActivity"
-            android:enabled="true"
-            android:exported="true"
-            android:label="RADAR Telegram Smoke Test">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-    </application>
+    <application />
 </manifest>

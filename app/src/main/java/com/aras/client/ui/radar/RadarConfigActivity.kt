@@ -78,8 +78,8 @@ class RadarConfigActivity : ComponentActivity() {
 
                 val visibleResults = results.filter { check ->
                     val statusMatches = when (resultFilter) {
-                        "reachable" -> check.tcpReachable
-                        "failed" -> !check.tcpReachable
+                        "reachable" -> check.isImportable
+                        "failed" -> !check.isImportable
                         else -> true
                     }
                     val protocolMatches = protocolFilter == "all" || check.candidate.protocol == protocolFilter
@@ -100,7 +100,7 @@ class RadarConfigActivity : ComponentActivity() {
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
-                                    "امتیاز Reality / Hysteria2 / TUIC / XHTTP بالاتر است. TCP فقط پیش‌فیلتر است؛ رتبه‌بندی با تأخیر واقعی‌تر و بعد از افزودن با تست هسته (Real Ping) تکمیل می‌شود.",
+                                    "امتیاز Reality / Hysteria2 / TUIC / XHTTP بالاتر است. TCP فقط برای پروتکل‌های TCP بررسی می‌شود؛ کانفیگ‌های UDP/QUIC پس از بررسی DNS برای تست واقعی هسته نگه داشته می‌شوند.",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -132,12 +132,12 @@ class RadarConfigActivity : ComponentActivity() {
                                         Text("توقف")
                                     }
                                 }
-                                if (top20Ready && results.any { it.tcpReachable }) {
+                                if (top20Ready && results.any { it.isImportable }) {
                                     Button(
-                                        onClick = { importTop20(results.filter { it.tcpReachable }.take(TOP_N)) },
+                                        onClick = { importTop20(results.filter { it.isImportable }.take(TOP_N)) },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("افزودن ${minOf(TOP_N, results.count { it.tcpReachable })}تای برتر برای تست هسته")
+                                        Text("افزودن ${minOf(TOP_N, results.count { it.isImportable })}تای برتر برای تست هسته")
                                     }
                                 }
                                 if (scanning) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -322,7 +322,7 @@ class RadarConfigActivity : ComponentActivity() {
                             }
 
                             val top = probed
-                                .filter { it.tcpReachable }
+                                .filter { it.isImportable }
                                 .sortedByDescending { it.rankScore }
                                 .take(TOP_N)
 
@@ -332,7 +332,7 @@ class RadarConfigActivity : ComponentActivity() {
 
                             if (scanning) {
                                 message = if (top.isEmpty()) {
-                                    "اسکن تمام شد اما هیچ endpoint با TCP زنده پیدا نشد."
+                                    "هیچ گزینه قابل تست پیدا نشد؛ گزارش منابع را بررسی کن یا شبکه را تغییر بده."
                                 } else {
                                     "۲۰ تای برتر انتخاب شد (${top.size} مورد). می‌تونی همه را برای تست هسته اضافه کنی."
                                 }
@@ -388,6 +388,7 @@ class RadarConfigActivity : ComponentActivity() {
         val candidate = check.candidate
         val color = when (check.status) {
             RadarProbeStatus.TCP_REACHABLE -> Color(0xFF00A86B)
+            RadarProbeStatus.CORE_TEST_REQUIRED -> Color(0xFFB8860B)
             RadarProbeStatus.PRIVATE_ADDRESS -> Color(0xFFB8860B)
             else -> MaterialTheme.colorScheme.error
         }
@@ -416,7 +417,7 @@ class RadarConfigActivity : ComponentActivity() {
                     color = color,
                     style = MaterialTheme.typography.bodySmall
                 )
-                if (check.tcpReachable) {
+                if (check.isImportable) {
                     Button(onClick = onImport) { Text("افزودن برای تست واقعی هسته") }
                 }
             }
