@@ -128,6 +128,7 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                     Text(stringResource(R.string.map_origin, origin?.label ?: stringResource(R.string.map_not_captured)))
                     Text(stringResource(R.string.map_exit, exit?.label ?: stringResource(R.string.map_not_captured)))
                     Text(stringResource(R.string.map_ip, exit?.ip ?: origin?.ip ?: stringResource(R.string.map_no_ip)))
+                    Text(stringResource(R.string.map_disclaimer), style = MaterialTheme.typography.bodySmall)
                     Button(onClick = { locateNetwork() }, enabled = !loading) {
                         Text(if (loading) stringResource(R.string.map_lookup_loading) else if (isVpnTransportActive(context)) stringResource(R.string.map_refresh_exit) else stringResource(R.string.map_capture_network))
                     }
@@ -156,10 +157,6 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                     }
                 },
                 update = { mapView = it }
-            )
-            Text(
-                stringResource(R.string.map_disclaimer),
-                style = MaterialTheme.typography.bodySmall
             )
         }
     }
