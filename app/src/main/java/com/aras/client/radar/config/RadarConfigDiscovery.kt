@@ -34,9 +34,13 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
     )
 
     suspend fun discover(): RadarDiscoveryReport = withContext(Dispatchers.IO) {
+        // The topic is a discovery index, not a config feed. Resolve its current
+        // repositories through GitHub's API, then inspect each repository normally.
+        val topicSources = fetchTopicSources()
+        val activeSources = sources + topicSources
         val semaphore = Semaphore(5)
         val results = coroutineScope {
-            sources.map { spec ->
+            activeSources.map { spec ->
                 async { semaphore.withPermit { fetchSource(spec) } }
             }.awaitAll()
         }
@@ -48,8 +52,27 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
             }
         }
         val ordered = unique.values.sortedByDescending { it.dpiScore }
-        RadarDiscoveryReport(ordered, results.map { it.report })
+        val topicReport = RadarSourceReport(
+            source = "github.com/topics/v2ray-config",
+            fetchedFiles = if (topicSources.isNotEmpty()) 1 else 0,
+            parsedCandidates = topicSources.size,
+            error = if (topicSources.isEmpty()) "No repositories returned by the topic index" else null
+        )
+        RadarDiscoveryReport(ordered, results.map { it.report } + topicReport)
     }
+
+    private fun fetchTopicSources(): List<SourceSpec> = runCatching {
+        val json = JsonParser.parseString(
+            get("https://api.github.com/search/repositories?q=topic%3Av2ray-configs&sort=updated&per_page=8")
+        ).asJsonObject
+        json.getAsJsonArray("items").mapNotNull { item ->
+            val repo = item.asJsonObject
+            val owner = repo.getAsJsonObject("owner")?.get("login")?.asString
+            val name = repo.get("name")?.asString
+            if (owner.isNullOrBlank() || name.isNullOrBlank()) null
+            else SourceSpec("$owner/$name", sourceBonus = 4)
+        }.distinctBy { it.repository }
+    }.getOrElse { emptyList() }
 
     private fun fetchSource(spec: SourceSpec): SourceResult {
         val label = spec.repository
@@ -268,7 +291,37 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
             SourceSpec("MatinGhanbari/v2ray-configs", sourceBonus = 6),
             SourceSpec("0xRadikal/Free-v2ray-Configs", sourceBonus = 8),
             SourceSpec("drmikecrypto/PulseConfigs", sourceBonus = 7),
-            SourceSpec("ircfspace/tconfig", sourceBonus = 5),
+            SourceSpec(
+                "ircfspace/tconfig",
+                listOf(
+                    // tconfig's UI serves the current mixed subscription from its upstream.
+                    "https://raw.githubusercontent.com/SoliSpirit/v2ray-configs/main/all_configs.txt",
+                    "https://raw.githubusercontent.com/SoliSpirit/v2ray-configs/main/Protocols/vless.txt",
+                    "https://raw.githubusercontent.com/SoliSpirit/v2ray-configs/main/Protocols/vmess.txt"
+                ),
+                sourceBonus = 8
+            ),
+            SourceSpec(
+                "vlesscollector/vlesscollector",
+                listOf("https://raw.githubusercontent.com/vlesscollector/vlesscollector/main/vless_configs.txt"),
+                sourceBonus = 9
+            ),
+            SourceSpec(
+                "Edsel-Rahimi/Ariston",
+                listOf(
+                    "https://raw.githubusercontent.com/Edsel-Rahimi/Ariston/data/validated.txt",
+                    "https://raw.githubusercontent.com/Edsel-Rahimi/Ariston/data/gold.txt"
+                ),
+                sourceBonus = 18
+            ),
+            SourceSpec(
+                "patterniha/free-configs",
+                listOf(
+                    "https://raw.githubusercontent.com/patterniha/free-configs/main/configs.txt",
+                    "https://raw.githubusercontent.com/patterniha/free-configs/main/configs_base64.txt"
+                ),
+                sourceBonus = 12
+            ),
             SourceSpec("Argh94/V2RayAutoConfig", sourceBonus = 6),
             SourceSpec("aiboboxx/v2rayfree", sourceBonus = 5),
             SourceSpec("Pawdroid/Free-servers", sourceBonus = 5),
