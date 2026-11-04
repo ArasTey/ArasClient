@@ -164,7 +164,7 @@ private fun ZxUiScreen(
     Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
-                NavigationBar(containerColor = Color(0xF20D1520)) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
                     ZxTab.entries.forEach { item ->
                         NavigationBarItem(
                             selected = tab == item,
