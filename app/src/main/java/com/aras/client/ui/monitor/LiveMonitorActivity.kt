@@ -56,6 +56,7 @@ private data class MonitorSample(
     val cpu: Float,
     val ramMb: Float,
     val battery: Int,
+    val batteryStatus: String,
     val batteryCurrentMa: Int?,
     val batteryTempC: Float?,
     val thermalStatus: String,
@@ -72,6 +73,10 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
     var sample by remember { mutableStateOf<MonitorSample?>(null) }
     val cpuHistory = remember { mutableStateListOf<Float>() }
     val ramHistory = remember { mutableStateListOf<Float>() }
+    val cryptoProvider = remember {
+        runCatching { Cipher.getInstance("AES/GCM/NoPadding").provider?.name ?: "Unavailable" }
+            .getOrDefault("Unavailable")
+    }
 
     LaunchedEffect(Unit) {
         var previousCpu = Process.getElapsedCpuTime()
@@ -99,6 +104,13 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
             val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
             val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
             val battery = if (level >= 0 && scale > 0) (level * 100 / scale).coerceIn(0, 100) else -1
+            val batteryStatus = when (batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1) {
+                BatteryManager.BATTERY_STATUS_CHARGING -> context.getString(R.string.monitor_battery_charging)
+                BatteryManager.BATTERY_STATUS_DISCHARGING -> context.getString(R.string.monitor_battery_discharging)
+                BatteryManager.BATTERY_STATUS_FULL -> context.getString(R.string.monitor_battery_full)
+                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> context.getString(R.string.monitor_battery_not_charging)
+                else -> context.getString(R.string.monitor_unavailable)
+            }
             val tempRaw = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
             val temp = if (tempRaw >= 0) tempRaw / 10f else null
             val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -134,14 +146,10 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 Locale.getDefault(), "%02d:%02d:%02d",
                 elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60
             )
-            val provider = runCatching {
-                Cipher.getInstance("AES/GCM/NoPadding").provider?.name ?: "Unavailable"
-            }.getOrDefault("Unavailable")
-
             sample = MonitorSample(
-                cpu, ramMb, battery, current, temp, thermal, headroom, threads, uptime,
+                cpu, ramMb, battery, batteryStatus, current, temp, thermal, headroom, threads, uptime,
                 context.getString(R.string.monitor_process_uptime),
-                provider
+                cryptoProvider
             )
             cpuHistory.add(cpu)
             ramHistory.add(ramMb)
@@ -182,6 +190,7 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 }
                 item {
                     MetricCard(stringResource(R.string.monitor_battery), if (current.battery >= 0) "${current.battery}%" else stringResource(R.string.monitor_unavailable)) {
+                        Text(stringResource(R.string.monitor_battery_status, current.batteryStatus))
                         Text(stringResource(R.string.monitor_current_value, current.batteryCurrentMa?.let { "$it mA" } ?: stringResource(R.string.monitor_unavailable)))
                         Text(stringResource(R.string.monitor_temperature_value, current.batteryTempC?.let { String.format(Locale.getDefault(), "%.1f °C", it) } ?: stringResource(R.string.monitor_unavailable)))
                     }
