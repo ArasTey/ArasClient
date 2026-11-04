@@ -18,6 +18,7 @@ import android.content.Intent
 import androidx.compose.material3.TextButton
 import com.aras.client.ui.radar.RadarConfigActivity
 import com.aras.client.ui.dns.DnsChangerActivity
+import com.aras.client.ui.dns.DnsScannerActivity
 import com.aras.client.enums.EConfigType
 import com.aras.client.ui.server.ServerAetherActivity
 import com.aras.client.ui.zx.ZxUiActivity
@@ -58,6 +59,10 @@ fun MainTopBar(
             onOpenDnsChanger = {
                 showImportMenu = false
                 context.startActivity(Intent(context, DnsChangerActivity::class.java))
+            },
+            onOpenDnsScanner = {
+                showImportMenu = false
+                context.startActivity(Intent(context, DnsScannerActivity::class.java))
             },
             onOpenPsiphonCdn = {
                 showImportMenu = false
