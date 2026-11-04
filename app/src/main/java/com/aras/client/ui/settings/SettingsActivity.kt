@@ -231,8 +231,11 @@ fun SettingsScreen(
             )
             if (uiSettingsExpanded) {
                 SettingsListItem(
-                    title = "رابط کاربری برنامه",
-                    entries = listOf("RADAR کلاسیک", "ZX UI"),
+                    title = stringResource(R.string.title_ui_experience),
+                    entries = listOf(
+                        stringResource(R.string.ui_experience_radar),
+                        stringResource(R.string.ui_experience_zx),
+                    ),
                     values = listOf("radar", "zx"),
                     selectedValue = uiExperience,
                     onSelected = { value ->
