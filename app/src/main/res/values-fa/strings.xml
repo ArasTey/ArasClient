@@ -927,7 +927,7 @@
     <string name="monitor_headroom_hint">در دستگاه‌های پشتیبانی‌شده، این مقدار هر ۱۰ ثانیه نمونه‌برداری می‌شود.</string>
     <string name="monitor_process">فرایند برنامه</string>
     <string name="monitor_threads">%1$d ترد</string>
-    <string name="monitor_uptime">زمان فعالیت فرایند: %1$s</string>
+    <string name="monitor_uptime">%1$s: %2$s</string>
     <string name="monitor_process_note">مقادیر CPU و RAM مربوط به خود RADAR VPN هستند، نه کل دستگاه.</string>
     <string name="monitor_crypto">ارائه‌دهنده رمزنگاری</string>
     <string name="monitor_crypto_note">در دسترس بودن ارائه‌دهنده نمایش داده می‌شود؛ اندروید نشانگر عمومی و قابل‌اعتمادی برای شتاب‌دهی سخت‌افزاری ارائه نمی‌کند.</string>
@@ -957,5 +957,9 @@
     <string name="map_disclaimer">موقعیت‌ها از روی IP عمومی تخمین زده می‌شوند، نه GPS. برای مکان‌یابی IP عمومی شما به ipwho.is ارسال می‌شود. مسیر فقط نمایشی است و مسیر فیزیکی عبور بسته‌ها نیست.</string>
     <string name="map_origin_marker">شبکه مبدأ</string>
     <string name="map_exit_marker">خروجی VPN</string>
+
+
+    <string name="monitor_process_uptime">زمان فعالیت فرایند</string>
+    <string name="monitor_session_uptime">زمان نشست مانیتور (زمان شروع فرایند در این نسخه اندروید در دسترس نیست)</string>
 
 </resources>
