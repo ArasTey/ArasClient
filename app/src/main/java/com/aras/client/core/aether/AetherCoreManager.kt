@@ -582,7 +582,14 @@ object AetherCoreManager {
         val deadline = System.currentTimeMillis() + MAX_READY_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
             if (probe(port)) return true
-            if (process?.isAlive == false) return false
+            if (process?.let { running ->
+                    try {
+                        running.exitValue()
+                        true
+                    } catch (_: IllegalThreadStateException) {
+                        false
+                    }
+                } == true) return false
             try {
                 Thread.sleep(READY_POLL_MS)
             } catch (e: InterruptedException) {
