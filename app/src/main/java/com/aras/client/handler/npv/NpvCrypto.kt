@@ -7,6 +7,7 @@ import java.nio.ByteOrder
 import java.util.zip.InflaterInputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.SecretKeyFactory
@@ -84,11 +85,6 @@ object NpvCrypto {
         } catch (_: Exception) {
             null
         }
-    }
-
-    fun be32(b: ByteArray, off: Int): Int {
-        if (off + 4 > b.size) return 0
-        return ByteBuffer.wrap(b, off, 4).order(ByteOrder.BIG_ENDIAN).int
     }
 
     /**

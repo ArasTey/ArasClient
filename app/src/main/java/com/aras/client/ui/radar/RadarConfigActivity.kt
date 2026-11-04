@@ -47,6 +47,7 @@ import com.aras.client.handler.NpvConfigImporter
 import com.aras.client.radar.config.RadarConfigCheck
 import com.aras.client.radar.config.RadarConfigDiscovery
 import com.aras.client.radar.config.RadarConfigProbe
+import com.aras.client.radar.config.RadarConfigParser
 import com.aras.client.radar.config.RadarConfigProbeCache
 import com.aras.client.radar.config.RadarProbeStatus
 import com.aras.client.radar.config.RadarSourceReport
@@ -60,6 +61,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.withContext
 
 /**
@@ -101,6 +103,111 @@ class RadarConfigActivity : ComponentActivity() {
                     val countryMatches = countryFilter == "all" || country == countryFilter
                     statusMatches && protocolMatches && countryMatches
                 }.sortedByDescending { it.rankScore }
+
+                val localNpvPicker = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument()
+                ) { uri: Uri? ->
+                    if (uri != null) lifecycleScope.launch {
+                        try {
+                            val (name, bytes) = withContext(Dispatchers.IO) {
+                                val displayName = contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                                    if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+                                } ?: uri.lastPathSegment ?: "local-config"
+                                val data = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                    ?: throw IllegalStateException("فایل قابل خواندن نیست.")
+                                displayName to data
+                            }
+                            pendingNpvName = name
+                            pendingNpvBytes = bytes
+                            val parsed = withContext(Dispatchers.IO) { NpvConfigImporter.inspect(bytes, name) }
+                            when (parsed) {
+                                is NpvConfigImporter.Result.Open -> {
+                                    val candidates = withContext(Dispatchers.IO) {
+                                        RadarConfigParser.extract(parsed.shareLinksText, "local:" + name)
+                                    }
+                                    val checked = withContext(Dispatchers.IO) {
+                                        candidates.take(MAX_CANDIDATES_FOR_PROBE).map { candidate ->
+                                            RadarConfigProbe.check(candidate).let { check ->
+                                                check.copy(rankScore = computeRankScore(check))
+                                            }
+                                        }
+                                    }
+                                    results.clear()
+                                    results.addAll(checked.sortedByDescending { it.rankScore }.take(TOP_N))
+                                    top20Ready = results.any { it.isImportable }
+                                    sourceReports.clear()
+                                    sourceReports.add(RadarSourceReport("local:" + name, 1, candidates.size,
+                                        if (candidates.isEmpty()) "No supported share links found" else null))
+                                    message = "فایل محلی بررسی شد: " + candidates.size + " کانفیگ استخراج شد؛ " +
+                                        results.count { it.isImportable } + " مورد آماده‌ی تست هسته است."
+                                }
+                                is NpvConfigImporter.Result.NeedPassword -> {
+                                    showNpvPassword = true
+                                    message = parsed.message
+                                }
+                                is NpvConfigImporter.Result.Failed -> message = "ورود فایل ناموفق بود: " + parsed.message
+                            }
+                        } catch (error: Exception) {
+                            message = "خطا در خواندن فایل: " + (error.message ?: "خطای ناشناخته")
+                        }
+                    }
+                }
+
+                if (showNpvPassword) {
+                    AlertDialog(
+                        onDismissRequest = { showNpvPassword = false; npvPassword = ""; pendingNpvBytes = null },
+                        title = { Text("رمز فایل NPV") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("رمز سازنده را وارد کن. پردازش فایل روی همین دستگاه انجام می‌شود.")
+                                OutlinedTextField(value = npvPassword, onValueChange = { npvPassword = it },
+                                    label = { Text("رمز عبور") }, singleLine = true)
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(enabled = npvPassword.isNotBlank() && pendingNpvBytes != null, onClick = {
+                                val data = pendingNpvBytes ?: return@TextButton
+                                val pass = npvPassword
+                                val name = pendingNpvName
+                                showNpvPassword = false
+                                npvPassword = ""
+                                lifecycleScope.launch {
+                                    val parsed = withContext(Dispatchers.IO) {
+                                        NpvConfigImporter.inspectWithPassphrase(data, pass, name)
+                                    }
+                                    when (parsed) {
+                                        is NpvConfigImporter.Result.Open -> {
+                                            val candidates = withContext(Dispatchers.IO) {
+                                                RadarConfigParser.extract(parsed.shareLinksText, "local:" + name)
+                                            }
+                                            val checked = withContext(Dispatchers.IO) {
+                                                candidates.take(MAX_CANDIDATES_FOR_PROBE).map { candidate ->
+                                                    RadarConfigProbe.check(candidate).let { check ->
+                                                        check.copy(rankScore = computeRankScore(check))
+                                                    }
+                                                }
+                                            }
+                                            results.clear()
+                                            results.addAll(checked.sortedByDescending { it.rankScore }.take(TOP_N))
+                                            top20Ready = results.any { it.isImportable }
+                                            sourceReports.clear()
+                                            sourceReports.add(RadarSourceReport("local:" + name, 1, candidates.size,
+                                                if (candidates.isEmpty()) "No supported share links found" else null))
+                                            message = "رمزگشایی انجام شد: " + candidates.size + " کانفیگ استخراج شد."
+                                        }
+                                        is NpvConfigImporter.Result.NeedPassword -> message = parsed.message
+                                        is NpvConfigImporter.Result.Failed -> message = "رمزگشایی ناموفق بود: " + parsed.message
+                                    }
+                                    pendingNpvBytes = null
+                                }
+                            }) { Text("رمزگشایی و بررسی") }
+                        },
+                        dismissButton = { TextButton(onClick = {
+                            showNpvPassword = false; npvPassword = ""; pendingNpvBytes = null
+                        }) { Text("انصراف") } }
+                    )
+                }
 
                 Scaffold(topBar = { TopAppBar(title = { Text("رادار کانفیگ · Top 20") }) }) { padding ->
                     LazyColumn(
@@ -291,111 +398,6 @@ class RadarConfigActivity : ComponentActivity() {
                             }
                         }
                     }
-                }
-
-                val localNpvPicker = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocument()
-                ) { uri: Uri? ->
-                    if (uri != null) lifecycleScope.launch {
-                        try {
-                            val (name, bytes) = withContext(Dispatchers.IO) {
-                                val displayName = contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                                    if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
-                                } ?: uri.lastPathSegment ?: "local-config"
-                                val data = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                    ?: throw IllegalStateException("فایل قابل خواندن نیست.")
-                                displayName to data
-                            }
-                            pendingNpvName = name
-                            pendingNpvBytes = bytes
-                            val parsed = withContext(Dispatchers.IO) { NpvConfigImporter.inspect(bytes, name) }
-                            when (parsed) {
-                                is NpvConfigImporter.Result.Open -> {
-                                    val candidates = withContext(Dispatchers.IO) {
-                                        RadarConfigParser.extract(parsed.shareLinksText, "local:" + name)
-                                    }
-                                    val checked = withContext(Dispatchers.IO) {
-                                        candidates.take(MAX_CANDIDATES_FOR_PROBE).map { candidate ->
-                                            RadarConfigProbe.check(candidate).let { check ->
-                                                check.copy(rankScore = computeRankScore(check))
-                                            }
-                                        }
-                                    }
-                                    results.clear()
-                                    results.addAll(checked.sortedByDescending { it.rankScore }.take(TOP_N))
-                                    top20Ready = results.any { it.isImportable }
-                                    sourceReports.clear()
-                                    sourceReports.add(RadarSourceReport("local:" + name, 1, candidates.size,
-                                        if (candidates.isEmpty()) "No supported share links found" else null))
-                                    message = "فایل محلی بررسی شد: " + candidates.size + " کانفیگ استخراج شد؛ " +
-                                        results.count { it.isImportable } + " مورد آماده‌ی تست هسته است."
-                                }
-                                is NpvConfigImporter.Result.NeedPassword -> {
-                                    showNpvPassword = true
-                                    message = parsed.message
-                                }
-                                is NpvConfigImporter.Result.Failed -> message = "ورود فایل ناموفق بود: " + parsed.message
-                            }
-                        } catch (error: Exception) {
-                            message = "خطا در خواندن فایل: " + (error.message ?: "خطای ناشناخته")
-                        }
-                    }
-                }
-
-                if (showNpvPassword) {
-                    AlertDialog(
-                        onDismissRequest = { showNpvPassword = false; npvPassword = ""; pendingNpvBytes = null },
-                        title = { Text("رمز فایل NPV") },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("رمز سازنده را وارد کن. پردازش فایل روی همین دستگاه انجام می‌شود.")
-                                OutlinedTextField(value = npvPassword, onValueChange = { npvPassword = it },
-                                    label = { Text("رمز عبور") }, singleLine = true)
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(enabled = npvPassword.isNotBlank() && pendingNpvBytes != null, onClick = {
-                                val data = pendingNpvBytes ?: return@TextButton
-                                val pass = npvPassword
-                                val name = pendingNpvName
-                                showNpvPassword = false
-                                npvPassword = ""
-                                lifecycleScope.launch {
-                                    val parsed = withContext(Dispatchers.IO) {
-                                        NpvConfigImporter.inspectWithPassphrase(data, pass, name)
-                                    }
-                                    when (parsed) {
-                                        is NpvConfigImporter.Result.Open -> {
-                                            val candidates = withContext(Dispatchers.IO) {
-                                                RadarConfigParser.extract(parsed.shareLinksText, "local:" + name)
-                                            }
-                                            val checked = withContext(Dispatchers.IO) {
-                                                candidates.take(MAX_CANDIDATES_FOR_PROBE).map { candidate ->
-                                                    RadarConfigProbe.check(candidate).let { check ->
-                                                        check.copy(rankScore = computeRankScore(check))
-                                                    }
-                                                }
-                                            }
-                                            results.clear()
-                                            results.addAll(checked.sortedByDescending { it.rankScore }.take(TOP_N))
-                                            top20Ready = results.any { it.isImportable }
-                                            sourceReports.clear()
-                                            sourceReports.add(RadarSourceReport("local:" + name, 1, candidates.size,
-                                                if (candidates.isEmpty()) "No supported share links found" else null))
-                                            message = "رمزگشایی انجام شد: " + candidates.size + " کانفیگ استخراج شد."
-                                        }
-                                        is NpvConfigImporter.Result.NeedPassword -> message = parsed.message
-                                        is NpvConfigImporter.Result.Failed -> message = "رمزگشایی ناموفق بود: " + parsed.message
-                                    }
-                                    pendingNpvBytes = null
-                                }
-                            }) { Text("رمزگشایی و بررسی") }
-                        },
-                        dismissButton = { TextButton(onClick = {
-                            showNpvPassword = false; npvPassword = ""; pendingNpvBytes = null
-                        }) { Text("انصراف") } }
-                    )
                 }
 
                 LaunchedEffect(scanning) {

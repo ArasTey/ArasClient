@@ -629,8 +629,8 @@ object NpvConfigImporter {
         }
         if (value.isJsonObject) {
             val result = JsonObject()
-            value.asJsonObject.entrySet().forEach { (key, child) ->
-                result.add(key, substituteNpvFields(child, fields))
+            value.asJsonObject.entrySet().forEach { entry ->
+                result.add(entry.key, substituteNpvFields(entry.value, fields))
             }
             return result
         }
