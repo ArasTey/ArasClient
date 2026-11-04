@@ -2,7 +2,16 @@ package com.aras.client.ui.zx
 
 import android.content.Intent
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -192,25 +202,27 @@ private fun ZxUiScreen(
                         }
                     }
 
-                    when (tab) {
-                        ZxTab.Home -> ZxHomePage(
-                            isRunning = state.isRunning,
-                            profile = selectedProfile,
-                            onToggle = { viewModel.onAction(MainAction.ToggleService) },
-                            onServers = { tab = ZxTab.Servers },
-                            onMap = { onOpen(ConnectionMapActivity::class.java) },
-                            onMonitor = { onOpen(LiveMonitorActivity::class.java) },
-                        )
-                        ZxTab.Servers -> ZxServersPage(
-                            groups = state.groups,
-                            selectedGroupId = state.selectedGroupId,
-                            serverGuids = serverGuids,
-                            selectedGuid = state.selectedGuid,
-                            onGroup = { viewModel.onAction(MainAction.SelectGroup(it)) },
-                            onServer = { viewModel.onAction(MainAction.SelectServer(it)) },
-                        )
-                        ZxTab.Tools -> ZxToolsPage(onOpen)
-                        ZxTab.Settings -> Unit
+                    Crossfade(targetState = tab, label = "zx-tab-transition") { page ->
+                        when (page) {
+                            ZxTab.Home -> ZxHomePage(
+                                isRunning = state.isRunning,
+                                profile = selectedProfile,
+                                onToggle = { viewModel.onAction(MainAction.ToggleService) },
+                                onServers = { tab = ZxTab.Servers },
+                                onMap = { onOpen(ConnectionMapActivity::class.java) },
+                                onMonitor = { onOpen(LiveMonitorActivity::class.java) },
+                            )
+                            ZxTab.Servers -> ZxServersPage(
+                                groups = state.groups,
+                                selectedGroupId = state.selectedGroupId,
+                                serverGuids = serverGuids,
+                                selectedGuid = state.selectedGuid,
+                                onGroup = { viewModel.onAction(MainAction.SelectGroup(it)) },
+                                onServer = { viewModel.onAction(MainAction.SelectServer(it)) },
+                            )
+                            ZxTab.Tools -> ZxToolsPage(onOpen)
+                            ZxTab.Settings -> Unit
+                        }
                     }
                 }
                 Text(
@@ -237,7 +249,15 @@ private fun ZxHomePage(
     onMap: () -> Unit,
     onMonitor: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val pulse = animateFloatAsState(
+        targetValue = if (isRunning) 1.22f else 1f,
+        animationSpec = tween(durationMillis = 900),
+        label = "zx-connection-pulse",
+    )
+    Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         Text(
             "اتصال امن، با کنترل کامل",
             style = MaterialTheme.typography.titleLarge,
@@ -250,14 +270,29 @@ private fun ZxHomePage(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF142A2C)),
         ) {
             Column(
-                modifier = Modifier.padding(22.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(Color(0xFF173D39), Color(0xFF142A3A), Color(0xFF24213D))))
+                    .padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    if (isRunning) "تونل فعال است" else "آماده اتصال",
-                    color = Color(0xFF65F5C6),
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Box(
+                        Modifier
+                            .size(9.dp)
+                            .scale(pulse.value)
+                            .background(if (isRunning) Color(0xFF65F5C6) else Color(0xFFFFB86B), CircleShape),
+                    )
+                    Text(
+                        if (isRunning) "تونل فعال است" else "آماده اتصال",
+                        color = if (isRunning) Color(0xFF65F5C6) else Color(0xFFFFC27A),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                AnimatedVisibility(visible = isRunning, enter = fadeIn(), exit = fadeOut()) {
+                    Text("وضعیت تونل از سرویس VPN برنامه دریافت می‌شود", color = Color(0xFFB5D8CF), style = MaterialTheme.typography.bodySmall)
+                }
+                /*
                 Text(
                     profile?.remarks?.takeIf { it.isNotBlank() } ?: "سروری انتخاب نشده",
                     color = Color.White,
@@ -366,7 +401,10 @@ private fun ZxServersPage(
 
 @Composable
 private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Text("ابزارهای اتصال", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
         ZxQuickTile("نقشه اتصال", "موقعیت IP و خروجی VPN", Modifier.fillMaxWidth()) { onOpen(ConnectionMapActivity::class.java) }
         ZxQuickTile("مانیتور زنده", "CPU، RAM، باتری و دما", Modifier.fillMaxWidth()) { onOpen(LiveMonitorActivity::class.java) }
@@ -387,10 +425,33 @@ private fun ZxQuickTile(
         modifier = modifier.clickable(onClick = onClick),
         color = Color(0xFF14202C),
         shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, Color(0xFF34505A).copy(alpha = 0.55f)),
+        shadowElevation = 5.dp,
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(title, color = Color(0xFFE8FFF7), fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = Color(0xFF8EA8A7), style = MaterialTheme.typography.bodySmall)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.linearGradient(listOf(Color(0xFF182D38), Color(0xFF121C2A))))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            val marker = when {
+                title.contains("نقشه") -> "⌖"
+                title.contains("مانیتور") -> "◉"
+                title.contains("رادار") -> "⌁"
+                title.contains("تعمیر") -> "✧"
+                title.contains("DNS") -> "⇄"
+                else -> "✦"
+            }
+            Surface(color = Color(0xFF24463F), shape = RoundedCornerShape(14.dp)) {
+                Text(marker, modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), color = Color(0xFF83F7D0), style = MaterialTheme.typography.titleLarge)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, color = Color(0xFFE8FFF7), fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = Color(0xFF8EA8A7), style = MaterialTheme.typography.bodySmall)
+            }
+            Text("›", color = Color(0xFF65F5C6), style = MaterialTheme.typography.headlineSmall)
         }
     }
 }
