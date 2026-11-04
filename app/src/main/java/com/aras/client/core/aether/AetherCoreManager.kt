@@ -487,11 +487,9 @@ object AetherCoreManager {
     /**
      * The settings laid over the core's own Psiphon configuration.
      *
-     * Two things go in it. The resolvers, because Android has no resolver
-     * configuration a Linux-built program could read, and Psiphon looks names up
-     * itself, alone or around the tunnel. And the server list, unpacked from the
-     * bundled one, so a fresh install has servers before it can reach a list on its
-     * own: aether 2.1 takes the list here rather than by a flag of its own.
+     * The resolvers, because Android has no resolver configuration a Linux-built
+     * program could read. When selected, the signed bundled server list is added too;
+     * otherwise Psiphon is left to its own server-list discovery and update path.
      */
     private fun psiphonOverlay(context: Context, useBundledServerList: Boolean): File? {
         val dir = File(context.filesDir, "aether-psiphon").apply { mkdirs() }
