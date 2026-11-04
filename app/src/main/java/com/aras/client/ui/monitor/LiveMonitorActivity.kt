@@ -75,7 +75,6 @@ private data class MonitorSample(
 @Composable
 private fun LiveMonitorScreen(onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val monitorStartedAt = remember { SystemClock.elapsedRealtime() }
     var sample by remember { mutableStateOf<MonitorSample?>(null) }
     val cpuHistory = remember { mutableStateListOf<Float>() }
     val ramHistory = remember { mutableStateListOf<Float>() }
@@ -144,7 +143,7 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 Cipher.getInstance("AES/GCM/NoPadding").provider?.name ?: "Unavailable"
             }.getOrDefault("Unavailable")
 
-            sample = MonitorSample(\n                cpu, ramMb, battery, current, temp, thermal, headroom, threads, uptime,\n                context.getString(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) R.string.monitor_process_uptime else R.string.monitor_session_uptime),\n                provider\n            )
+            sample = MonitorSample(\n                cpu, ramMb, battery, current, temp, thermal, headroom, threads, uptime,\n                context.getString(R.string.monitor_process_uptime),\n                provider\n            )
             cpuHistory.add(cpu)
             ramHistory.add(ramMb)
             while (cpuHistory.size > 120) cpuHistory.removeAt(0)
