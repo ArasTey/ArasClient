@@ -153,19 +153,6 @@ class DnsChangerVpnService : VpnService() {
                 .addRoute("fd00::2", 128)
                 .allowBypass()
 
-            for (server in servers) {
-                try {
-                    val addr = InetAddress.getByName(server)
-                    // Only the synthetic resolver addresses are routed into this TUN.
-                    // Upstream resolver sockets are protected and sent over the underlying network.
-                    // Avoid routing the resolver's entire IP, which could capture unrelated game traffic.
-                    if (addr !is java.net.Inet4Address && addr !is java.net.Inet6Address) {
-                        continue
-                    }
-                } catch (e: Exception) {
-                }
-            }
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 builder.setMetered(false)
             }
