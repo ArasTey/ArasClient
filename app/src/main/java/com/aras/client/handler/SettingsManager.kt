@@ -359,6 +359,14 @@ object SettingsManager {
      * @return A list of VPN DNS servers.
      */
     fun getVpnDnsServers(): List<String> {
+        // DNS CHANGER overrides the tunnel resolver only while its profile is enabled.
+        if (MmkvManager.decodeSettingsBool("dns_changer_enabled", false)) {
+            val selected = listOf(
+                MmkvManager.decodeSettingsString("dns_changer_primary").orEmpty(),
+                MmkvManager.decodeSettingsString("dns_changer_secondary").orEmpty()
+            ).filter { it.isNotBlank() && Utils.isPureIpAddress(it) }
+            if (selected.isNotEmpty()) return selected
+        }
         val vpnDns = MmkvManager.decodeSettingsString(AppConfig.PREF_VPN_DNS) ?: AppConfig.DNS_VPN
         return vpnDns.split(",").filter { Utils.isPureIpAddress(it) }
     }

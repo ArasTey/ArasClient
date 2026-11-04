@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import com.aras.client.ui.subscription.SubEditActivity
 import com.aras.client.ui.radar.DpiTestActivity
+import com.aras.client.ui.dns.DnsChangerActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -358,6 +359,30 @@ fun MainScreen(
                             onImportClipboard = { onAction(MainAction.ImportClipboard) },
                             onScanQr = { onAction(MainAction.ImportQRcode) }
                         )
+                    }
+                    androidx.compose.material3.Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .clickable {
+                                context.startActivity(Intent(context, DnsChangerActivity::class.java))
+                            },
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("DNS", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("DNS CHANGER", fontWeight = FontWeight.Bold)
+                                Text("Custom DNS • latency test • profiles", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                     if (groups.size > 1) {
                         GroupTabBar(

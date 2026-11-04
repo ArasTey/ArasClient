@@ -15,6 +15,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import com.aras.client.ui.dns.DnsChangerActivity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aras.client.R
@@ -91,8 +94,13 @@ internal fun serverMenuActions(
 }
 
 @Composable
-fun ImportMenuContent(onAction: (MainAction) -> Unit) {
+fun ImportMenuContent(onAction: (MainAction) -> Unit, onOpenDnsChanger: () -> Unit = {}) {
     var showProtocolMenu by remember { mutableStateOf(false) }
+
+    DropdownMenuItem(
+        text = { Text("DNS CHANGER") },
+        onClick = onOpenDnsChanger
+    )
 
     DropdownMenuItem(
         text = { Text("تعمیرگاه کانفیگ") },

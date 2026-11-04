@@ -129,10 +129,16 @@ fun RdrToolbarCapsule(
         }
         if (showAdd) {
             RdrGlassPopup(onDismiss = { showAdd = false }) {
-                ImportMenuContent(onAction = { action ->
-                    showAdd = false
-                    onImportAction(action)
-                })
+                ImportMenuContent(
+                    onAction = { action ->
+                        showAdd = false
+                        onImportAction(action)
+                    },
+                    onOpenDnsChanger = {
+                        showAdd = false
+                        context.startActivity(Intent(context, com.aras.client.ui.dns.DnsChangerActivity::class.java))
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.rdr_config_radar)) },
                     onClick = {
