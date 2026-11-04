@@ -54,6 +54,9 @@
         android:usesCleartextTraffic="true">
 
         <activity
+            android:name=".ui.zx.ZxUiActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.monitor.LiveMonitorActivity"
             android:exported="false" />
         <activity
