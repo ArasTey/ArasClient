@@ -41,6 +41,7 @@
     <string name="menu_item_import_config_qrcode">کانفیگ را از کد QR وارد کنید</string>
     <string name="menu_item_import_config_clipboard">کانفیگ را از کلیپ ‌بورد وارد کنید</string>
     <string name="menu_item_import_config_local">کانفیگ را از محلی وارد کنید</string>
+    <string name="menu_item_import_npv_config">وارد کردن کانفیگ NPV / NapsternetV</string>
     <string name="menu_item_import_config_policy_group">افزودن [گروه خط‌‌ مشی]</string>
     <string name="menu_item_import_config_proxy_chain">افزودن [زنجیره پروکسی]</string>
     <string name="menu_item_import_config_manually">افزودن دستی</string>
