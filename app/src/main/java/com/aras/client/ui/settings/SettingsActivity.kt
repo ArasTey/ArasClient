@@ -1,5 +1,6 @@
 package com.aras.client.ui.settings
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.viewModels
@@ -35,6 +36,8 @@ import com.aras.client.handler.MmkvManager.rememberMmkvString
 import com.aras.client.handler.SettingsChangeManager
 import com.aras.client.root.RootManager
 import com.aras.client.ui.base.BaseComponentActivity
+import com.aras.client.ui.monitor.LiveMonitorActivity
+import com.aras.client.ui.map.ConnectionMapActivity
 import com.aras.client.ui.compose.AppTopBar
 import com.aras.client.ui.compose.CollapsiblePreferenceGroupHeader
 import com.aras.client.ui.compose.ConnectionPreferencesSection
@@ -738,6 +741,15 @@ fun SettingsScreen(
             if (statsExpanded) {
                 ConnectionStatsSection()
             }
+
+            SettingsMenuItem(
+                title = stringResource(R.string.monitor_open),
+                onClick = { context.startActivity(Intent(context, LiveMonitorActivity::class.java)) }
+            )
+            SettingsMenuItem(
+                title = stringResource(R.string.map_open),
+                onClick = { context.startActivity(Intent(context, ConnectionMapActivity::class.java)) }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
             SettingsMenuItem(
