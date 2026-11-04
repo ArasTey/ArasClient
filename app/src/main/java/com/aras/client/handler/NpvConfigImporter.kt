@@ -83,9 +83,14 @@ object NpvConfigImporter {
                 if (recovered.isNotEmpty()) {
                     return Result.Open(recovered.joinToString("\n"), recovered.size, "npvs-recovered")
                 }
-                if (isNpvGen2Passphrase(bytes)) {
+                if (isNpvGen2Passphrase(bytes) || isNpvV1Passphrase(bytes)) {
                     return Result.NeedPassword(
-                        "فایل NPVS قفل‌شده با رمز سازنده است. رمز را وارد کنید (مثل اپ NPV Tunnel)."
+                        "فایل NPVS با رمز سازنده محافظت شده است. رمز را از سازنده‌ی فایل دریافت و وارد کنید."
+                    )
+                }
+                if (isNpvV1AppKey(bytes)) {
+                    return Result.Failed(
+                        "این فایل از AppKey نسل قدیمی NPVS استفاده می‌کند؛ این نسخه‌ی White-Box با جدول نسل ۵ متفاوت است."
                     )
                 }
                 if (isNpvGen2AppKey(bytes)) {
@@ -145,6 +150,10 @@ object NpvConfigImporter {
         val gen2 = tryOpenGen2Passphrase(bytes, passphrase)
         if (gen2 != null && gen2.isNotEmpty()) {
             return Result.Open(gen2.joinToString("\n"), gen2.size, "npvs-gen2-pass")
+        }
+        val legacy = tryOpenNpvV1Passphrase(bytes, passphrase)
+        if (legacy != null && legacy.isNotEmpty()) {
+            return Result.Open(legacy.joinToString("\n"), legacy.size, "npvs-v1-pass")
         }
 
         val recovered = extractFromBinaryish(bytes)
@@ -253,6 +262,84 @@ object NpvConfigImporter {
         if (hdrLen < 53 || 9L + hdrLen > b.size) return false
         return (b[9 + 50].toInt() and 0xff) == 2
     }
+
+    private fun npvV1Header(bytes: ByteArray): JsonObject? {
+        if (bytes.size < 89 || String(bytes, 0, 4, StandardCharsets.US_ASCII) != "NPVS") return null
+        if ((bytes[4].toInt() and 0xff) !in 0..4) return null
+        val headerLength = NpvCrypto.be32(bytes, 5)
+        if (headerLength <= 0 || 9L + headerLength > bytes.size) return null
+        return runCatching {
+            JsonParser.parseString(String(bytes, 9, headerLength, StandardCharsets.UTF_8)).asJsonObject
+        }.getOrNull()
+    }
+
+    private fun isNpvV1Passphrase(bytes: ByteArray): Boolean =
+        npvV1Header(bytes)?.has("passphrase") == true && npvV1Header(bytes)?.has("appKey") != true
+
+    private fun isNpvV1AppKey(bytes: ByteArray): Boolean =
+        npvV1Header(bytes)?.has("appKey") == true
+
+    private fun tryOpenNpvV1Passphrase(bytes: ByteArray, passphrase: String): List<String>? {
+        val header = npvV1Header(bytes) ?: return null
+        if (header.has("appKey")) return null
+        val wrapInfo = header.getAsJsonObject("passphrase") ?: return null
+        return try {
+            val kdf = wrapInfo.get("kdf")?.asString ?: return null
+            if (kdf != "pbkdf2-hmac-sha256") return null
+            val iterations = wrapInfo.get("iters")?.asInt ?: return null
+            if (iterations !in 1..2_000_000) return null
+            val salt = decodeBase64(wrapInfo.get("salt")?.asString ?: "")?.toByteArray(StandardCharsets.ISO_8859_1)
+                ?: return null
+            val wrapped = decodeBase64(wrapInfo.get("wrap")?.asString ?: "")?.toByteArray(StandardCharsets.ISO_8859_1)
+                ?: return null
+            if (salt.size != 16 || wrapped.size != 60) return null
+            val headerLength = NpvCrypto.be32(bytes, 5)
+            val headerRaw = bytes.copyOfRange(9, 9 + headerLength)
+            val derived = NpvCrypto.pbkdf2HmacSha256(
+                passphrase.trim().toByteArray(StandardCharsets.UTF_8), salt, iterations, 32
+            )
+            val dek = NpvCrypto.chacha20Poly1305Open(
+                derived, wrapped.copyOfRange(0, 12), wrapped.copyOfRange(12, 60), salt
+            ) ?: return null
+
+            val bodyOffset = 9 + headerLength
+            if (bodyOffset + 16 > bytes.size) return null
+            val nonce = bytes.copyOfRange(bodyOffset, bodyOffset + 12)
+            val bodyLength = NpvCrypto.be32(bytes, bodyOffset + 12)
+            val encryptedOffset = bodyOffset + 16
+            if (bodyLength < 16 || encryptedOffset.toLong() + bodyLength > bytes.size) return null
+            val encrypted = bytes.copyOfRange(encryptedOffset, encryptedOffset + bodyLength)
+            val plain = NpvCrypto.chacha20Poly1305Open(dek, nonce, encrypted, headerRaw) ?: return null
+            val text = decodeNpvSentinels(String(plain, StandardCharsets.UTF_8))
+            val links = LinkedHashSet<String>()
+            links += extractLinks(text)
+            links += extractLinksFromNpvJson(text)
+            links.take(200).toList().takeIf { it.isNotEmpty() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun extractLinksFromNpvJson(text: String): List<String> = runCatching {
+        val root = JsonParser.parseString(text)
+        val links = LinkedHashSet<String>()
+        fun visit(element: JsonElement) {
+            when {
+                element.isJsonPrimitive && element.asJsonPrimitive.isString ->
+                    links += extractLinks(element.asString)
+                element.isJsonArray -> element.asJsonArray.forEach(::visit)
+                element.isJsonObject -> {
+                    val obj = element.asJsonObject
+                    obj.get("v2rayProfile")?.takeIf { it.isJsonObject }?.asJsonObject
+                        ?.let { profile -> profileToShareLink(obj, profile)?.let(links::add) }
+                    obj.get("v2rayJson")?.let(::visit)
+                    obj.entrySet().forEach { (key, child) -> if (key != "v2rayJson") visit(child) }
+                }
+            }
+        }
+        visit(root)
+        links.take(200).toList()
+    }.getOrElse { emptyList() }
 
     private const val GEN2_VERSION: Byte = 5
     private const val GEN2_METHOD_PASS = 1
