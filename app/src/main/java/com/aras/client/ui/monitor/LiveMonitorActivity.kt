@@ -42,6 +42,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.aras.client.R
 import kotlinx.coroutines.delay
 import javax.crypto.Cipher
 import java.util.Locale
@@ -116,16 +118,16 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
             val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 when (power.currentThermalStatus) {
-                    PowerManager.THERMAL_STATUS_NONE -> "Normal"
-                    PowerManager.THERMAL_STATUS_LIGHT -> "Light"
-                    PowerManager.THERMAL_STATUS_MODERATE -> "Moderate"
-                    PowerManager.THERMAL_STATUS_SEVERE -> "Severe"
-                    PowerManager.THERMAL_STATUS_CRITICAL -> "Critical"
-                    PowerManager.THERMAL_STATUS_EMERGENCY -> "Emergency"
-                    PowerManager.THERMAL_STATUS_SHUTDOWN -> "Shutdown"
-                    else -> "Unavailable"
+                    PowerManager.THERMAL_STATUS_NONE -> context.getString(R.string.monitor_thermal_normal)
+                    PowerManager.THERMAL_STATUS_LIGHT -> context.getString(R.string.monitor_thermal_light)
+                    PowerManager.THERMAL_STATUS_MODERATE -> context.getString(R.string.monitor_thermal_moderate)
+                    PowerManager.THERMAL_STATUS_SEVERE -> context.getString(R.string.monitor_thermal_severe)
+                    PowerManager.THERMAL_STATUS_CRITICAL -> context.getString(R.string.monitor_thermal_critical)
+                    PowerManager.THERMAL_STATUS_EMERGENCY -> context.getString(R.string.monitor_thermal_emergency)
+                    PowerManager.THERMAL_STATUS_SHUTDOWN -> context.getString(R.string.monitor_thermal_shutdown)
+                    else -> context.getString(R.string.monitor_unavailable)
                 }
-            } else "Android 10+ required"
+            } else context.getString(R.string.monitor_android10_required)
             ticks++
             val headroom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && ticks % 10 == 0) {
                 runCatching { power.getThermalHeadroom(10).takeIf { it.isFinite() && it >= 0f } }
@@ -156,8 +158,8 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Live Monitor", style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = onBack) { Text("Back") }
+                Text(stringResource(R.string.monitor_title), style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = onBack) { Text(stringResource(R.string.monitor_back)) }
             }
         }
     ) { padding ->
@@ -167,39 +169,39 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
         ) {
             val current = sample
             if (current == null) {
-                item { Text("Collecting device metrics…", modifier = Modifier.padding(12.dp)) }
+                item { Text(stringResource(R.string.monitor_collecting), modifier = Modifier.padding(12.dp)) }
             } else {
                 item {
-                    MetricCard("CPU · app process", String.format(Locale.getDefault(), "%.1f%%", current.cpu)) {
+                    MetricCard(stringResource(R.string.monitor_cpu), String.format(Locale.getDefault(), "%.1f%%", current.cpu)) {
                         HistoryChart(cpuHistory.toList(), 100f, "%")
                     }
                 }
                 item {
-                    MetricCard("RAM · app process", String.format(Locale.getDefault(), "%.1f MB", current.ramMb)) {
+                    MetricCard(stringResource(R.string.monitor_ram), String.format(Locale.getDefault(), "%.1f MB", current.ramMb)) {
                         HistoryChart(ramHistory.toList(), (ramHistory.maxOrNull() ?: 1f).coerceAtLeast(1f), "MB")
                     }
                 }
                 item {
-                    MetricCard("Battery", if (current.battery >= 0) "${current.battery}%" else "Unavailable") {
-                        Text("Current: ${current.batteryCurrentMa?.let { "$it mA" } ?: "Unavailable"}")
-                        Text("Temperature: ${current.batteryTempC?.let { String.format(Locale.getDefault(), "%.1f °C", it) } ?: "Unavailable"}")
+                    MetricCard(stringResource(R.string.monitor_battery), if (current.battery >= 0) "${current.battery}%" else stringResource(R.string.monitor_unavailable)) {
+                        Text(stringResource(R.string.monitor_current_value, current.batteryCurrentMa?.let { "$it mA" } ?: stringResource(R.string.monitor_unavailable)))
+                        Text(stringResource(R.string.monitor_temperature_value, current.batteryTempC?.let { String.format(Locale.getDefault(), "%.1f °C", it) } ?: stringResource(R.string.monitor_unavailable)))
                     }
                 }
                 item {
-                    MetricCard("Thermal", current.thermalStatus) {
-                        Text("Thermal headroom: ${current.thermalHeadroom?.let { String.format(Locale.getDefault(), "%.2f", it) } ?: "Not available yet"}")
-                        Text("Headroom is sampled every 10 seconds where supported by Android.")
+                    MetricCard(stringResource(R.string.monitor_thermal), current.thermalStatus) {
+                        Text(stringResource(R.string.monitor_headroom_value, current.thermalHeadroom?.let { String.format(Locale.getDefault(), "%.2f", it) } ?: stringResource(R.string.monitor_headroom_waiting)))
+                        Text(stringResource(R.string.monitor_headroom_hint))
                     }
                 }
                 item {
-                    MetricCard("Process", "${current.threads} threads") {
-                        Text("Process uptime: ${current.uptime}")
-                        Text("CPU and RAM values refer to RADAR VPN, not total device usage.")
+                    MetricCard(stringResource(R.string.monitor_process), stringResource(R.string.monitor_threads, current.threads)) {
+                        Text(stringResource(R.string.monitor_uptime, current.uptime))
+                        Text(stringResource(R.string.monitor_process_note))
                     }
                 }
                 item {
-                    MetricCard("Cryptography provider", current.cryptoProvider) {
-                        Text("Provider availability is shown; Android does not expose a reliable generic flag for hardware acceleration.")
+                    MetricCard(stringResource(R.string.monitor_crypto), current.cryptoProvider) {
+                        Text(stringResource(R.string.monitor_crypto_note))
                     }
                 }
                 item { Spacer(Modifier.height(20.dp)) }
