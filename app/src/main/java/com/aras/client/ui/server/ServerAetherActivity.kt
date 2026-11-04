@@ -74,15 +74,19 @@ class ServerAetherActivity : BaseServerActivity() {
     @Composable
     override fun ScreenContent() {
         val scope = rememberCoroutineScope()
+        val psiphonCdnPreset = intent.getBooleanExtra("presetPsiphonCdn", false)
         val uiState = rememberSaveable(saver = ServerUiState.Saver) {
             ServerUiState.from(initialConfig = initialConfig).apply {
-                if (intent.getBooleanExtra("presetPsiphonCdn", false) && editGuid.isEmpty()) {
+                if (psiphonCdnPreset && editGuid.isEmpty()) {
                     remarks = "Psiphon CDN"
+                    // ONLY is a standalone Psiphon tunnel: no WARP identity or
+                    // gateway is required, and the core does not receive --protocol.
                     aetherProtocol = "wg"
                     aetherPsiphon = "only"
                     aetherPsiphonMode = "cdn"
                     aetherPsiphonBundledList = true
                     aetherPsiphonRegion = ""
+                    aetherTor = "off"
                 }
             }
         }.apply {
@@ -95,128 +99,132 @@ class ServerAetherActivity : BaseServerActivity() {
         ) {
             CommonBasicFields(uiState)
 
-            val protocol = AetherProtocol.fromString(uiState.aetherProtocol)
-            val overMasque = protocol.overMasque
-            val twoHops = protocol.twoHops
-
-            FormDropdownField(
-                label = stringResource(R.string.server_lab_aether_protocol),
-                value = uiState.aetherProtocol,
-                options = stringArrayResource(R.array.aether_protocols).toList(),
-                onValueChange = { uiState.aetherProtocol = it },
-            )
-            FormDropdownField(
-                label = stringResource(R.string.server_lab_aether_scan_mode),
-                value = uiState.aetherScanMode,
-                options = stringArrayResource(R.array.aether_scan_modes).toList(),
-                onValueChange = { uiState.aetherScanMode = it },
-            )
-            FormDropdownField(
-                label = stringResource(R.string.server_lab_aether_obfuscation),
-                value = uiState.aetherObfuscation,
-                options = stringArrayResource(R.array.aether_obfuscations).toList(),
-                onValueChange = { uiState.aetherObfuscation = it },
-            )
-            FormDropdownField(
-                label = stringResource(R.string.server_lab_aether_ip_version),
-                value = uiState.aetherIpVersion,
-                options = stringArrayResource(R.array.aether_ip_versions).toList(),
-                onValueChange = { uiState.aetherIpVersion = it },
-            )
-            if (overMasque) {
-                FormDropdownField(
-                    label = stringResource(R.string.server_lab_aether_transport),
-                    value = uiState.aetherTransport,
-                    options = stringArrayResource(R.array.aether_transports).toList(),
-                    onValueChange = { uiState.aetherTransport = it },
-                )
-            }
-
-            if (twoHops) {
-                // Two-hop tunnels name both gateways instead of one address/port pair.
-                FormTextField(
-                    stringResource(R.string.server_lab_aether_outer_hop),
-                    uiState.aetherWiwOuter,
-                    { uiState.aetherWiwOuter = it }
-                )
-                FormTextField(
-                    stringResource(R.string.server_lab_aether_inner_hop),
-                    uiState.aetherWiwInner,
-                    { uiState.aetherWiwInner = it }
-                )
-            }
-
-            if (protocol == AetherProtocol.MASQUE) {
-                FormTextField(
-                    stringResource(R.string.server_lab_sni),
-                    uiState.sni,
-                    { uiState.sni = it }
-                )
-                FormTextField(
-                    stringResource(R.string.server_lab_path),
-                    uiState.path,
-                    { uiState.path = it }
-                )
+            if (psiphonCdnPreset) {
+                PsiphonOnlySettingsSection(uiState)
             } else {
+                val protocol = AetherProtocol.fromString(uiState.aetherProtocol)
+                val overMasque = protocol.overMasque
+                val twoHops = protocol.twoHops
+    
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_protocol),
+                    value = uiState.aetherProtocol,
+                    options = stringArrayResource(R.array.aether_protocols).toList(),
+                    onValueChange = { uiState.aetherProtocol = it },
+                )
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_scan_mode),
+                    value = uiState.aetherScanMode,
+                    options = stringArrayResource(R.array.aether_scan_modes).toList(),
+                    onValueChange = { uiState.aetherScanMode = it },
+                )
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_obfuscation),
+                    value = uiState.aetherObfuscation,
+                    options = stringArrayResource(R.array.aether_obfuscations).toList(),
+                    onValueChange = { uiState.aetherObfuscation = it },
+                )
+                FormDropdownField(
+                    label = stringResource(R.string.server_lab_aether_ip_version),
+                    value = uiState.aetherIpVersion,
+                    options = stringArrayResource(R.array.aether_ip_versions).toList(),
+                    onValueChange = { uiState.aetherIpVersion = it },
+                )
+                if (overMasque) {
+                    FormDropdownField(
+                        label = stringResource(R.string.server_lab_aether_transport),
+                        value = uiState.aetherTransport,
+                        options = stringArrayResource(R.array.aether_transports).toList(),
+                        onValueChange = { uiState.aetherTransport = it },
+                    )
+                }
+    
+                if (twoHops) {
+                    // Two-hop tunnels name both gateways instead of one address/port pair.
+                    FormTextField(
+                        stringResource(R.string.server_lab_aether_outer_hop),
+                        uiState.aetherWiwOuter,
+                        { uiState.aetherWiwOuter = it }
+                    )
+                    FormTextField(
+                        stringResource(R.string.server_lab_aether_inner_hop),
+                        uiState.aetherWiwInner,
+                        { uiState.aetherWiwInner = it }
+                    )
+                }
+    
+                if (protocol == AetherProtocol.MASQUE) {
+                    FormTextField(
+                        stringResource(R.string.server_lab_sni),
+                        uiState.sni,
+                        { uiState.sni = it }
+                    )
+                    FormTextField(
+                        stringResource(R.string.server_lab_path),
+                        uiState.path,
+                        { uiState.path = it }
+                    )
+                } else {
+                    FormTextField(
+                        stringResource(R.string.server_lab_secret_key),
+                        uiState.secretKey,
+                        { uiState.secretKey = it }
+                    )
+                    FormTextField(
+                        stringResource(R.string.server_lab_public_key),
+                        uiState.publicKey,
+                        { uiState.publicKey = it }
+                    )
+                    FormTextField(
+                        stringResource(R.string.server_lab_preshared_key),
+                        uiState.preSharedKey,
+                        { uiState.preSharedKey = it }
+                    )
+                    FormTextField(
+                        stringResource(R.string.server_lab_local_address),
+                        uiState.localAddress,
+                        { uiState.localAddress = it }
+                    )
+                    FormTextField(
+                        stringResource(R.string.server_lab_reserved),
+                        uiState.reserved,
+                        { uiState.reserved = it }
+                    )
+                    FormTextField(
+                        stringResource(R.string.server_lab_local_mtu),
+                        uiState.mtu,
+                        { uiState.mtu = it },
+                        keyboardType = KeyboardType.Number
+                    )
+                }
+    
                 FormTextField(
-                    stringResource(R.string.server_lab_secret_key),
-                    uiState.secretKey,
-                    { uiState.secretKey = it }
+                    stringResource(R.string.server_lab_aether_dns),
+                    uiState.aetherDns,
+                    { uiState.aetherDns = it }
                 )
                 FormTextField(
-                    stringResource(R.string.server_lab_public_key),
-                    uiState.publicKey,
-                    { uiState.publicKey = it }
+                    stringResource(R.string.server_lab_aether_exit_loc),
+                    uiState.aetherExitLoc,
+                    { uiState.aetherExitLoc = it }
                 )
                 FormTextField(
-                    stringResource(R.string.server_lab_preshared_key),
-                    uiState.preSharedKey,
-                    { uiState.preSharedKey = it }
-                )
-                FormTextField(
-                    stringResource(R.string.server_lab_local_address),
-                    uiState.localAddress,
-                    { uiState.localAddress = it }
-                )
-                FormTextField(
-                    stringResource(R.string.server_lab_reserved),
-                    uiState.reserved,
-                    { uiState.reserved = it }
-                )
-                FormTextField(
-                    stringResource(R.string.server_lab_local_mtu),
-                    uiState.mtu,
-                    { uiState.mtu = it },
+                    stringResource(R.string.server_lab_aether_listen_port),
+                    uiState.aetherListenPort,
+                    { uiState.aetherListenPort = it },
                     keyboardType = KeyboardType.Number
                 )
+    
+                FormTextField(
+                    stringResource(R.string.server_lab_aether_command),
+                    uiState.aetherCommand,
+                    { uiState.aetherCommand = it },
+                )
+    
+                AetherCarriersSection(uiState)
+    
+                AetherIdentitySection(uiState, scope)
             }
-
-            FormTextField(
-                stringResource(R.string.server_lab_aether_dns),
-                uiState.aetherDns,
-                { uiState.aetherDns = it }
-            )
-            FormTextField(
-                stringResource(R.string.server_lab_aether_exit_loc),
-                uiState.aetherExitLoc,
-                { uiState.aetherExitLoc = it }
-            )
-            FormTextField(
-                stringResource(R.string.server_lab_aether_listen_port),
-                uiState.aetherListenPort,
-                { uiState.aetherListenPort = it },
-                keyboardType = KeyboardType.Number
-            )
-
-            FormTextField(
-                stringResource(R.string.server_lab_aether_command),
-                uiState.aetherCommand,
-                { uiState.aetherCommand = it },
-            )
-
-            AetherCarriersSection(uiState)
-
-            AetherIdentitySection(uiState, scope)
         }
     }
 
@@ -285,6 +293,67 @@ class ServerAetherActivity : BaseServerActivity() {
      * discovered at connect time: either one in *reverse* needs MASQUE, and the two of
      * them go together only nested.
      */
+    /**
+     * Focused entry point from the + menu. It exposes only the settings that
+     * affect a standalone Psiphon session, without asking for unrelated WARP keys.
+     */
+    @Composable
+    private fun PsiphonOnlySettingsSection(state: ServerUiState) {
+        Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+            Text(
+                "Psiphon CDN · Direct tunnel",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                "Psiphon starts directly; no Aether/WARP gateway is required.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FormDropdownField(
+                label = stringResource(R.string.server_lab_aether_psiphon_mode),
+                value = state.aetherPsiphonMode,
+                options = stringArrayResource(R.array.aether_psiphon_modes).toList(),
+                onValueChange = { state.aetherPsiphonMode = it },
+            )
+            FormTextField(
+                stringResource(R.string.server_lab_aether_psiphon_cdn_ips),
+                state.aetherPsiphonCdnIps,
+                { state.aetherPsiphonCdnIps = it },
+            )
+            FormTextField(
+                stringResource(R.string.server_lab_aether_psiphon_cdn_sni),
+                state.aetherPsiphonCdnSni,
+                { state.aetherPsiphonCdnSni = it },
+            )
+            val countries = remember {
+                listOf("Auto") + java.util.Locale.getISOCountries()
+                    .map { code ->
+                        "${java.util.Locale("", code).getDisplayCountry(java.util.Locale.getDefault())} ($code)"
+                    }
+                    .sortedBy { it.substringBeforeLast(" (") }
+            }
+            val selectedCountry = if (state.aetherPsiphonRegion.isBlank()) {
+                "Auto"
+            } else {
+                countries.firstOrNull { it.endsWith("(${state.aetherPsiphonRegion})") } ?: "Auto"
+            }
+            FormDropdownField(
+                label = stringResource(R.string.server_lab_aether_psiphon_region),
+                value = selectedCountry,
+                options = countries,
+                onValueChange = { selected ->
+                    state.aetherPsiphonRegion = if (selected == "Auto") "" else
+                        selected.substringAfterLast("(").removeSuffix(")")
+                },
+            )
+            FormToggleField(
+                label = stringResource(R.string.server_lab_aether_psiphon_bundled),
+                checked = state.aetherPsiphonBundledList,
+                onCheckedChange = { state.aetherPsiphonBundledList = it },
+            )
+        }
+    }
+
     @Composable
     private fun AetherCarriersSection(state: ServerUiState) {
         val psiphon = AetherPsiphon.fromString(state.aetherPsiphon)
