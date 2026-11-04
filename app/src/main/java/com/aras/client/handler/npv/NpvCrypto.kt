@@ -1,7 +1,9 @@
 package com.aras.client.handler.npv
 
+import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.zip.InflaterInputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import javax.crypto.Cipher
@@ -86,6 +88,199 @@ object NpvCrypto {
     fun be32(b: ByteArray, off: Int): Int {
         if (off + 4 > b.size) return 0
         return ByteBuffer.wrap(b, off, 4).order(ByteOrder.BIG_ENDIAN).int
+    }
+
+    /**
+     * NPV Tunnel Gen-2 AppKey White-Box derivation.
+     * Table layout and test vector are compatible with the MIT-licensed
+     * NPV//FORGE implementation; the arithmetic below is an independent Kotlin port.
+     */
+    fun npvGen2A16(salt: ByteArray, compressedTables: ByteArray): ByteArray? = runCatching {
+        if (salt.size != 16 || compressedTables.isEmpty()) return null
+        val tables = InflaterInputStream(ByteArrayInputStream(compressedTables)).use { it.readBytes() }
+        val blockSize = 57_344
+        val blockCount = 13
+        if (tables.size != blockSize * blockCount + 4_096) return null
+        val shift = intArrayOf(0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11)
+        val state = salt.copyOf()
+        repeat(blockCount) { blockIndex ->
+            val block = tables.copyOfRange(blockIndex * blockSize, (blockIndex + 1) * blockSize)
+            val shifted = ByteArray(16) { state[shift[it]] }
+            System.arraycopy(shifted, 0, state, 0, 16)
+            repeat(4) { group ->
+                var args = npvGen2GroupArgs(block, 0x6000, group, state, group * 4)
+                var result = npvGen2Sub7DC0(block, group, args[0], args[1], args[2], args[3])
+                System.arraycopy(result, 0, state, group * 4, 4)
+                args = npvGen2GroupArgs(block, 0xa000, group, state, group * 4)
+                result = npvGen2Sub7DC0(block, group, args[0], args[1], args[2], args[3])
+                System.arraycopy(result, 0, state, group * 4, 4)
+            }
+        }
+        val pageOffset = blockSize * blockCount
+        val page = tables.copyOfRange(pageOffset, tables.size)
+        ByteArray(16) { i -> page[0x100 * i + (state[shift[i]].toInt() and 0xff)] }
+    }.getOrNull()
+
+    private fun npvGen2GroupArgs(block: ByteArray, half: Int, group: Int, state: ByteArray, stateOffset: Int): LongArray {
+        val base = half + 0x1000 * group
+        fun be32(offset: Int): Long =
+            ((block[offset].toLong() and 0xff) shl 24) or
+                ((block[offset + 1].toLong() and 0xff) shl 16) or
+                ((block[offset + 2].toLong() and 0xff) shl 8) or
+                (block[offset + 3].toLong() and 0xff)
+        return longArrayOf(
+            be32(base + 4 * (state[stateOffset].toInt() and 0xff)),
+            be32(base + 0x400 + 4 * (state[stateOffset + 1].toInt() and 0xff)),
+            be32(base + 0x800 + 4 * (state[stateOffset + 2].toInt() and 0xff)),
+            be32(base + 0xc00 + 4 * (state[stateOffset + 3].toInt() and 0xff))
+        )
+    }
+
+    private fun npvGen2Sub7DC0(block: ByteArray, index: Int, in3: Long, in4: Long, in5: Long, in6: Long): ByteArray {
+        fun u32(v: Long) = v and 0xffffffffL
+        fun at(address: Long): Long = (block[u32(address).toInt()].toInt() and 0xff).toLong()
+        val x2 = index.toLong()
+        val x3 = u32(in3); val x4 = u32(in4); val x5 = u32(in5); val x6 = u32(in6)
+        var x0 = 0L; var x8 = 0L; var x9 = 0L; var x10 = 0L; var x11 = 0L
+        var x12 = 0L; var x13 = 0L; var x14 = 0L; var x15 = 0L; var x16 = 0L; var x17 = 0L
+        val out = ByteArray(4)
+
+        x8 = u32(x2 + u32(x2 shl 1))
+        x12 = u32(x3 ushr 0x14)
+        x11 = u32(x3 ushr 0x18)
+        x13 = (x4 ushr 0x18) and 0xf
+        x14 = u32(x5 ushr 0x18)
+        x10 = x6
+        x9 = u32(x8 shl 3)
+        x8 = x4
+        x12 = x12 and 0xf0
+        x12 = u32(x12 + x13)
+        x13 = u32(x5 ushr 0x14)
+        x16 = x8 ushr 0x1c
+        x9 = u32(x9)
+        x11 = x11 and 0xf0
+        x14 = x14 and 0xf0
+        x15 = u32(x6 ushr 0x18) and 0xf
+        x13 = x13 and 0xf0
+        x17 = u32(x3 ushr 0x10)
+        x9 = u32(x9 shl 8)
+        x8 = x8 and 0xf
+        x13 = u32(x13 + x15)
+        x17 = x17 and 0xf0
+        x11 = u32(x9 + x11)
+        x14 = u32(x9 + x14)
+        x12 = u32(x9 + x12)
+        x16 = at(x11 + x16)
+        x14 = u32(x14 + (x10 ushr 28))
+        x12 = at(x12 + 0x200)
+        x13 = u32(x9 + x13)
+        x0 = u32(x6 ushr 0x14) and 0xf
+        x14 = at(x14 + 0x100)
+        x15 = u32(x9 + (x16 shl 4))
+        x13 = at(x13 + 0x300)
+        x12 = u32(x9 + (x12 shl 4))
+        x16 = u32(x4 ushr 0x14) and 0xf
+        x10 = x10 and 0xf
+        x14 = u32(x15 + x14)
+        x15 = u32(x5 ushr 0x10)
+        x12 = u32(x12 + x13)
+        x13 = u32(x3 ushr 0xc)
+        x14 = at(x14 + 0x400)
+        x12 = at(x12 + 0x500)
+        x15 = x15 and 0xf0
+        x16 = u32(x17 + x16)
+        x15 = u32(x15 + x0)
+        x0 = u32(x4 ushr 0x10) and 0xf
+        x17 = u32(x5 ushr 0xc)
+        x12 = u32(x12 or (x14 shl 4))
+        x13 = x13 and 0xf0
+        x14 = u32(x6 ushr 0x10) and 0xf
+        x13 = u32(x13 + x0)
+        x17 = x17 and 0xf0
+        x16 = u32(x9 + x16)
+        out[0] = x12.toByte()
+        x13 = u32(x9 + x13)
+        x12 = u32(x17 + x14)
+        x14 = at(x16 + 0x600)
+        x13 = at(x13 + 0x800)
+        x15 = u32(x9 + x15)
+        x12 = u32(x9 + x12)
+        x15 = at(x15 + 0x700)
+        x16 = u32(x5 ushr 8)
+        x12 = at(x12 + 0x900)
+        x14 = u32(x9 + (x14 shl 4))
+        x13 = u32(x9 + (x13 shl 4))
+        x0 = u32(x6 ushr 0xc) and 0xf
+        x17 = u32(x3 ushr 8)
+        x14 = u32(x14 + x15)
+        x12 = u32(x13 + x12)
+        x13 = x16 and 0xf0
+        x14 = at(x14 + 0xa00)
+        x12 = at(x12 + 0xb00)
+        x15 = u32(x3 ushr 4)
+        x13 = u32(x13 + x0)
+        x0 = u32(x4 ushr 8) and 0xf
+        x16 = u32(x4 ushr 0xc) and 0xf
+        x12 = u32(x12 or (x14 shl 4))
+        x14 = x15 and 0xf0
+        x17 = x17 and 0xf0
+        x14 = u32(x14 + x0)
+        x15 = u32(x9 + 0xc00)
+        x0 = u32(x5 ushr 4)
+        x17 = u32(x15 + x17)
+        out[1] = x12.toByte()
+        x12 = u32(x6 ushr 8) and 0xf
+        x16 = at(x17 + x16)
+        x14 = u32(x9 + x14)
+        x17 = x0 and 0xf0
+        x14 = at(x14 + 0xe00)
+        x12 = u32(x17 + x12)
+        x13 = u32(x15 + x13)
+        x12 = u32(x9 + x12)
+        x13 = at(x13 + 0x100)
+        x15 = u32(x9 + (x16 shl 4))
+        x12 = at(x12 + 0xf00)
+        x14 = u32(x9 + (x14 shl 4))
+        x16 = 0x1000
+        x13 = u32(x15 + x13)
+        x17 = u32(x6 ushr 4) and 0xf
+        x0 = x5 and 0xf0
+        x12 = u32(x14 + x12)
+        x14 = 0x1100
+        x13 = at(x13 + x16)
+        x12 = at(x12 + x14)
+        x14 = 0x1200
+        x15 = u32(x4 ushr 4) and 0xf
+        x16 = x3 and 0xf0
+        x17 = u32(x0 + x17)
+        x14 = u32(x9 + x14)
+        x12 = u32(x12 or (x13 shl 4))
+        x13 = (x3 and 0xf) shl 4
+        x16 = u32(x14 + x16)
+        out[2] = x12.toByte()
+        x8 = u32(x13 + x8)
+        x12 = u32(x14 + x17)
+        x14 = (x5 and 0xf) shl 4
+        x13 = at(x16 + x15)
+        x8 = u32(x9 + x8)
+        x15 = 0x1400
+        x12 = at(x12 + 0x100)
+        x8 = at(x8 + x15)
+        x10 = u32(x14 + x10)
+        x14 = 0x1500
+        x10 = u32(x9 + x10)
+        x13 = u32(x9 + (x13 shl 4))
+        x10 = at(x10 + x14)
+        x8 = u32(x9 + (x8 shl 4))
+        x9 = u32(x13 + x12)
+        x12 = 0x1600
+        x8 = u32(x8 + x10)
+        x10 = 0x1700
+        x9 = at(x9 + x12)
+        x8 = at(x8 + x10)
+        x8 = u32(x8 or (x9 shl 4))
+        out[3] = x8.toByte()
+        return out
     }
 
     fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int = 32): ByteArray {
