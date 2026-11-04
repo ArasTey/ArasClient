@@ -62,6 +62,7 @@ private data class MonitorSample(
     val thermalHeadroom: Float?,
     val threads: Int,
     val uptime: String,
+    val uptimeLabel: String,
     val cryptoProvider: String
 )
 
