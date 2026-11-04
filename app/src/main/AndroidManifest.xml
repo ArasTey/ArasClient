@@ -94,6 +94,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.dns.DnsScannerActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.radar.DpiTestActivity"
             android:exported="false" />
 
