@@ -292,7 +292,6 @@ private fun ZxHomePage(
                 AnimatedVisibility(visible = isRunning, enter = fadeIn(), exit = fadeOut()) {
                     Text("وضعیت تونل از سرویس VPN برنامه دریافت می‌شود", color = Color(0xFFB5D8CF), style = MaterialTheme.typography.bodySmall)
                 }
-                /*
                 Text(
                     profile?.remarks?.takeIf { it.isNotBlank() } ?: "سروری انتخاب نشده",
                     color = Color.White,
