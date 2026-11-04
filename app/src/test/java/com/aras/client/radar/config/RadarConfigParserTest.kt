@@ -30,6 +30,17 @@ class RadarConfigParserTest {
     }
 
     @Test
+    fun extractsPlainLinksAndBase64BlocksFromTheSameFeed() {
+        val encoded = Base64.getEncoder().encodeToString(
+            "trojan://secret@example.net:443#encoded-node".toByteArray()
+        )
+        val mixed = "vless://id@example.com:443#plain-node\n$encoded"
+        val result = RadarConfigParser.extract(mixed, "mixed-source")
+        assertEquals(2, result.size)
+        assertEquals(setOf("plain-node", "encoded-node"), result.map { it.remark }.toSet())
+    }
+
+    @Test
     fun parsesVmessJsonEndpoint() {
         val json = """{"add":"vmess.example.org","port":"8443","ps":"Germany"}"""
         val encoded = Base64.getEncoder().encodeToString(json.toByteArray())
