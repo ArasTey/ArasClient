@@ -183,7 +183,7 @@ object MieruProcessManager {
         val deadline = System.currentTimeMillis() + READY_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
             if (probe(port)) return true
-            if (process?.isAlive == false) return false
+            if (process?.let { hasExited(it) } == true) return false
             try {
                 Thread.sleep(READY_POLL_MS)
             } catch (e: InterruptedException) {
@@ -235,12 +235,28 @@ object MieruProcessManager {
     /** The client currently running, or null. */
     fun running(): Int? = session.get()?.takeIf { probe(it) }
 
+    /** API-24-safe process state check. */
+    private fun hasExited(started: Process): Boolean =
+        try {
+            started.exitValue()
+            true
+        } catch (_: IllegalThreadStateException) {
+            false
+        }
+
     fun stop() {
         process?.let { started ->
             runCatching { started.destroy() }
-            if (!started.waitFor(2, TimeUnit.SECONDS)) {
-                runCatching { started.destroyForcibly() }
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+            while (!hasExited(started) && System.nanoTime() < deadline) {
+                try {
+                    Thread.sleep(50)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
             }
+            if (!hasExited(started)) runCatching { started.destroy() }
         }
         process = null
         session.set(null)
