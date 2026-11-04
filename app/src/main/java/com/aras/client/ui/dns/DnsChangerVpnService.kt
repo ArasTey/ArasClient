@@ -1,5 +1,7 @@
 package com.aras.client.ui.dns
 
+// DNS-only VPN packet interception adapted from DnsChanger/dnschanger-mobile (MIT).
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -114,7 +116,14 @@ class DnsChangerVpnService : VpnService() {
 
     private fun startVpn(servers: ArrayList<String>, dnsType: String, dohUrl: String, dotDomain: String, serverName: String, notificationTitle: String, disconnectText: String) {
         if (isRunning) {
-            stopVpn()
+            isRunning = false
+            serviceScope.cancel()
+            try {
+                vpnInterface?.close()
+            } catch (_: Exception) {
+            }
+            vpnInterface = null
+            serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         }
         currentDnsServers = servers
         currentDnsType = dnsType
@@ -543,6 +552,7 @@ class DnsChangerVpnService : VpnService() {
     private fun stopVpn() {
         isRunning = false
         currentStatus = "disconnected"
+        DnsChangerStore.deactivate()
         serviceScope.cancel()
         serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 

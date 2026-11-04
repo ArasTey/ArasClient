@@ -78,10 +78,12 @@ class DnsChangerActivity : BaseComponentActivity() {
     }
 
     private fun connectDns() {
+        // Reuse the already-active Radar tunnel when possible; Android allows only one VPN.
         if (com.aras.client.core.CoreServiceManager.isRunning()) {
+            com.aras.client.core.LauncherManager.restartService(this)
             android.widget.Toast.makeText(
                 this,
-                "Disconnect the main Radar VPN first, then connect DNS CHANGER.",
+                "Selected DNS applied to the active Radar VPN tunnel.",
                 android.widget.Toast.LENGTH_LONG
             ).show()
             return
@@ -116,8 +118,12 @@ class DnsChangerActivity : BaseComponentActivity() {
     }
 
     private fun disconnectDns() {
-        stopService(android.content.Intent(this, DnsChangerVpnService::class.java))
+        val radarTunnelWasRunning = com.aras.client.core.CoreServiceManager.isRunning()
+        if (DnsChangerVpnService.isRunning) {
+            stopService(android.content.Intent(this, DnsChangerVpnService::class.java))
+        }
         DnsChangerStore.deactivate()
+        if (radarTunnelWasRunning) com.aras.client.core.LauncherManager.restartService(this)
     }
 }
 
