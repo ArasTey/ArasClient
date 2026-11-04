@@ -83,11 +83,15 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
         spec.directFeeds.forEach { feed ->
             runCatching { get(feed) }
                 .onSuccess { body ->
-                    fetched++
-                    val feedName = feed.substringAfterLast('/')
-                    RadarConfigParser.extract(body, label + "/" + feedName).forEach { raw ->
-                        val scored = applyDpiScore(raw, spec.sourceBonus)
-                        found.putIfAbsent(scored.identity, scored)
+                    if (body.isBlank()) {
+                        errors += "$feed: empty feed"
+                    } else {
+                        fetched++
+                        val feedName = feed.substringAfterLast('/')
+                        RadarConfigParser.extract(body, label + "/" + feedName).forEach { raw ->
+                            val scored = applyDpiScore(raw, spec.sourceBonus)
+                            found.putIfAbsent(scored.identity, scored)
+                        }
                     }
                 }
                 .onFailure { errors += it.message ?: "feed fetch failed" }
@@ -119,10 +123,14 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
                 val rawUrl = "https://raw.githubusercontent.com/" + label + "/" + branch + "/" + path
                 runCatching { get(rawUrl) }
                     .onSuccess { body ->
-                        fetched++
-                        RadarConfigParser.extract(body, label + "/" + path).forEach { raw ->
-                            val scored = applyDpiScore(raw, spec.sourceBonus)
-                            found.putIfAbsent(scored.identity, scored)
+                        if (body.isBlank()) {
+                            errors += "$path: empty feed"
+                        } else {
+                            fetched++
+                            RadarConfigParser.extract(body, label + "/" + path).forEach { raw ->
+                                val scored = applyDpiScore(raw, spec.sourceBonus)
+                                found.putIfAbsent(scored.identity, scored)
+                            }
                         }
                     }
                     .onFailure { errors += path + ": " + (it.message ?: "fetch failed") }
