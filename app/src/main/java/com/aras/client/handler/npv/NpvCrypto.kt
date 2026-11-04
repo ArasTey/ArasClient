@@ -95,12 +95,13 @@ object NpvCrypto {
      * Table layout and test vector are compatible with the MIT-licensed
      * NPV//FORGE implementation; the arithmetic below is an independent Kotlin port.
      */
-    fun npvGen2A16(salt: ByteArray, compressedTables: ByteArray): ByteArray? = runCatching {
+    fun npvGen2A16(salt: ByteArray, compressedTables: ByteArray): ByteArray? {
         if (salt.size != 16 || compressedTables.isEmpty()) return null
+        return runCatching {
         val tables = InflaterInputStream(ByteArrayInputStream(compressedTables)).use { it.readBytes() }
         val blockSize = 57_344
         val blockCount = 13
-        if (tables.size != blockSize * blockCount + 4_096) return null
+        require(tables.size == blockSize * blockCount + 4_096)
         val shift = intArrayOf(0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11)
         val state = salt.copyOf()
         repeat(blockCount) { blockIndex ->
@@ -119,7 +120,8 @@ object NpvCrypto {
         val pageOffset = blockSize * blockCount
         val page = tables.copyOfRange(pageOffset, tables.size)
         ByteArray(16) { i -> page[0x100 * i + (state[shift[i]].toInt() and 0xff)] }
-    }.getOrNull()
+        }.getOrNull()
+    }
 
     private fun npvGen2GroupArgs(block: ByteArray, half: Int, group: Int, state: ByteArray, stateOffset: Int): LongArray {
         val base = half + 0x1000 * group
