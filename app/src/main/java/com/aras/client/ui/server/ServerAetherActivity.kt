@@ -324,11 +324,25 @@ class ServerAetherActivity : BaseServerActivity() {
                 state.aetherPsiphonCdnSets,
                 { state.aetherPsiphonCdnSets = it },
             )
+            val psiphonCountries = remember {
+                listOf("Auto") + java.util.Locale.getISOCountries()
+                    .map { code ->
+                        "${java.util.Locale("", code).getDisplayCountry(java.util.Locale.getDefault())} ($code)"
+                    }
+                    .sortedBy { it.substringBeforeLast(" (") }
+            }
+            val selectedCountry = if (state.aetherPsiphonRegion.isBlank()) {
+                "Auto"
+            } else {
+                psiphonCountries.firstOrNull { it.endsWith("(${state.aetherPsiphonRegion})") } ?: "Auto"
+            }
             FormDropdownField(
                 label = stringResource(R.string.server_lab_aether_psiphon_region),
-                value = state.aetherPsiphonRegion.ifBlank { "auto" },
-                options = listOf("auto") + java.util.Locale.getISOCountries().sorted(),
-                onValueChange = { state.aetherPsiphonRegion = if (it == "auto") "" else it },
+                value = selectedCountry,
+                options = psiphonCountries,
+                onValueChange = { selected ->
+                    state.aetherPsiphonRegion = if (selected == "Auto") "" else selected.substringAfterLast("(").removeSuffix(")")
+                },
             )
             FormToggleField(
                 label = stringResource(R.string.server_lab_aether_psiphon_bundled),
