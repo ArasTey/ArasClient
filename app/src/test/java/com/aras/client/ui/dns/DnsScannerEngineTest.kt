@@ -13,7 +13,7 @@ class DnsScannerEngineTest {
         assertEquals(0x34, packet[1].toInt() and 0xff)
         assertEquals(0x01, packet[2].toInt() and 0xff)
         assertEquals(1, packet[5].toInt() and 0xff)
-        assertEquals(1, packet[packet.size - 4].toInt() and 0xff)
+        assertEquals(1, packet[packet.size - 3].toInt() and 0xff)
     }
 
     @Test
@@ -21,7 +21,7 @@ class DnsScannerEngineTest {
         val packet = DnsScannerEngine.buildQuery(7, "example.com", 28, edns = true)
         assertEquals(1, packet[11].toInt() and 0xff)
         assertEquals(0, packet[packet.size - 11].toInt() and 0xff)
-        assertEquals(41, packet[packet.size - 10].toInt() and 0xff)
+        assertEquals(41, packet[packet.size - 9].toInt() and 0xff)
     }
 
     @Test
