@@ -18,6 +18,8 @@ import android.content.Intent
 import androidx.compose.material3.TextButton
 import com.aras.client.ui.radar.RadarConfigActivity
 import com.aras.client.ui.dns.DnsChangerActivity
+import com.aras.client.enums.EConfigType
+import com.aras.client.ui.server.ServerAetherActivity
 import com.aras.client.ui.zx.ZxUiActivity
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +58,13 @@ fun MainTopBar(
             onOpenDnsChanger = {
                 showImportMenu = false
                 context.startActivity(Intent(context, DnsChangerActivity::class.java))
+            },
+            onOpenPsiphonCdn = {
+                showImportMenu = false
+                context.startActivity(Intent(context, ServerAetherActivity::class.java).apply {
+                    putExtra("createConfigType", EConfigType.AETHER.value)
+                    putExtra("presetPsiphonCdn", true)
+                })
             }
         )
         TextButton(onClick = {
