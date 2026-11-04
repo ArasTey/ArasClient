@@ -113,8 +113,10 @@ object DnsScannerEngine {
             checks += runCheck(resolver.primary, label, "example.com", type, timeoutMs, false, false)
         }
         checks += runCheck(resolver.primary, "EDNS", "example.com", 1, timeoutMs, true, false)
-        val randomName = "radar-${Random.nextInt(1_000_000, 9_999_999)}.invalid"
-        checks += runCheck(resolver.primary, "NXDOMAIN", randomName, 1, timeoutMs, false, true)
+        val randomLabel = "radar-${Random.nextInt(1_000_000, 9_999_999)}"
+        checks += runCheck(resolver.primary, "RND", "$randomLabel.example.com", 1, timeoutMs, false, true)
+        checks += runCheck(resolver.primary, "NXDOMAIN", "$randomLabel.invalid", 1, timeoutMs, false, true)
+        checks += runCheck(resolver.primary, "DPI heuristic", "probe-$randomLabel.invalid", 1, timeoutMs, false, true)
         return DnsResolverScanResult(resolver, checks)
     }
 
@@ -132,6 +134,7 @@ object DnsScannerEngine {
             return DnsScanCheck(label, false, null, null, "none", e.message ?: "Invalid query")
         }
         val started = System.nanoTime()
+        var receivedResponse: ByteArray? = null
         return try {
             val address = InetAddress.getByName(server)
             val udp = DatagramSocket().use { socket ->
@@ -145,13 +148,32 @@ object DnsScannerEngine {
             }
             val truncated = udp.size >= 4 && (udp[2].toInt() and 0x02) != 0
             val response = if (truncated) tcpQuery(address, query, timeoutMs) else udp
-            val rcode = parseResponse(response, id, expectNxDomain)
+            receivedResponse = response
+            val rcode = try {
+                parseResponse(response, id, expectNxDomain)
+            } catch (error: Exception) {
+                if (expectNxDomain && response.size >= 12) {
+                    val flags = response[2].toInt() and 0xff
+                    val responseId = ((response[0].toInt() and 0xff) shl 8) or (response[1].toInt() and 0xff)
+                    val responseCode = response[3].toInt() and 0x0f
+                    val answerCount = ((response[6].toInt() and 0xff) shl 8) or (response[7].toInt() and 0xff)
+                    if (responseId == id && (flags and 0x80) != 0 && responseCode == 0 && answerCount > 0) {
+                        val elapsed = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
+                        return DnsScanCheck(
+                            label, false, responseCode, elapsed, if (truncated) "TCP" else "UDP",
+                            "Possible wildcard or synthetic DNS answer; this is not proof of DPI"
+                        )
+                    }
+                }
+                throw error
+            }
             val elapsed = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
             DnsScanCheck(label, true, rcode, elapsed, if (truncated) "TCP" else "UDP", "Response validated")
         } catch (e: SocketTimeoutException) {
             DnsScanCheck(label, false, null, null, "UDP", "Timed out")
         } catch (e: Exception) {
-            DnsScanCheck(label, false, null, null, "UDP", e.message ?: "Probe failed")
+            val responseCode = receivedResponse?.takeIf { it.size >= 12 }?.get(3)?.toInt()?.and(0x0f)
+            DnsScanCheck(label, false, responseCode, null, "UDP", e.message ?: "Probe failed")
         }
     }
 
