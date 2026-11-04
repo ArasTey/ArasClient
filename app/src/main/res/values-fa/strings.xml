@@ -970,4 +970,7 @@
     <string name="monitor_battery_full">شارژ کامل</string>
     <string name="monitor_battery_not_charging">بدون شارژ</string>
 
+    <string name="title_ui_experience">رابط کاربری برنامه</string>
+    <string name="ui_experience_radar">رابط کلاسیک RADAR</string>
+    <string name="ui_experience_zx">رابط ZX</string>
 </resources>
