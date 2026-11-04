@@ -422,7 +422,11 @@ object AetherCoreManager {
      * whatever it considers its config path, which on Android is a place an app
      * cannot write, so it would re-register a device on every start.
      */
-    internal fun coreEnvironment(context: Context, markSession: Boolean): Map<String, String> {
+    internal fun coreEnvironment(
+        context: Context,
+        markSession: Boolean,
+        useBundledPsiphonServerList: Boolean = true,
+    ): Map<String, String> {
         val work = workDir(context)
         return buildMap {
             put(OWNER_ENV, android.os.Process.myPid().toString())
@@ -442,7 +446,9 @@ object AetherCoreManager {
             // since Android 14 and on the system image before that. Without this neither
             // can verify a certificate, the Psiphon server list first of all.
             certificateDirectories { File(it).isDirectory }?.let { put(CERT_DIR_ENV, it) }
-            psiphonOverlay(context)?.let { put(PSIPHON_CONFIG_ENV, it.absolutePath) }
+            psiphonOverlay(context, useBundledPsiphonServerList)?.let {
+                put(PSIPHON_CONFIG_ENV, it.absolutePath)
+            }
             put(
                 PSIPHON_DIR_ENV,
                 File(if (markSession) context.filesDir else context.cacheDir, "aether-psiphon")
@@ -487,21 +493,26 @@ object AetherCoreManager {
      * bundled one, so a fresh install has servers before it can reach a list on its
      * own: aether 2.1 takes the list here rather than by a flag of its own.
      */
-    private fun psiphonOverlay(context: Context): File? {
+    private fun psiphonOverlay(context: Context, useBundledServerList: Boolean): File? {
         val dir = File(context.filesDir, "aether-psiphon").apply { mkdirs() }
         val file = File(dir, "config.json")
         val resolvers = SettingsManager.getRemoteDnsServers()
             .filter { com.aras.client.util.Utils.isPureIpAddress(it) }
             .joinToString(",")
             .ifBlank { DEFAULT_RESOLVERS }
-        val entries = PsiphonServerList.entriesFile(
-            assetDir = File(Utils.userAssetPath(context)),
-            workDir = workDir(context),
-        )?.let { entriesFile ->
-            runCatching {
-                entriesFile.readLines().filter { it.isNotBlank() }
-            }.getOrNull()
-        }
+        // When the user chooses the remote Psiphon list, omit ServerEntryList so
+        // Psiphon can use its own discovery/update path. The signed bundled list
+        // remains untouched on disk and is used again whenever the toggle is enabled.
+        val entries = if (useBundledServerList) {
+            PsiphonServerList.entriesFile(
+                assetDir = File(Utils.userAssetPath(context)),
+                workDir = workDir(context),
+            )?.let { entriesFile ->
+                runCatching {
+                    entriesFile.readLines().filter { it.isNotBlank() }
+                }.getOrNull()
+            }
+        } else null
         return runCatching {
             val parts = mutableListOf<String>()
             parts += """"RemoteDnsAddresses":[""" +
@@ -547,7 +558,13 @@ object AetherCoreManager {
         val builder = ProcessBuilder(listOf(exe.absolutePath) + core.arguments)
             .directory(workDir(context))
             .redirectErrorStream(true)
-        builder.environment().putAll(coreEnvironment(context, markSession = true))
+        builder.environment().putAll(
+            coreEnvironment(
+                context,
+                markSession = true,
+                useBundledPsiphonServerList = core.useBundledPsiphonServerList,
+            )
+        )
         val started = try {
             builder.start()
         } catch (e: IOException) {
