@@ -53,7 +53,7 @@ class NpvConfigImporterTest {
             ByteArray(16) { (it * 7 + 3).toByte() },
             tables
         )
-        val container = "NPVT1\\n" + java.util.Base64.getEncoder().encodeToString(encrypted)
+        val container = "NPVT1\n" + java.util.Base64.getEncoder().encodeToString(encrypted)
         val result = NpvConfigImporter.inspect(
             container.toByteArray(StandardCharsets.UTF_8),
             "profile.npvt",
@@ -75,7 +75,7 @@ class NpvConfigImporterTest {
         // Fixed NPVT1 AES-CTR chunk produced with the published NPV//FORGE table algorithm.
         val encryptedHex = "000102030405060708090a0b0c0d0e0f03c40ca5b13f9cef8e520492e1a98303badc5aa4a270d548c24243a3ceaad11abfd642aef268825ed71f01a4de2df70c69da0cf1e57edbb9d102fda7c557995727db49aefe378183d9008ea7995dc601da930cb8b5208fd7c62040b0c3079957658b1de9fc708998c70394adc5b0814ff78e1cf8b566cc55835d3efa8ed48e444edb1de6b166cc7d9944d4f4814797447d8b1efbe070d53cda152cb5d8c6c8573e9d59b8f27edb16d11341b0de10da57009d5aa7a370d55fc71e45e08dd6c011cd914bb3b13f8912d15ebda7c3c28f5783d05dbff268db73c61f94b6997cdb145dcf42aefe3c9c3c965cf9b2d6adcb577c9d01bca3708421e9"
         val result = NpvConfigImporter.inspect(
-            "NPVT1\\n$encryptedHex".toByteArray(StandardCharsets.UTF_8),
+            "NPVT1\n$encryptedHex".toByteArray(StandardCharsets.UTF_8),
             "fixture.npvt",
             legacyTablesJson = tables
         )
@@ -106,6 +106,6 @@ class NpvConfigImporterTest {
     fun legacyNpvtDoesNotAskForAnUnrelatedPassphrase() {
         val result = NpvConfigImporter.inspect("NPVT1\nnot-a-valid-container".toByteArray(), "legacy.npvt")
         assertTrue(result is NpvConfigImporter.Result.Failed)
-        assertFalse((result as NpvConfigImporter.Result.Failed).message.contains("رمز"))
+        assertFalse((result as NpvConfigImporter.Result.Failed).message.contains("رمز سازنده را وارد کنید"))
     }
 }
