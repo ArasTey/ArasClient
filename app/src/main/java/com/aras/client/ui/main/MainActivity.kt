@@ -47,6 +47,7 @@ import com.aras.client.ui.export.ExportActivity
 import com.aras.client.ui.logcat.LogcatActivity
 import com.aras.client.ui.perappproxy.PerAppProxyActivity
 import com.aras.client.ui.repair.ConfigRepairActivity
+import com.aras.client.ui.zx.ZxUiActivity
 import com.aras.client.ui.routing.RoutingSettingActivity
 import com.aras.client.ui.server.ProfileEditorResult
 import com.aras.client.ui.server.ServerAetherActivity
@@ -130,6 +131,20 @@ class MainActivity : HelperBaseComponentActivity() {
         maybeImportOpenedArasc(intent)
         handleSubscriptionNavigation(intent)
         maybeImportRadarConfig(intent)
+
+        // Launch the integrated ZX experience for normal app launches only.
+        // File imports, subscription deep links, notifications and internal
+        // navigation continue to use the original RADAR MainActivity flow.
+        val isLauncherEntry = intent?.action == Intent.ACTION_MAIN &&
+            intent.categories?.any {
+                it == Intent.CATEGORY_LAUNCHER ||
+                    it == Intent.CATEGORY_LEANBACK_LAUNCHER
+            } == true
+        if (savedInstanceState == null && isLauncherEntry) {
+            startActivity(Intent(this, ZxUiActivity::class.java))
+            finish()
+            return
+        }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
