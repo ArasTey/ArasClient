@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.aras.client.R
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -91,7 +93,7 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                 if (vpnActive) exit = place else origin = place
                 refreshMap()
             } catch (exception: Exception) {
-                error = exception.message ?: "IP location lookup failed"
+                error = exception.message ?: context.getString(R.string.map_lookup_failed)
             } finally {
                 loading = false
             }
@@ -104,8 +106,8 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("VPN Connection Map", style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = onBack) { Text("Back") }
+                Text(stringResource(R.string.map_title), style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = onBack) { Text(stringResource(R.string.map_back)) }
             }
         }
     ) { padding ->
@@ -115,13 +117,13 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
         ) {
             Card(shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Network locations", style = MaterialTheme.typography.titleMedium)
-                    Text("Before connecting, tap Capture network location. After connecting, tap Refresh VPN exit.")
-                    Text("Origin: ${origin?.label ?: "Not captured"}")
-                    Text("Exit: ${exit?.label ?: "Not captured"}")
-                    Text("IP lookup: ${exit?.ip ?: origin?.ip ?: "—"}")
+                    Text(stringResource(R.string.map_network_locations), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.map_capture_instructions))
+                    Text(stringResource(R.string.map_origin, origin?.label ?: stringResource(R.string.map_not_captured)))
+                    Text(stringResource(R.string.map_exit, exit?.label ?: stringResource(R.string.map_not_captured)))
+                    Text(stringResource(R.string.map_ip, exit?.ip ?: origin?.ip ?: stringResource(R.string.map_no_ip)))
                     Button(onClick = { locateNetwork() }, enabled = !loading) {
-                        Text(if (loading) "Looking up public IP…" else if (isVpnTransportActive(context)) "Refresh VPN exit" else "Capture network location")
+                        Text(if (loading) stringResource(R.string.map_lookup_loading) else if (isVpnTransportActive(context)) stringResource(R.string.map_refresh_exit) else stringResource(R.string.map_capture_network))
                     }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
@@ -150,7 +152,7 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                 update = { mapView = it }
             )
             Text(
-                "Locations are estimated from public IP addresses, not GPS. IP lookup sends your public IP to ipwho.is. The route is illustrative, not the physical path taken by packets.",
+                stringResource(R.string.map_disclaimer),
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -221,11 +223,11 @@ window.setConnectionPoints=function(olat,olon,elat,elon){
  const points=[];
  if(olat!==null && olon!==null){
   const p=[olat,olon]; points.push(p);
-  originMarker=L.marker(p).addTo(map).bindPopup('Origin network');
+  originMarker=L.marker(p).addTo(map).bindPopup('${'Origin network'}');
  }
  if(elat!==null && elon!==null){
   const p=[elat,elon]; points.push(p);
-  exitMarker=L.marker(p).addTo(map).bindPopup('VPN exit');
+  exitMarker=L.marker(p).addTo(map).bindPopup('${'VPN exit'}');
  }
  if(points.length===2){
   route=L.polyline(points,{color:'#31d6b0',weight:3,dashArray:'8 10'}).addTo(map);
