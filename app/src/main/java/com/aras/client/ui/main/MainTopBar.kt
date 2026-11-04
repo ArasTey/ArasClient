@@ -18,6 +18,7 @@ import android.content.Intent
 import androidx.compose.material3.TextButton
 import com.aras.client.ui.radar.RadarConfigActivity
 import com.aras.client.ui.dns.DnsChangerActivity
+import com.aras.client.ui.zx.ZxUiActivity
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.painterResource
@@ -112,6 +113,9 @@ fun MainTopBar(
         },
         actions = {
             if (!showSearch) {
+                TextButton(onClick = { context.startActivity(Intent(context, ZxUiActivity::class.java)) }) {
+                    Text("ZX UI")
+                }
                 IconButton(onClick = { onToggleAutoScroll(!autoScrollEnabled) }) {
                     Icon(
                         painterResource(R.drawable.ic_autoscroll_24dp),
