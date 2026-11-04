@@ -161,19 +161,7 @@ private fun ZxUiScreen(
     val selectedProfile: ProfileItem? = state.selectedGuid?.let(MmkvManager::decodeServerConfig)
     val serverGuids = MmkvManager.decodeServerList(state.selectedGroupId)
 
-    MaterialTheme(
-        colorScheme = androidx.compose.material3.darkColorScheme(
-            primary = Color(0xFF65F5C6),
-            onPrimary = Color(0xFF052019),
-            secondary = Color(0xFF9D8CFF),
-            background = Color(0xFF070B12),
-            surface = Color(0xFF111A26),
-            surfaceVariant = Color(0xFF1A2635),
-            onSurface = Color(0xFFEAF5F3),
-            onSurfaceVariant = Color(0xFFA2B7B8),
-        ),
-    ) {
-        Scaffold(
+    Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
                 NavigationBar(containerColor = Color(0xF20D1520)) {
@@ -199,7 +187,7 @@ private fun ZxUiScreen(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0xFF0B1821), Color(0xFF080D16), Color(0xFF090B13)),
+                            listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.background),
                         ),
                     )
                     .padding(insets),
@@ -218,19 +206,19 @@ private fun ZxUiScreen(
                     ) {
                         Column {
                             Text(
-                                "ZX VPN",
+                                "RADAR VPN",
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Black,
-                                color = Color(0xFFECFFF8),
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                "محیط رابط مستقل",
+                                "ZX UI · رابط مستقل و قابل انتخاب",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color(0xFF8DA6A8),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Surface(
-                            color = if (state.isRunning) Color(0xFF153D32) else Color(0xFF292333),
+                            color = if (state.isRunning) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                             shape = CircleShape,
                         ) {
                             Row(
@@ -241,13 +229,13 @@ private fun ZxUiScreen(
                                     Modifier
                                         .size(7.dp)
                                         .background(
-                                            if (state.isRunning) Color(0xFF65F5C6) else Color(0xFFFFB86B),
+                                            if (state.isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                                             CircleShape,
                                         ),
                                 )
                                 Text(
                                     if (state.isRunning) " متصل" else " قطع",
-                                    color = Color(0xFFEAF5F3),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     style = MaterialTheme.typography.labelMedium,
                                 )
                             }
@@ -284,12 +272,11 @@ private fun ZxUiScreen(
                         .padding(top = 78.dp, end = 20.dp)
                         .clickable(onClick = onExit)
                         .padding(6.dp),
-                    color = Color(0xFF78918F),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
         }
-    }
 }
 
 @Composable
@@ -314,17 +301,17 @@ private fun ZxHomePage(
             "اتصال امن، با کنترل کامل",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFE8FFF7),
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(30.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF142A2C)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.linearGradient(listOf(Color(0xFF173D39), Color(0xFF142A3A), Color(0xFF24213D))))
+                    .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerHighest)))
                     .padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -333,27 +320,27 @@ private fun ZxHomePage(
                         Modifier
                             .size(9.dp)
                             .scale(pulse.value)
-                            .background(if (isRunning) Color(0xFF65F5C6) else Color(0xFFFFB86B), CircleShape),
+                            .background(if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary, CircleShape),
                     )
                     Text(
                         if (isRunning) "تونل فعال است" else "آماده اتصال",
-                        color = if (isRunning) Color(0xFF65F5C6) else Color(0xFFFFC27A),
+                        color = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
                 AnimatedVisibility(visible = isRunning, enter = fadeIn(), exit = fadeOut()) {
-                    Text("وضعیت تونل از سرویس VPN برنامه دریافت می‌شود", color = Color(0xFFB5D8CF), style = MaterialTheme.typography.bodySmall)
+                    Text("وضعیت تونل از سرویس VPN برنامه دریافت می‌شود", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
                 Text(
                     profile?.remarks?.takeIf { it.isNotBlank() } ?: "سروری انتخاب نشده",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
                     profile?.let { listOfNotNull(it.server, it.serverPort).joinToString(":") }
                         ?.takeIf { it.isNotBlank() } ?: "یک سرور از فهرست انتخاب کنید",
-                    color = Color(0xFF9EB8B6),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Button(
@@ -378,7 +365,7 @@ private fun ZxHomePage(
         }
         Text(
             "وضعیت اتصال مستقیماً از موتور فعلی برنامه خوانده می‌شود.",
-            color = Color(0xFF819A9A),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
     }
@@ -394,7 +381,7 @@ private fun ZxServersPage(
     onServer: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("سرورها", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+        Text("سرورها", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
         androidx.compose.foundation.lazy.LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
@@ -402,14 +389,14 @@ private fun ZxServersPage(
             items(groups) { group ->
                 val selected = group.id == selectedGroupId
                 Surface(
-                    color = if (selected) Color(0xFF245344) else Color(0xFF182331),
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier.clickable { onGroup(group.id) },
                 ) {
                     Text(
                         group.remarks,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        color = if (selected) Color(0xFF8BFFCF) else Color(0xFFD5E4E2),
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -427,21 +414,21 @@ private fun ZxServersPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onServer(guid) },
-                        color = if (selected) Color(0xFF193C34) else Color(0xFF121D29),
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(20.dp),
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(
                                 profile.remarks.ifBlank { "سرور بدون نام" },
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
                                 "${profile.configType.name}  •  ${profile.server.orEmpty()}${profile.serverPort?.let { ":$it" }.orEmpty()}",
-                                color = Color(0xFF9EB8B6),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                             )
-                            if (selected) Text("انتخاب‌شده", color = Color(0xFF65F5C6), style = MaterialTheme.typography.labelSmall)
+                            if (selected) Text("انتخاب‌شده", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -456,7 +443,7 @@ private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit, onMan
         modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("ابزارهای اتصال", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+        Text("ابزارهای اتصال", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
         ZxQuickTile("نقشه اتصال", "موقعیت IP و خروجی VPN", Modifier.fillMaxWidth()) { onOpen(ConnectionMapActivity::class.java) }
         ZxQuickTile("مانیتور زنده", "CPU، RAM، باتری و دما", Modifier.fillMaxWidth()) { onOpen(LiveMonitorActivity::class.java) }
         ZxQuickTile("رادار کانفیگ", "کشف و بررسی کانفیگ‌ها", Modifier.fillMaxWidth()) { onOpen(RadarConfigActivity::class.java) }
@@ -476,15 +463,15 @@ private fun ZxQuickTile(
 ) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        color = Color(0xFF14202C),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(1.dp, Color(0xFF34505A).copy(alpha = 0.55f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         shadowElevation = 5.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.linearGradient(listOf(Color(0xFF182D38), Color(0xFF121C2A))))
+                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainer)))
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp),
@@ -497,14 +484,14 @@ private fun ZxQuickTile(
                 title.contains("DNS") -> "⇄"
                 else -> "✦"
             }
-            Surface(color = Color(0xFF24463F), shape = RoundedCornerShape(14.dp)) {
-                Text(marker, modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), color = Color(0xFF83F7D0), style = MaterialTheme.typography.titleLarge)
+            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(14.dp)) {
+                Text(marker, modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, color = Color(0xFFE8FFF7), fontWeight = FontWeight.SemiBold)
-                Text(subtitle, color = Color(0xFF8EA8A7), style = MaterialTheme.typography.bodySmall)
+                Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            Text("›", color = Color(0xFF65F5C6), style = MaterialTheme.typography.headlineSmall)
+            Text("›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
         }
     }
 }
