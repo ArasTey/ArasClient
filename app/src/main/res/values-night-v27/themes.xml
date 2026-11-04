@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keep light navigation-bar icons disabled in night mode on API 27+. -->
+    <style name="AppThemeBase" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

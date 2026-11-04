@@ -178,13 +178,16 @@ jobs:
           disable-animations: true
           script: bash .github/scripts/radar-launch-smoke.sh
 
-      - name: Upload APK and launch diagnostics
+      - name: Upload APK, lint reports and launch diagnostics
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: radar-complete-validation
           path: |
             app/build/outputs/apk/**/*.apk
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.sarif
+            app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
             radar-launch-logcat.txt
           if-no-files-found: warn
           retention-days: 14
