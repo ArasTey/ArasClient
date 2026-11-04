@@ -31,6 +31,7 @@ private enum class ImportMenuAction(@StringRes val labelRes: Int, val action: Ma
     QRCode(R.string.menu_item_import_config_qrcode, MainAction.ImportQRcode),
     Clipboard(R.string.menu_item_import_config_clipboard, MainAction.ImportClipboard),
     LocalFile(R.string.menu_item_import_config_local, MainAction.ImportConfigLocal),
+    NpvFile(R.string.menu_item_import_npv_config, MainAction.ImportConfigLocal),
     ArascFile(R.string.menu_item_import_config_arasc, MainAction.ImportArascFile),
     Aether(R.string.menu_item_import_config_manually_aether, MainAction.ImportManually(EConfigType.AETHER.value)),
     Manual(R.string.menu_item_import_config_manually, MainAction.ImportManualMenu),
