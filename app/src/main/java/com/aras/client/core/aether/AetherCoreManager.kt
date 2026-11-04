@@ -672,12 +672,29 @@ object AetherCoreManager {
     /** The core currently running, or null. */
     fun running(): AetherCore? = session.get()?.takeIf { probe(it.port) }
 
+    private fun hasExited(process: Process): Boolean =
+        try {
+            process.exitValue()
+            true
+        } catch (_: IllegalThreadStateException) {
+            false
+        }
+
     fun stop() {
         process?.let { running ->
             runCatching { running.destroy() }
-            if (!running.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                runCatching { running.destroyForcibly() }
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+            while (!hasExited(running) && System.nanoTime() < deadline) {
+                try {
+                    Thread.sleep(50)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
             }
+            // destroy() is available on every supported Android API. Avoid the
+            // API-26-only timed wait/force-kill Process methods on minSdk 24.
+            if (!hasExited(running)) runCatching { running.destroy() }
         }
         process = null
         session.set(null)
