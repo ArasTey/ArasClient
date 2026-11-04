@@ -1,0 +1,36 @@
+NPV//FORGE NPV conversion compatibility component
+
+Source project:
+https://github.com/MahdiAbedi2000/NPV-to-V2ray
+
+License: MIT
+Copyright (c) 2026 NPV//FORGE Project Contributors
+
+The bundled Gen-2 White-Box table data in:
+app/src/main/assets/npv/gen2_tables.bin.z.b64
+is redistributed under the MIT License. The NPV Gen-2 decoding compatibility
+work in this repository is an independent Kotlin implementation based on the
+publicly documented format and test vectors from NPV//FORGE.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Compatibility reference only (no Pantegnos source code is copied):
+https://github.com/FrontierTM/Pantegnos
+Pantegnos is separately licensed under AGPL-3.0. Its notices and license apply
+to Pantegnos itself, not to this independently implemented compatibility layer.
