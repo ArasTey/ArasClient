@@ -97,8 +97,16 @@ object NpvConfigImporter {
                     )
                 }
                 if (isNpvV1AppKey(bytes)) {
+                    val opened = legacyTablesJson?.let { tryOpenNpvV1AppKey(bytes, it) }
+                    if (!opened.isNullOrEmpty()) {
+                        return Result.Open(opened.joinToString("\n"), opened.size, "npvs-v1-appkey")
+                    }
                     return Result.Failed(
-                        "این فایل از AppKey نسل قدیمی NPVS استفاده می‌کند؛ این نسخه‌ی White-Box با جدول نسل ۵ متفاوت است."
+                        if (legacyTablesJson == null) {
+                            "جداول آفلاین White-Box نسل قدیمی NPVS در دسترس نیستند."
+                        } else {
+                            "رمزگشایی NPVS قدیمی با AppKey انجام نشد؛ فایل ممکن است ناقص یا ناسازگار باشد."
+                        }
                     )
                 }
                 if (isNpvGen2AppKey(bytes)) {
@@ -299,6 +307,41 @@ object NpvConfigImporter {
 
     private fun isNpvV1AppKey(bytes: ByteArray): Boolean =
         npvV1Header(bytes)?.has("appKey") == true
+
+    private fun tryOpenNpvV1AppKey(bytes: ByteArray, tablesJson: String): List<String>? {
+        val header = npvV1Header(bytes) ?: return null
+        val appKey = header.getAsJsonObject("appKey") ?: return null
+        return try {
+            val salt = decodeBase64Bytes(appKey.get("salt")?.asString ?: "") ?: return null
+            val wrapped = decodeBase64Bytes(appKey.get("wrap")?.asString ?: "") ?: return null
+            if (salt.size != 16 || wrapped.size != 60) return null
+            val headerLength = NpvCrypto.be32(bytes, 5)
+            val headerRaw = bytes.copyOfRange(9, 9 + headerLength)
+            var dek: ByteArray? = null
+            for (kdk in NpvCrypto.npvV1CustodianKdks(salt, tablesJson)) {
+                dek = NpvCrypto.chacha20Poly1305Open(
+                    kdk, wrapped.copyOfRange(0, 12), wrapped.copyOfRange(12, 60), salt
+                )
+                if (dek != null) break
+            }
+            val dataKey = dek ?: return null
+            val bodyOffset = 9 + headerLength
+            if (bodyOffset + 16 > bytes.size) return null
+            val nonce = bytes.copyOfRange(bodyOffset, bodyOffset + 12)
+            val bodyLength = NpvCrypto.be32(bytes, bodyOffset + 12)
+            val encryptedOffset = bodyOffset + 16
+            if (bodyLength < 16 || encryptedOffset.toLong() + bodyLength > bytes.size) return null
+            val encrypted = bytes.copyOfRange(encryptedOffset, encryptedOffset + bodyLength)
+            val plain = NpvCrypto.chacha20Poly1305Open(dataKey, nonce, encrypted, headerRaw) ?: return null
+            val text = decodeNpvSentinels(String(plain, StandardCharsets.UTF_8))
+            val links = LinkedHashSet<String>()
+            links += extractLinks(text)
+            links += extractLinksFromNpvJson(text)
+            links.take(200).toList().takeIf { it.isNotEmpty() }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private fun tryOpenNpvV1Passphrase(bytes: ByteArray, passphrase: String): List<String>? {
         val header = npvV1Header(bytes) ?: return null
