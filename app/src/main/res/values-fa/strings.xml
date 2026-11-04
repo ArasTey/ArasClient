@@ -962,4 +962,11 @@
     <string name="monitor_process_uptime">زمان فعالیت فرایند</string>
     <string name="monitor_session_uptime">زمان نشست مانیتور (زمان شروع فرایند در این نسخه اندروید در دسترس نیست)</string>
 
+
+    <string name="monitor_battery_status">وضعیت شارژ: %1$s</string>
+    <string name="monitor_battery_charging">در حال شارژ</string>
+    <string name="monitor_battery_discharging">در حال مصرف</string>
+    <string name="monitor_battery_full">شارژ کامل</string>
+    <string name="monitor_battery_not_charging">بدون شارژ</string>
+
 </resources>
