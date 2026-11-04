@@ -119,7 +119,7 @@
                 <data android:scheme="file" />
                 <data android:mimeType="application/x-rdr" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter tools:ignore="AppLinkUrlError">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <!-- File-provider URIs are selected by document pickers, not browser deep links. -->
