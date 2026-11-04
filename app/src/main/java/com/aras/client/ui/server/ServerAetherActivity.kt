@@ -63,9 +63,8 @@ import com.aras.client.ui.compose.FormToggleField
  * Field names and values follow the aether core's own, so a link or a .arasc file
  * moves between ArasClient, the Aether app and PattNG unchanged.
  *
- * gool and mim are the core's two-hop tunnels and lower to a WireGuard profile here;
- * Psiphon and Tor are the daemon's runtime and are not offered, because ArasClient
- * runs the gateway in-process rather than spawning the aether binary.
+ * gool and mim are the core's two-hop tunnels. Psiphon and Tor are managed by the
+ * bundled Aether daemon; the + menu offers a focused standalone Psiphon CDN preset.
  */
 class ServerAetherActivity : BaseServerActivity() {
 
