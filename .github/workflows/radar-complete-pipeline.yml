@@ -141,7 +141,16 @@ jobs:
         with:
           packages: platform-tools
       - name: Install Android platform and build tools
-        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+          # SDK publishes API 37 as android-37.0; AGP resolves compileSdk 37
+          # through android-37, so mirror the installed platform directory.
+          if [[ -d "$ANDROID_HOME/platforms/android-37.0" && ! -d "$ANDROID_HOME/platforms/android-37" ]]; then
+            cp -a "$ANDROID_HOME/platforms/android-37.0" "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
 
       - name: Verify source contracts for integrated features
         run: bash .github/scripts/radar-feature-contracts.sh
