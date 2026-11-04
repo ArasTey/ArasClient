@@ -48,7 +48,8 @@ object NpvConfigImporter {
     fun needsGen2Tables(bytes: ByteArray): Boolean = isNpvGen2AppKey(bytes)
 
     fun needsLegacyTables(bytes: ByteArray): Boolean =
-        bytes.size >= 5 && String(bytes, 0, 5, StandardCharsets.US_ASCII) == "NPVT1"
+        (bytes.size >= 5 && String(bytes, 0, 5, StandardCharsets.US_ASCII) == "NPVT1") ||
+            isNpvV1AppKey(bytes)
 
     fun hasNpvMagic(bytes: ByteArray): Boolean {
         if (bytes.size < 4) return false
