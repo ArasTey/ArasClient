@@ -47,13 +47,21 @@ object NpvConfigImporter {
 
     fun needsGen2Tables(bytes: ByteArray): Boolean = isNpvGen2AppKey(bytes)
 
+    fun needsLegacyTables(bytes: ByteArray): Boolean =
+        bytes.size >= 5 && String(bytes, 0, 5, StandardCharsets.US_ASCII) == "NPVT1"
+
     fun hasNpvMagic(bytes: ByteArray): Boolean {
         if (bytes.size < 4) return false
         val head = String(bytes, 0, minOf(5, bytes.size), StandardCharsets.US_ASCII)
         return head.startsWith("NPVS") || head.startsWith("NPVT") || head.startsWith("NPVO")
     }
 
-    fun inspect(bytes: ByteArray, fileName: String? = null, gen2Tables: ByteArray? = null): Result {
+    fun inspect(
+        bytes: ByteArray,
+        fileName: String? = null,
+        gen2Tables: ByteArray? = null,
+        legacyTablesJson: String? = null,
+    ): Result {
         if (bytes.isEmpty()) return Result.Failed("فایل خالی است.")
 
         val asText = runCatching {
@@ -111,14 +119,26 @@ object NpvConfigImporter {
                     )
                 }
             }
-            magic.startsWith("NPVT") ||
-                (bytes.size >= 5 && String(bytes, 0, 5, StandardCharsets.US_ASCII).startsWith("NPVT")) -> {
-                val recovered = extractFromBinaryish(bytes)
-                if (recovered.isNotEmpty()) {
-                    return Result.Open(recovered.joinToString("\n"), recovered.size, "npvt-recovered")
+            magic.startsWith("NPVT") -> {
+                val decrypted = legacyTablesJson?.let { NpvCrypto.decryptNpvt1Chunks(bytes, it) }
+                if (!decrypted.isNullOrEmpty()) {
+                    val links = LinkedHashSet<String>()
+                    decrypted.forEach { chunk ->
+                        val plain = String(chunk, StandardCharsets.UTF_8)
+                        links += extractLinks(plain)
+                        links += extractLinksFromNpvJson(plain)
+                    }
+                    if (links.isNotEmpty()) {
+                        return Result.Open(links.take(200).joinToString("\n"), minOf(links.size, 200), "npvt1-decrypted")
+                    }
+                    return Result.Failed("NPVT1 بازگشایی شد، اما هیچ پروفایل V2Ray قابل‌واردکردنی در آن پیدا نشد.")
                 }
                 return Result.Failed(
-                    "ظرف رمزگذاری‌شده‌ی NPVT1 شناسایی شد، اما این نسخه هنوز به موتور رمزگشایی White-Box نسخه‌ی NPVT1 نیاز دارد؛ رمز عبور معمولی برای این فرمت کاربرد ندارد."
+                    if (legacyTablesJson == null) {
+                        "جداول آفلاین رمزگشایی NPVT1 در دسترس نیستند؛ فایل اصلی تغییری نکرده است."
+                    } else {
+                        "رمزگشایی NPVT1 انجام نشد؛ ساختار فایل ناقص یا ناسازگار است."
+                    }
                 )
             }
             magic.startsWith("NPVO") -> {
@@ -142,8 +162,9 @@ object NpvConfigImporter {
         passphrase: String,
         fileName: String? = null,
         gen2Tables: ByteArray? = null,
+        legacyTablesJson: String? = null,
     ): Result {
-        val base = inspect(bytes, fileName, gen2Tables)
+        val base = inspect(bytes, fileName, gen2Tables, legacyTablesJson)
         if (base is Result.Open) return base
         if (passphrase.isBlank()) return base
 
