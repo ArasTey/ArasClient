@@ -62,15 +62,68 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class DnsChangerActivity : BaseComponentActivity() {
+    private val vpnPermissionLauncher =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) startStandaloneDnsVpn()
+            else android.widget.Toast.makeText(this, "VPN permission was not granted", android.widget.Toast.LENGTH_LONG).show()
+        }
+
     @Composable
     override fun ScreenContent() {
-        DnsChangerScreen(onBack = { finish() })
+        DnsChangerScreen(
+            onBack = { finish() },
+            onConnect = { connectDns() },
+            onDisconnect = { disconnectDns() },
+        )
+    }
+
+    private fun connectDns() {
+        if (com.aras.client.core.CoreServiceManager.isRunning()) {
+            android.widget.Toast.makeText(
+                this,
+                "Disconnect the main Radar VPN first, then connect DNS CHANGER.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        val prepareIntent = android.net.VpnService.prepare(this)
+        if (prepareIntent != null) vpnPermissionLauncher.launch(prepareIntent)
+        else startStandaloneDnsVpn()
+    }
+
+    private fun startStandaloneDnsVpn() {
+        val profile = DnsChangerStore.activeProfile()
+        if (profile == null) {
+            android.widget.Toast.makeText(this, "Select a valid DNS profile first", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val servers = arrayListOf(profile.primary).apply {
+            if (profile.secondary.isNotBlank()) add(profile.secondary)
+        }
+        val intent = android.content.Intent(this, DnsChangerVpnService::class.java).apply {
+            action = DnsChangerVpnService.ACTION_START
+            putStringArrayListExtra("servers", servers)
+            putExtra("dnsType", "udp")
+            putExtra("serverName", profile.name)
+            putExtra("notificationTitle", "RADAR DNS CHANGER")
+            putExtra("disconnectText", "Disconnect DNS")
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun disconnectDns() {
+        stopService(android.content.Intent(this, DnsChangerVpnService::class.java))
+        DnsChangerStore.deactivate()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DnsChangerScreen(onBack: () -> Unit) {
+private fun DnsChangerScreen(onBack: () -> Unit, onConnect: () -> Unit, onDisconnect: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val profiles = remember {
@@ -88,9 +141,16 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
     var testResult by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var showStandaloneInfo by remember { mutableStateOf(false) }
+    var serviceRunning by remember { mutableStateOf(DnsChangerVpnService.isRunning) }
     var selectedName by remember { mutableStateOf(active?.name) }
 
     BackHandler(onBack = onBack)
+    LaunchedEffect(Unit) {
+        while (true) {
+            serviceRunning = DnsChangerVpnService.isRunning
+            kotlinx.coroutines.delay(500)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -129,7 +189,7 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
                         Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(34.dp))
                         Spacer(Modifier.size(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(if (DnsChangerStore.isEnabled()) "DNS profile selected" else "Choose your resolver", fontWeight = FontWeight.Bold)
+                            Text(if (serviceRunning) "DNS tunnel connected" else if (serviceRunning) "DNS tunnel connected" else if (DnsChangerStore.isEnabled()) "DNS profile selected" else "Choose your resolver", fontWeight = FontWeight.Bold)
                             Text(
                                 if (DnsChangerStore.isEnabled()) "${primary}  ${secondary}".trim()
                                 else "Custom resolver profiles for the Radar VPN tunnel",
@@ -289,27 +349,18 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
                             notice = "Enter valid IPv4 or IPv6 DNS addresses"
                         } else {
                             DnsChangerStore.activate(DnsProfile(selectedName ?: "Custom DNS", primary, secondary))
-                            if (CoreServiceManager.isRunning()) {
-                                runCatching { LauncherManager.restartService(context) }
-                                notice = "DNS selected and the active Radar tunnel is restarting"
-                            } else {
-                                showStandaloneInfo = true
-                            }
+                            onConnect()
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                    Icon(if (serviceRunning) Icons.Rounded.CheckCircle else Icons.Rounded.PlayArrow, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
-                    Text("APPLY DNS TO VPN TUNNEL")
+                    Text(if (serviceRunning) "DNS CONNECTED" else "CONNECT DNS • NO CONFIG")
                 }
-                if (DnsChangerStore.isEnabled()) {
+                if (serviceRunning || DnsChangerStore.isEnabled()) {
                     TextButton(
-                        onClick = {
-                            DnsChangerStore.deactivate()
-                            if (CoreServiceManager.isRunning()) LauncherManager.restartService(context)
-                            notice = "DNS override disabled"
-                        },
+                        onClick = onDisconnect,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Rounded.Stop, contentDescription = null)
@@ -318,8 +369,7 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
                     }
                 }
                 Text(
-                    "When Radar's VPN tunnel is running, this profile replaces its DNS resolvers. " +
-                        "The standalone no-config tunnel is not enabled in this build yet; DNS is never reported as connected when no tunnel exists.",
+                    "DNS-only local VPN: DNS packets are sent to the selected resolver; normal game traffic stays on the device's regular internet route. Android allows only one active VPN, so disconnect Radar's main VPN before starting standalone DNS.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

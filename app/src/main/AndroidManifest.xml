@@ -66,6 +66,19 @@
             android:name=".ui.radar.RadarConfigActivity"
             android:exported="false" />
 
+        <service
+            android:name=".ui.dns.DnsChangerVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local DNS request routing and resolution" />
+        </service>
+
         <activity
             android:name=".ui.dns.DnsChangerActivity"
             android:exported="false" />
