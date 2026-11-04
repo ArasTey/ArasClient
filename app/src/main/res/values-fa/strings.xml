@@ -909,4 +909,53 @@
     <string name="theme_ui_aurora_summary">داشبورد شیشه‌ای آینده‌نگر با جزئیات نورانی</string>
     <string name="theme_ui_style_title">سبک رابط اصلی برنامه</string>
     <string name="menu_dpi_diagnostics">آزمایش تشخیصی DPI</string>
+
+    <!-- Live monitor -->
+    <string name="monitor_open">مانیتور زنده</string>
+    <string name="monitor_title">مانیتور زنده</string>
+    <string name="monitor_back">بازگشت</string>
+    <string name="monitor_collecting">در حال جمع‌آوری اطلاعات دستگاه…</string>
+    <string name="monitor_cpu">پردازنده · فرایند برنامه</string>
+    <string name="monitor_ram">حافظه RAM · فرایند برنامه</string>
+    <string name="monitor_battery">باتری</string>
+    <string name="monitor_unavailable">در دسترس نیست</string>
+    <string name="monitor_current_value">جریان: %1$s</string>
+    <string name="monitor_temperature_value">دما: %1$s</string>
+    <string name="monitor_thermal">وضعیت حرارتی</string>
+    <string name="monitor_headroom_value">ظرفیت حرارتی باقی‌مانده: %1$s</string>
+    <string name="monitor_headroom_waiting">هنوز در دسترس نیست</string>
+    <string name="monitor_headroom_hint">در دستگاه‌های پشتیبانی‌شده، این مقدار هر ۱۰ ثانیه نمونه‌برداری می‌شود.</string>
+    <string name="monitor_process">فرایند برنامه</string>
+    <string name="monitor_threads">%1$d ترد</string>
+    <string name="monitor_uptime">زمان فعالیت فرایند: %1$s</string>
+    <string name="monitor_process_note">مقادیر CPU و RAM مربوط به خود RADAR VPN هستند، نه کل دستگاه.</string>
+    <string name="monitor_crypto">ارائه‌دهنده رمزنگاری</string>
+    <string name="monitor_crypto_note">در دسترس بودن ارائه‌دهنده نمایش داده می‌شود؛ اندروید نشانگر عمومی و قابل‌اعتمادی برای شتاب‌دهی سخت‌افزاری ارائه نمی‌کند.</string>
+    <string name="monitor_android10_required">نیازمند اندروید ۱۰ یا بالاتر</string>
+    <string name="monitor_thermal_normal">عادی</string>
+    <string name="monitor_thermal_light">کم</string>
+    <string name="monitor_thermal_moderate">متوسط</string>
+    <string name="monitor_thermal_severe">شدید</string>
+    <string name="monitor_thermal_critical">بحرانی</string>
+    <string name="monitor_thermal_emergency">اضطراری</string>
+    <string name="monitor_thermal_shutdown">خاموشی</string>
+    <!-- Connection map -->
+    <string name="map_open">نقشه اتصال VPN</string>
+    <string name="map_title">نقشه اتصال VPN</string>
+    <string name="map_back">بازگشت</string>
+    <string name="map_network_locations">موقعیت‌های شبکه</string>
+    <string name="map_capture_instructions">قبل از اتصال، موقعیت شبکه را ثبت کن. پس از اتصال، خروجی VPN را تازه‌سازی کن.</string>
+    <string name="map_origin">مبدأ: %1$s</string>
+    <string name="map_exit">مقصد خروج: %1$s</string>
+    <string name="map_ip">آدرس IP: %1$s</string>
+    <string name="map_not_captured">ثبت نشده</string>
+    <string name="map_no_ip">—</string>
+    <string name="map_lookup_loading">در حال بررسی IP عمومی…</string>
+    <string name="map_refresh_exit">تازه‌سازی خروجی VPN</string>
+    <string name="map_capture_network">ثبت موقعیت شبکه</string>
+    <string name="map_lookup_failed">دریافت موقعیت IP ناموفق بود</string>
+    <string name="map_disclaimer">موقعیت‌ها از روی IP عمومی تخمین زده می‌شوند، نه GPS. برای مکان‌یابی IP عمومی شما به ipwho.is ارسال می‌شود. مسیر فقط نمایشی است و مسیر فیزیکی عبور بسته‌ها نیست.</string>
+    <string name="map_origin_marker">شبکه مبدأ</string>
+    <string name="map_exit_marker">خروجی VPN</string>
+
 </resources>
