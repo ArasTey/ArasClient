@@ -98,6 +98,7 @@ internal fun serverMenuActions(
 fun ImportMenuContent(
     onAction: (MainAction) -> Unit,
     onOpenDnsChanger: () -> Unit = {},
+    onOpenDnsScanner: () -> Unit = {},
     onOpenPsiphonCdn: () -> Unit = {},
 ) {
     var showProtocolMenu by remember { mutableStateOf(false) }
@@ -105,6 +106,11 @@ fun ImportMenuContent(
     DropdownMenuItem(
         text = { Text("DNS CHANGER") },
         onClick = onOpenDnsChanger
+    )
+
+    DropdownMenuItem(
+        text = { Text("DNS SCANNER & RESOLVER") },
+        onClick = onOpenDnsScanner
     )
 
     DropdownMenuItem(
