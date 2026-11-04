@@ -10,9 +10,8 @@ import android.os.Debug
 import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composable
+import com.aras.client.ui.base.BaseComponentActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,14 +46,10 @@ import kotlinx.coroutines.delay
 import javax.crypto.Cipher
 import java.util.Locale
 
-class LiveMonitorActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme {
-                LiveMonitorScreen(onBack = { finish() })
-            }
-        }
+class LiveMonitorActivity : BaseComponentActivity() {
+    @Composable
+    override fun ScreenContent() {
+        LiveMonitorScreen(onBack = { finish() })
     }
 }
 
