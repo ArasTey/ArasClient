@@ -88,6 +88,11 @@ android {
         getByName("main") {
             jniLibs.srcDirs("libs")
         }
+        // Reuse the bundled local NPV table in JVM unit tests for the published
+        // Gen-2 White-Box test vector; no network fixture is needed.
+        getByName("test") {
+            resources.srcDir("src/main/assets")
+        }
     }
 
     compileOptions {
