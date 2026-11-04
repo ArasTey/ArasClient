@@ -55,7 +55,7 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
         val topicReport = RadarSourceReport(
             source = "github.com/topics/v2ray-config",
             fetchedFiles = if (topicSources.isNotEmpty()) 1 else 0,
-            parsedCandidates = topicSources.size,
+            parsedCandidates = 0,
             error = if (topicSources.isEmpty()) "No repositories returned by the topic index" else null
         )
         RadarDiscoveryReport(ordered, results.map { it.report } + topicReport)
