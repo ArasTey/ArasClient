@@ -23,6 +23,26 @@ class NpvCryptoTest {
     }
 
     @Test
+    fun npvsV1CustodianKeysMatchBothPublishedWhiteBoxVectors() {
+        val tables = javaClass.classLoader!!
+            .getResourceAsStream("npv/legacy_whitebox_tables.json")!!
+            .bufferedReader(Charsets.UTF_8)
+            .use { it.readText() }
+        val salt = "843cc2c901ce91516c38cc6605b92e47".chunked(2)
+            .map { it.toInt(16).toByte() }.toByteArray()
+        val keys = NpvCrypto.npvV1CustodianKdks(salt, tables)
+        assertEquals(2, keys.size)
+        assertEquals(
+            "a9c9058dca50d178b64e0318ad5362be8f8d4103dc83ce2bd0ccd7e404584e3d",
+            keys[0].joinToString("") { "%02x".format(it) }
+        )
+        assertEquals(
+            "438a04b521a5952156441a76bee5d8377a67257ff7e8291b220023614d7933d5",
+            keys[1].joinToString("") { "%02x".format(it) }
+        )
+    }
+
+    @Test
     fun hkdfSha256MatchesRfc5869CaseOne() {
         val ikm = ByteArray(22) { 0x0b.toByte() }
         val salt = "000102030405060708090a0b0c".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
