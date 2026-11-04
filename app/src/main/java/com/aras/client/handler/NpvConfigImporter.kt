@@ -252,6 +252,7 @@ object NpvConfigImporter {
             }
             "grpc" -> value("serviceName").takeIf(String::isNotBlank)?.let { query["serviceName"] = it }
         }
+        value("flow").takeIf(String::isNotBlank)?.let { query["flow"] = it }
         if (security == "tls") {
             value("sni").takeIf(String::isNotBlank)?.let { query["sni"] = it }
             value("fingerPrint").takeIf(String::isNotBlank)?.let { query["fp"] = it }
@@ -272,6 +273,18 @@ object NpvConfigImporter {
         return when (type) {
             5 -> "vless://$user@$host:$port?$q#${fragment}"
             6 -> "trojan://$user@$host:$port?$q#${fragment}"
+            3 -> {
+                val method = value("method", "aes-128-gcm")
+                val credentials = Base64.getEncoder().encodeToString(
+                    "$method:$user".toByteArray(StandardCharsets.UTF_8)
+                )
+                "ss://$credentials@$host:$port#${fragment}"
+            }
+            7 -> {
+                val username = value("username")
+                val auth = if (username.isBlank()) user else "$username:$user"
+                "socks5://${enc(auth)}@$host:$port#${fragment}"
+            }
             1 -> {
                 val vmess = linkedMapOf(
                     "v" to "2", "ps" to name, "add" to server, "port" to port.toString(),
