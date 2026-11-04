@@ -49,6 +49,7 @@
     <string name="menu_item_import_config_qrcode">Import from QR code</string>
     <string name="menu_item_import_config_clipboard">Import from Clipboard</string>
     <string name="menu_item_import_config_local">Import from a local file</string>
+    <string name="menu_item_import_npv_config">Import NPV / NapsternetV config</string>
     <string name="protected_config_hidden">Protected config</string>
     <string name="server_lab_aether_protocol">Aether protocol</string>
     <string name="server_lab_aether_scan_mode">Scan mode</string>
