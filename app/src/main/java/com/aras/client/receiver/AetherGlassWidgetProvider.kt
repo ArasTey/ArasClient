@@ -120,10 +120,7 @@ class AetherGlassWidgetProvider : AppWidgetProvider() {
                 else -> "${lastPing} ms"
             },
         )
-        views.setTextViewText(
-            R.id.aether_node,
-            profileName,
-        )
+        views.setTextViewText(R.id.aether_node, profileName)
         views.setTextViewText(
             R.id.aether_action,
             when {
@@ -135,10 +132,12 @@ class AetherGlassWidgetProvider : AppWidgetProvider() {
 
         val accent = if (running) 0xFF55FFAA.toInt() else 0xFFFF6475.toInt()
         views.setTextColor(R.id.aether_status, accent)
-        views.setTextColor(R.id.aether_ping, if (running) 0xFF55FFAA.toInt() else 0xFFB5C0BC.toInt())
-        views.setInt(
+        views.setTextColor(
+            R.id.aether_ping,
+            if (running) 0xFF55FFAA.toInt() else 0xFFB5C0BC.toInt(),
+        )
+        views.setImageViewResource(
             R.id.aether_status_dot,
-            "setBackgroundResource",
             if (running) R.drawable.aether_glass_dot_green else R.drawable.aether_glass_dot_muted,
         )
         views.setInt(
