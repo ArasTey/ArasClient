@@ -76,7 +76,7 @@ class ServerAetherActivity : BaseServerActivity() {
         val scope = rememberCoroutineScope()
         val uiState = rememberSaveable(saver = ServerUiState.Saver) {
             ServerUiState.from(initialConfig = initialConfig).apply {
-                if (intent.getBooleanExtra("presetPsiphonCdn", false) && initialConfig == null) {
+                if (intent.getBooleanExtra("presetPsiphonCdn", false) && editGuid.isEmpty()) {
                     remarks = "Psiphon CDN"
                     aetherProtocol = "wg"
                     aetherPsiphon = "only"
