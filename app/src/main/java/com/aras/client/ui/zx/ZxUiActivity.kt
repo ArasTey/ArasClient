@@ -67,6 +67,7 @@ import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.core.LauncherManager
 import com.aras.client.enums.PermissionType
+import com.aras.client.enums.EConfigType
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.handler.MmkvManager
 import com.aras.client.handler.SettingsManager
@@ -82,6 +83,8 @@ import com.aras.client.ui.repair.ConfigRepairActivity
 import com.aras.client.ui.dns.DnsChangerActivity
 import com.aras.client.ui.dns.DnsScannerActivity
 import com.aras.client.ui.main.MainActivity
+import com.aras.client.ui.server.ProfileEditorResult
+import com.aras.client.ui.server.ServerAetherActivity
 import com.aras.client.ui.compose.AuroraGlassCard
 import com.aras.client.ui.compose.AuroraLinkState
 import com.aras.client.ui.compose.AuroraSentinelRadar
@@ -94,6 +97,33 @@ class ZxUiActivity : HelperBaseComponentActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) startVpnService()
         }
+
+    private val profileEditorLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != RESULT_OK) return@registerForActivityResult
+            val data = result.data ?: return@registerForActivityResult
+            val action = data.getStringExtra(ProfileEditorResult.EXTRA_ACTION)
+                ?: return@registerForActivityResult
+            if (action != ProfileEditorResult.ACTION_SAVED &&
+                action != ProfileEditorResult.ACTION_DELETED
+            ) return@registerForActivityResult
+            val restartService = data.getBooleanExtra(
+                ProfileEditorResult.EXTRA_RESTART_SERVICE, false
+            )
+            val selectedProfileSaved = action == ProfileEditorResult.ACTION_SAVED &&
+                data.getStringExtra(ProfileEditorResult.EXTRA_GUID) == mainViewModel.uiState.value.selectedGuid
+            mainViewModel.onAction(MainAction.RefreshGroups)
+            if (restartService || selectedProfileSaved) LauncherManager.restartService(this)
+        }
+
+    private fun openPsiphonCdnPreset() {
+        val intent = Intent(this, ServerAetherActivity::class.java).apply {
+            putExtra("createConfigType", EConfigType.AETHER.value)
+            putExtra("subscriptionId", mainViewModel.uiState.value.selectedGroupId)
+            putExtra("presetPsiphonCdn", true)
+        }
+        profileEditorLauncher.launch(intent)
+    }
 
     private fun selectServer(guid: String) {
         val wasRunning = mainViewModel.uiState.value.isRunning
@@ -140,6 +170,7 @@ class ZxUiActivity : HelperBaseComponentActivity() {
             onExit = { startActivity(Intent(this, MainActivity::class.java)); finish() },
             onSelectServer = ::selectServer,
             onOpen = { activity -> startActivity(Intent(this, activity)) },
+            onOpenPsiphonCdn = ::openPsiphonCdnPreset,
         )
     }
 }
@@ -158,6 +189,7 @@ private fun ZxUiScreen(
     onExit: () -> Unit,
     onOpen: (Class<out android.app.Activity>) -> Unit,
     onSelectServer: (String) -> Unit,
+    onOpenPsiphonCdn: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val screenTransition by ThemeManager.screenTransition.collectAsState()
@@ -302,7 +334,11 @@ private fun ZxUiScreen(
                                 onGroup = { viewModel.onAction(MainAction.SelectGroup(it)) },
                                 onServer = onSelectServer,
                             )
-                            ZxTab.Tools -> ZxToolsPage(onOpen) { onOpen(MainActivity::class.java) }
+                            ZxTab.Tools -> ZxToolsPage(
+                                onOpen = onOpen,
+                                onManageConfigs = { onOpen(MainActivity::class.java) },
+                                onPsiphonCdn = onOpenPsiphonCdn,
+                            )
                             ZxTab.Settings -> Unit
                         }
                     }
@@ -603,7 +639,7 @@ private fun ZxServersPage(
 }
 
 @Composable
-private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit, onManageConfigs: () -> Unit) {
+private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit, onManageConfigs: () -> Unit, onPsiphonCdn: () -> Unit) {
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -615,6 +651,7 @@ private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit, onMan
         ZxQuickTile("تعمیر کانفیگ", "بررسی و اصلاح پروفایل", Modifier.fillMaxWidth()) { onOpen(ConfigRepairActivity::class.java) }
         ZxQuickTile("تغییر DNS", "مدیریت DNS محلی", Modifier.fillMaxWidth()) { onOpen(DnsChangerActivity::class.java) }
         ZxQuickTile("اسکنر DNS", "پیدا کردن و بررسی Resolverها", Modifier.fillMaxWidth()) { onOpen(DnsScannerActivity::class.java) }
+        ZxQuickTile("Psiphon CDN", "ساخت پروفایل مستقل سایفون", Modifier.fillMaxWidth(), onPsiphonCdn)
         ZxQuickTile("مدیریت و افزودن کانفیگ", "QR، فایل، کلیپ‌بورد، لینک و اشتراک‌ها", Modifier.fillMaxWidth(), onManageConfigs)
     }
 }
