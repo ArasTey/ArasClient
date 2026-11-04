@@ -76,6 +76,10 @@ import com.aras.client.ui.repair.ConfigRepairActivity
 import com.aras.client.ui.dns.DnsChangerActivity
 import com.aras.client.ui.dns.DnsScannerActivity
 import com.aras.client.ui.main.MainActivity
+import com.aras.client.ui.compose.AuroraGlassCard
+import com.aras.client.ui.compose.AuroraLinkState
+import com.aras.client.ui.compose.AuroraSentinelRadar
+import com.aras.client.ui.compose.AuroraStatusPill
 import com.aras.client.ui.settings.SettingsActivity
 
 class ZxUiActivity : HelperBaseComponentActivity() {
@@ -135,6 +139,7 @@ class ZxUiActivity : HelperBaseComponentActivity() {
 
 private enum class ZxTab(val label: String, val marker: String) {
     Home("خانه", "⌂"),
+    Connection("اتصال", "◉"),
     Servers("سرورها", "◎"),
     Tools("ابزارها", "✦"),
     Settings("تنظیمات", "⚙"),
@@ -246,8 +251,20 @@ private fun ZxUiScreen(
                         when (page) {
                             ZxTab.Home -> ZxHomePage(
                                 isRunning = state.isRunning,
+                                isTesting = state.isTesting,
                                 profile = selectedProfile,
                                 onToggle = ::toggleVpnConnection,
+                                onServers = { tab = ZxTab.Servers },
+                                onConnection = { tab = ZxTab.Connection },
+                                onMap = { onOpen(ConnectionMapActivity::class.java) },
+                                onMonitor = { onOpen(LiveMonitorActivity::class.java) },
+                            )
+                            ZxTab.Connection -> ZxConnectionPage(
+                                isRunning = state.isRunning,
+                                isTesting = state.isTesting,
+                                profile = selectedProfile,
+                                onToggle = ::toggleVpnConnection,
+                                onTest = { viewModel.testCurrentServerRealPing() },
                                 onServers = { tab = ZxTab.Servers },
                                 onMap = { onOpen(ConnectionMapActivity::class.java) },
                                 onMonitor = { onOpen(LiveMonitorActivity::class.java) },
@@ -282,9 +299,11 @@ private fun ZxUiScreen(
 @Composable
 private fun ZxHomePage(
     isRunning: Boolean,
+    isTesting: Boolean,
     profile: ProfileItem?,
     onToggle: () -> Unit,
     onServers: () -> Unit,
+    onConnection: () -> Unit,
     onMap: () -> Unit,
     onMonitor: () -> Unit,
 ) {
@@ -297,6 +316,26 @@ private fun ZxHomePage(
         modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(218.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AuroraSentinelRadar(
+                state = when {
+                    isRunning -> AuroraLinkState.CONNECTED
+                    isTesting -> AuroraLinkState.CONNECTING
+                    else -> AuroraLinkState.OFF
+                },
+                contacts = emptyList(),
+                centerLabel = when {
+                    isRunning -> "ONLINE"
+                    isTesting -> "CHECKING"
+                    else -> "RADAR READY"
+                },
+                centerSubtitle = profile?.remarks?.take(24) ?: "SELECT A SERVER",
+                modifier = Modifier.size(218.dp),
+            )
+        }
         Text(
             "اتصال امن، با کنترل کامل",
             style = MaterialTheme.typography.titleLarge,
@@ -349,6 +388,13 @@ private fun ZxHomePage(
                     shape = RoundedCornerShape(18.dp),
                 ) {
                     Text(if (isRunning) "قطع اتصال" else "اتصال VPN", fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = onConnection,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Text("جزئیات اتصال")
                 }
                 OutlinedButton(
                     onClick = onServers,
