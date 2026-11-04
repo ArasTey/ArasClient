@@ -141,10 +141,7 @@ jobs:
         with:
           packages: platform-tools
       - name: Install Android platform and build tools
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Use hosted Android compile SDK
-        run: sed -i 's/compileSdk = 37/compileSdk = 36/' app/build.gradle.kts
+        run: sdkmanager "platforms;android-37" "build-tools;37.0.0"
 
       - name: Verify source contracts for integrated features
         run: bash .github/scripts/radar-feature-contracts.sh
