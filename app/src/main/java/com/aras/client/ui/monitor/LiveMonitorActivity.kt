@@ -75,6 +75,7 @@ private data class MonitorSample(
 @Composable
 private fun LiveMonitorScreen(onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val monitorStartedAt = remember { SystemClock.elapsedRealtime() }
     var sample by remember { mutableStateOf<MonitorSample?>(null) }
     val cpuHistory = remember { mutableStateListOf<Float>() }
     val ramHistory = remember { mutableStateListOf<Float>() }
@@ -134,7 +135,7 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
                     .getOrNull()
             } else sample?.thermalHeadroom
             val threads = runCatching { java.io.File("/proc/self/task").list()?.size ?: 0 }.getOrDefault(0)
-            val elapsed = SystemClock.elapsedRealtime() / 1000
+            val processStartedAt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {\n                Process.getStartElapsedRealtime()\n            } else monitorStartedAt\n            val elapsed = (SystemClock.elapsedRealtime() - processStartedAt).coerceAtLeast(0L) / 1000
             val uptime = String.format(
                 Locale.getDefault(), "%02d:%02d:%02d",
                 elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60
