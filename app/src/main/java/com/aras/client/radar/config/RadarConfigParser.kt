@@ -38,9 +38,9 @@ object RadarConfigParser {
             val compact = raw.filterNot(Char::isWhitespace)
             if (compact.length in 24..2_000_000) add(compact)
             raw.lineSequence()
-                .map(String::trim)
+                .map { it.trim() }
                 .filter { it.length in 24..2_000_000 && !it.contains("://") }
-                .forEach(::add)
+                .forEach { add(it) }
         }.distinct()
 
         encodedInputs.forEach { encoded ->
