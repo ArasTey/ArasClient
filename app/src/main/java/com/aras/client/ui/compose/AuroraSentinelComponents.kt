@@ -139,6 +139,8 @@ fun AuroraSentinelRadar(
     val accent = state.accent()
     val surface = MaterialTheme.colorScheme.surface
     val background = MaterialTheme.colorScheme.background
+    val errorColor = MaterialTheme.colorScheme.error
+    val primaryColor = MaterialTheme.colorScheme.primary
     val transition = rememberInfiniteTransition(label = "aurora-radar")
     val sweepAngle by transition.animateFloat(
         initialValue = 0f,
@@ -250,9 +252,9 @@ fun AuroraSentinelRadar(
                     val ping = contact.pingMs
                     val pointColor = when {
                         !contact.tested -> Color(0xFFFFC56E)
-                        !contact.profileResponding -> MaterialTheme.colorScheme.error
-                        ping == null || ping < 0 -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.primary
+                        !contact.profileResponding -> errorColor
+                        ping == null || ping < 0 -> errorColor
+                        else -> primaryColor
                     }
                     val radial = if (ping == null || ping < 0) {
                         0.91f
