@@ -95,27 +95,29 @@ object NpvCrypto {
      * Decrypts NPVT1's comma-separated White-Box AES-CTR chunks.
      * The table payload is the MIT-licensed NPV//FORGE compatibility dataset.
      */
-    fun decryptNpvt1Chunks(container: ByteArray, tablesJson: String): List<ByteArray>? = runCatching {
-        val text = String(container, StandardCharsets.UTF_8).trim()
-        if (!text.startsWith("NPVT1")) return null
-        val payload = text.removePrefix("NPVT1").trimStart()
-        if (payload.isBlank()) return null
-        val tables = parseLegacyTables(tablesJson)
-        val chunks = payload.split(',').map { token ->
-            val value = token.trim()
-            require(value.isNotEmpty())
-            val decoded = if (value.length % 2 == 0 && value.matches(Regex("[0-9a-fA-F]+"))) {
-                ByteArray(value.length / 2) { i -> value.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
-            } else {
-                var normalized = value.replace('-', '+').replace('_', '/')
-                normalized += "=".repeat((4 - normalized.length % 4) % 4)
-                Base64.getDecoder().decode(normalized)
+    fun decryptNpvt1Chunks(container: ByteArray, tablesJson: String): List<ByteArray>? {
+        if (container.isEmpty()) return null
+        return runCatching {
+            val text = String(container, StandardCharsets.UTF_8).trim()
+            require(text.startsWith("NPVT1"))
+            val payload = text.removePrefix("NPVT1").trimStart()
+            require(payload.isNotBlank())
+            val tables = parseLegacyTables(tablesJson)
+            payload.split(',').map { token ->
+                val value = token.trim()
+                require(value.isNotEmpty())
+                val decoded = if (value.length % 2 == 0 && value.matches(Regex("[0-9a-fA-F]+"))) {
+                    ByteArray(value.length / 2) { i -> value.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+                } else {
+                    var normalized = value.replace('-', '+').replace('_', '/')
+                    normalized += "=".repeat((4 - normalized.length % 4) % 4)
+                    Base64.getDecoder().decode(normalized)
+                }
+                require(decoded.size >= 16)
+                decryptLegacyCtr(decoded, tables)
             }
-            require(decoded.size >= 16)
-            decryptLegacyCtr(decoded, tables)
-        }
-        chunks
-    }.getOrNull()
+        }.getOrNull()
+    }
 
     internal fun encryptLegacyChunkForTest(plain: ByteArray, nonce: ByteArray, tablesJson: String): ByteArray {
         require(nonce.size == 16)
