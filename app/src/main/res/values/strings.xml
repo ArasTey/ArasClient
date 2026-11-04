@@ -908,4 +908,53 @@
     <string name="app_icon_calculator">Calculator</string>
     <string name="calculator_launcher_label">Calculator</string>
     <string name="calculator_access_code">Access code (4–12 digits; hold AC to restore icon)</string>
+
+    <!-- Live monitor -->
+    <string name="monitor_open">Live Monitor</string>
+    <string name="monitor_title">Live Monitor</string>
+    <string name="monitor_back">Back</string>
+    <string name="monitor_collecting">Collecting device metrics…</string>
+    <string name="monitor_cpu">CPU · app process</string>
+    <string name="monitor_ram">RAM · app process</string>
+    <string name="monitor_battery">Battery</string>
+    <string name="monitor_unavailable">Unavailable</string>
+    <string name="monitor_current_value">Current: %1$s</string>
+    <string name="monitor_temperature_value">Temperature: %1$s</string>
+    <string name="monitor_thermal">Thermal</string>
+    <string name="monitor_headroom_value">Thermal headroom: %1$s</string>
+    <string name="monitor_headroom_waiting">Not available yet</string>
+    <string name="monitor_headroom_hint">Headroom is sampled every 10 seconds where supported by Android.</string>
+    <string name="monitor_process">Process</string>
+    <string name="monitor_threads">%1$d threads</string>
+    <string name="monitor_uptime">Process uptime: %1$s</string>
+    <string name="monitor_process_note">CPU and RAM values refer to RADAR VPN, not total device usage.</string>
+    <string name="monitor_crypto">Cryptography provider</string>
+    <string name="monitor_crypto_note">Provider availability is shown; Android does not expose a reliable generic flag for hardware acceleration.</string>
+    <string name="monitor_android10_required">Android 10+ required</string>
+    <string name="monitor_thermal_normal">Normal</string>
+    <string name="monitor_thermal_light">Light</string>
+    <string name="monitor_thermal_moderate">Moderate</string>
+    <string name="monitor_thermal_severe">Severe</string>
+    <string name="monitor_thermal_critical">Critical</string>
+    <string name="monitor_thermal_emergency">Emergency</string>
+    <string name="monitor_thermal_shutdown">Shutdown</string>
+    <!-- Connection map -->
+    <string name="map_open">VPN Connection Map</string>
+    <string name="map_title">VPN Connection Map</string>
+    <string name="map_back">Back</string>
+    <string name="map_network_locations">Network locations</string>
+    <string name="map_capture_instructions">Before connecting, tap Capture network location. After connecting, tap Refresh VPN exit.</string>
+    <string name="map_origin">Origin: %1$s</string>
+    <string name="map_exit">Exit: %1$s</string>
+    <string name="map_ip">IP lookup: %1$s</string>
+    <string name="map_not_captured">Not captured</string>
+    <string name="map_no_ip">—</string>
+    <string name="map_lookup_loading">Looking up public IP…</string>
+    <string name="map_refresh_exit">Refresh VPN exit</string>
+    <string name="map_capture_network">Capture network location</string>
+    <string name="map_lookup_failed">IP location lookup failed</string>
+    <string name="map_disclaimer">Locations are estimated from public IP addresses, not GPS. IP lookup sends your public IP to ipwho.is. The route is illustrative, not the physical path taken by packets.</string>
+    <string name="map_origin_marker">Origin network</string>
+    <string name="map_exit_marker">VPN exit</string>
+
 </resources>
