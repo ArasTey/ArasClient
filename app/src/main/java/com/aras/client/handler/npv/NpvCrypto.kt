@@ -1,5 +1,6 @@
 package com.aras.client.handler.npv
 
+import com.google.gson.JsonParser
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -88,6 +89,143 @@ object NpvCrypto {
     fun be32(b: ByteArray, off: Int): Int {
         if (off + 4 > b.size) return 0
         return ByteBuffer.wrap(b, off, 4).order(ByteOrder.BIG_ENDIAN).int
+    }
+
+    /**
+     * Decrypts NPVT1's comma-separated White-Box AES-CTR chunks.
+     * The table payload is the MIT-licensed NPV//FORGE compatibility dataset.
+     */
+    fun decryptNpvt1Chunks(container: ByteArray, tablesJson: String): List<ByteArray>? = runCatching {
+        val text = String(container, StandardCharsets.UTF_8).trim()
+        if (!text.startsWith("NPVT1")) return null
+        val payload = text.removePrefix("NPVT1").trimStart()
+        if (payload.isBlank()) return null
+        val tables = parseLegacyTables(tablesJson)
+        val chunks = payload.split(',').map { token ->
+            val value = token.trim()
+            require(value.isNotEmpty())
+            val decoded = if (value.length % 2 == 0 && value.matches(Regex("[0-9a-fA-F]+"))) {
+                ByteArray(value.length / 2) { i -> value.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+            } else {
+                var normalized = value.replace('-', '+').replace('_', '/')
+                normalized += "=".repeat((4 - normalized.length % 4) % 4)
+                Base64.getDecoder().decode(normalized)
+            }
+            require(decoded.size >= 16)
+            decryptLegacyCtr(decoded, tables)
+        }
+        chunks
+    }.getOrNull()
+
+    internal fun encryptLegacyChunkForTest(plain: ByteArray, nonce: ByteArray, tablesJson: String): ByteArray {
+        require(nonce.size == 16)
+        val tables = parseLegacyTables(tablesJson)
+        val encrypted = cryptLegacyCtr(plain, nonce, tables)
+        return nonce + encrypted
+    }
+
+    private data class LegacyTables(
+        val shift: IntArray,
+        val ty: Array<LongArray>,
+        val mbl: Array<LongArray>,
+        val last: Array<IntArray>,
+        val xor: Array<Array<IntArray>>,
+    )
+
+    private fun parseLegacyTables(json: String): LegacyTables {
+        val root = JsonParser.parseString(json).asJsonObject
+        fun longRows(name: String): Array<LongArray> =
+            root.getAsJsonArray(name).map { row ->
+                row.asJsonArray.map { it.asLong }.toLongArray()
+            }.toTypedArray()
+        fun intRows(name: String): Array<IntArray> =
+            root.getAsJsonArray(name).map { row ->
+                row.asJsonArray.map { it.asInt }.toIntArray()
+            }.toTypedArray()
+        val xor = root.getAsJsonArray("xorTable").map { plane ->
+            plane.asJsonArray.map { row ->
+                row.asJsonArray.map { it.asInt }.toIntArray()
+            }.toTypedArray()
+        }.toTypedArray()
+        return LegacyTables(
+            shift = root.getAsJsonArray("shiftOrder").map { it.asInt }.toIntArray(),
+            ty = longRows("tyBoxes"),
+            mbl = longRows("mbl"),
+            last = intRows("tboxesLast"),
+            xor = xor,
+        ).also {
+            require(it.shift.size == 16 && it.ty.size == 16 && it.mbl.size == 16 &&
+                it.last.size == 16 && it.xor.size == 96)
+        }
+    }
+
+    private fun decryptLegacyCtr(encrypted: ByteArray, tables: LegacyTables): ByteArray {
+        val nonce = encrypted.copyOfRange(0, 16)
+        return cryptLegacyCtr(encrypted.copyOfRange(16, encrypted.size), nonce, tables)
+    }
+
+    private fun cryptLegacyCtr(input: ByteArray, nonce: ByteArray, tables: LegacyTables): ByteArray {
+        val counter = nonce.copyOf()
+        val output = ByteArray(input.size)
+        var offset = 0
+        while (offset < input.size) {
+            val keyStream = legacyCoreTransform(counter, tables)
+            for (i in 0 until minOf(16, input.size - offset)) {
+                output[offset + i] = (input[offset + i].toInt() xor keyStream[i].toInt()).toByte()
+            }
+            for (i in 15 downTo 0) {
+                counter[i] = ((counter[i].toInt() and 0xff) + 1).toByte()
+                if (counter[i] != 0.toByte()) break
+            }
+            offset += 16
+        }
+        return output
+    }
+
+    private fun legacyCoreTransform(input: ByteArray, tables: LegacyTables): ByteArray {
+        fun shift(source: ByteArray) = ByteArray(16) { i -> source[tables.shift[i]] }
+        val buffer = shift(input)
+        for (group in 0 until 4) {
+            val base = group * 4
+            val a = tables.ty[base][buffer[base].toInt() and 0xff]
+            val b = tables.ty[base + 1][buffer[base + 1].toInt() and 0xff]
+            val c = tables.ty[base + 2][buffer[base + 2].toInt() and 0xff]
+            val d = tables.ty[base + 3][buffer[base + 3].toInt() and 0xff]
+            for (column in 0 until 4) {
+                val t = group * 24 + column * 6
+                val highShift = 28 - column * 8
+                val lowShift = 24 - column * 8
+                val p1 = tables.xor[t][((a ushr highShift) and 15).toInt()][((b ushr highShift) and 15).toInt()]
+                val p2 = tables.xor[t + 1][((c ushr highShift) and 15).toInt()][((d ushr highShift) and 15).toInt()]
+                val p3 = tables.xor[t + 2][((a ushr lowShift) and 15).toInt()][((b ushr lowShift) and 15).toInt()]
+                val p4 = tables.xor[t + 3][((c ushr lowShift) and 15).toInt()][((d ushr lowShift) and 15).toInt()]
+                val low = tables.xor[t + 5][p3][p4]
+                val high = tables.xor[t + 4][p1][p2]
+                buffer[base + column] = (low or (high shl 4)).toByte()
+            }
+
+            val a2 = tables.mbl[base][buffer[base].toInt() and 0xff]
+            val b2 = tables.mbl[base + 1][buffer[base + 1].toInt() and 0xff]
+            val c2 = tables.mbl[base + 2][buffer[base + 2].toInt() and 0xff]
+            val d2 = tables.mbl[base + 3][buffer[base + 3].toInt() and 0xff]
+            for (column in 0 until 4) {
+                val t = group * 24 + column * 6
+                val highShift = 28 - column * 8
+                val lowShift = 24 - column * 8
+                val p1 = tables.xor[t][((a2 ushr highShift) and 15).toInt()][((b2 ushr highShift) and 15).toInt()]
+                val p2 = tables.xor[t + 1][((c2 ushr highShift) and 15).toInt()][((d2 ushr highShift) and 15).toInt()]
+                val p3 = tables.xor[t + 2][((a2 ushr lowShift) and 15).toInt()][((b2 ushr lowShift) and 15).toInt()]
+                val p4 = tables.xor[t + 3][((c2 ushr lowShift) and 15).toInt()][((d2 ushr lowShift) and 15).toInt()]
+                val high = tables.xor[t + 4][p1][p2]
+                val low = tables.xor[t + 5][p3][p4]
+                buffer[base + column] = ((high shl 4) or low).toByte()
+            }
+        }
+        val shifted = shift(buffer)
+        for (i in 0 until 16) {
+            shifted[i] = tables.last[i][shifted[i].toInt() and 0xff].toByte()
+        }
+        return shifted
     }
 
     /**
