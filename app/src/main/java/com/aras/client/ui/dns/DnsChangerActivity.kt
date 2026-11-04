@@ -56,6 +56,8 @@ import com.aras.client.core.LauncherManager
 import com.aras.client.core.CoreServiceManager
 import com.aras.client.ui.base.BaseComponentActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -82,6 +84,7 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
     var secondary by remember { mutableStateOf(active?.secondary.orEmpty()) }
     var customName by remember { mutableStateOf("My DNS") }
     var testing by remember { mutableStateOf(false) }
+    var testingAll by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var showStandaloneInfo by remember { mutableStateOf(false) }
@@ -240,6 +243,42 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
                         Text("Save")
                     }
                 }
+                Button(
+                    enabled = !testing && !testingAll && profiles.isNotEmpty(),
+                    onClick = {
+                        testingAll = true
+                        testResult = "Testing resolver catalogue…"
+                        val candidates = profiles.toList()
+                        scope.launch {
+                            val results = withContext(Dispatchers.IO) {
+                                candidates.map { profile ->
+                                    async {
+                                        profile to runCatching {
+                                            DnsLatencyProbe.test(profile.primary, 1400)
+                                        }.getOrNull()
+                                    }
+                                }.awaitAll()
+                            }
+                            val fastest = results.filter { it.second != null }
+                                .minByOrNull { it.second!! }
+                            if (fastest != null) {
+                                primary = fastest.first.primary
+                                secondary = fastest.first.secondary
+                                selectedName = fastest.first.name
+                                testResult = "Fastest responding DNS: ${fastest.first.name} • ${fastest.second} ms"
+                            } else {
+                                testResult = "No DNS resolver answered on UDP/53"
+                            }
+                            testingAll = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (testingAll) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Rounded.Speed, contentDescription = null)
+                    Spacer(Modifier.size(6.dp))
+                    Text("AUTO FASTEST • TEST ALL")
+                }
                 testResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             item {
@@ -293,7 +332,7 @@ private fun DnsChangerScreen(onBack: () -> Unit) {
             onDismissRequest = { showStandaloneInfo = false },
             title = { Text("DNS profile saved") },
             text = {
-                Text("The DNS profile is ready and will be used by the next Radar VPN tunnel. A separate no-config local VPN engine is still required to route all game traffic without importing a VPN configuration.")
+                Text("The DNS profile is saved. It can be applied to the Radar VPN tunnel. Standalone mode still needs its own local packet-forwarding engine before it can carry game traffic without a VPN configuration.")
             },
             confirmButton = {
                 TextButton(onClick = { showStandaloneInfo = false }) { Text("OK") }

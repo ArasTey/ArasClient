@@ -23,12 +23,40 @@ object DnsChangerStore {
     const val PRIMARY_KEY = "dns_changer_primary"
     const val SECONDARY_KEY = "dns_changer_secondary"
 
+    // Curated resolver catalogue inspired by the category and validation approach
+    // documented by Hadooshi/Iran-DNS-Toolbox. Regional resolvers are ISP-dependent.
     val presets = listOf(
-        DnsProfile("Cloudflare", "1.1.1.1", "1.0.0.1", "Global"),
-        DnsProfile("Google", "8.8.8.8", "8.8.4.4", "Global"),
-        DnsProfile("Quad9", "9.9.9.9", "149.112.112.112", "Security"),
-        DnsProfile("AdGuard DNS", "94.140.14.14", "94.140.15.15", "Ad blocking"),
-        DnsProfile("Shecan", "178.22.122.100", "185.51.200.2", "Iran"),
+        DnsProfile("Radar Game", "10.202.10.10", "10.202.10.11", "Iran • Gaming"),
+        DnsProfile("Electro", "78.157.42.100", "78.157.42.101", "Iran • Gaming"),
+        DnsProfile("Shecan", "178.22.122.100", "185.51.200.2", "Iran • Anti-sanction"),
+        DnsProfile("Shecan Pro", "178.22.122.101", "185.51.200.1", "Iran • Account / IP registration"),
+        DnsProfile("Begzar", "185.55.226.26", "185.55.225.25", "Iran • Gaming / Web"),
+        DnsProfile("Begzar 2", "185.55.224.24", "185.55.225.25", "Iran • Gaming / Web"),
+        DnsProfile("403 Online", "10.202.10.202", "10.202.10.102", "Iran • Regional"),
+        DnsProfile("Vanilla", "10.139.177.21", "10.139.177.22", "Iran • Regional"),
+        DnsProfile("HostIran", "172.29.0.100", "172.29.2.100", "Iran • Regional"),
+        DnsProfile("Shelter", "94.103.125.157", "94.103.125.158", "Iran • Gaming"),
+        DnsProfile("Beshkan", "181.41.194.177", "181.41.194.186", "Iran • Anti-sanction"),
+        DnsProfile("Pishgaman", "5.202.100.100", "5.202.100.101", "Iran • ISP"),
+        DnsProfile("Shatel", "85.15.1.14", "85.15.1.15", "Iran • ISP"),
+        DnsProfile("Pars Online", "91.99.101.12", "", "Iran • ISP"),
+        DnsProfile("AbrBaran", "172.16.1.100", "172.16.2.100", "Iran • Regional"),
+        DnsProfile("Cloudflare", "1.1.1.1", "1.0.0.1", "Global • Public"),
+        DnsProfile("Cloudflare Malware", "1.1.1.2", "1.0.0.2", "Global • Security"),
+        DnsProfile("Cloudflare Family", "1.1.1.3", "1.0.0.3", "Global • Family"),
+        DnsProfile("Google", "8.8.8.8", "8.8.4.4", "Global • Public"),
+        DnsProfile("OpenDNS", "208.67.222.222", "208.67.220.220", "Global • Security"),
+        DnsProfile("Quad9", "9.9.9.9", "149.112.112.112", "Global • Security"),
+        DnsProfile("Quad9 No Filter", "9.9.9.10", "149.112.112.10", "Global • Privacy"),
+        DnsProfile("AdGuard DNS", "94.140.14.14", "94.140.15.15", "Global • Ad blocking"),
+        DnsProfile("AdGuard Family", "94.140.14.15", "94.140.15.16", "Global • Family"),
+        DnsProfile("Control D", "76.76.2.0", "76.76.10.0", "Global • Public"),
+        DnsProfile("CleanBrowsing Security", "185.228.168.9", "185.228.169.9", "Global • Security"),
+        DnsProfile("DNS.WATCH", "84.200.69.80", "84.200.70.40", "Global • Privacy"),
+        DnsProfile("Verisign", "64.6.64.6", "64.6.65.6", "Global • Public"),
+        DnsProfile("Mullvad", "194.242.2.2", "", "Global • Privacy"),
+        DnsProfile("LibreDNS", "116.202.176.26", "", "Global • Privacy"),
+        DnsProfile("DNS.SB", "185.222.222.222", "45.11.45.11", "Global • Privacy"),
     )
 
     fun customProfiles(): List<DnsProfile> {
