@@ -257,7 +257,7 @@ fun ConfigCard(
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    "‪${maskHost(server.host)}:${server.port}‬",
+                    androidx.core.text.BidiFormatter.getInstance().unicodeWrap("${maskHost(server.host)}:${server.port}"),
                     color = c.textSecondary,
                     fontSize = 12.5.sp,
                     fontFamily = FontFamily.Monospace,
