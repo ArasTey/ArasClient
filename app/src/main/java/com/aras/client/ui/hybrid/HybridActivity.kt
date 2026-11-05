@@ -269,7 +269,7 @@ private fun HybridScreen(
                     )
                     Text(
                         text = statusMessage
-                            ?: statusResource?.let { context.getString(it) }
+                            ?: statusResource?.let { stringResource(id = it) }
                             ?: stringResource(R.string.hybrid_status_idle),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
