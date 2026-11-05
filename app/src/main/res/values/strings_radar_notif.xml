@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="notification_action_disconnect">Disconnect</string>
     <string name="notification_action_restart">Restart</string>
     <string name="radar_notif_title_connecting">RADAR · Connecting…</string>
