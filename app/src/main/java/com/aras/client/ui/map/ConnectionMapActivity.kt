@@ -60,6 +60,7 @@ class ConnectionMapActivity : BaseComponentActivity() {
 @Composable
 private fun ConnectionMapScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val lookupFailedMessage = stringResource(R.string.map_lookup_failed)
     val scope = rememberCoroutineScope()
     var origin by remember { mutableStateOf(readSavedPlace(context, "origin")) }
     var exit by remember { mutableStateOf(readSavedPlace(context, "exit")) }
@@ -97,7 +98,7 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                 }
                 refreshMap()
             } catch (exception: Exception) {
-                error = exception.message ?: context.getString(R.string.map_lookup_failed)
+                error = exception.message ?: lookupFailedMessage
             } finally {
                 loading = false
             }
