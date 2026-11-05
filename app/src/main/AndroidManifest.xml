@@ -53,6 +53,19 @@
         android:theme="@style/AppThemeDayNight.NoActionBar"
         android:usesCleartextTraffic="true">
 
+        <!-- Keep AndroidX Startup available for other libraries, but disable WorkManager's
+             automatic initializer because AngApplication supplies Configuration.Provider. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <activity
             android:name=".ui.zx.ZxUiActivity"
             android:exported="false" />
