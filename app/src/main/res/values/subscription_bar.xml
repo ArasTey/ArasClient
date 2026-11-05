@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Missing locale entries intentionally use Android's default-resource fallback. -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="sub_bar_update">Update subscription</string>
     <string name="sub_bar_delete_final">Final confirmation</string>
