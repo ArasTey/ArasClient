@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -67,7 +68,8 @@ private object BelowAnchorStart : PopupPositionProvider {
 /** منوی بازشونده‌ی شیشه‌ای که محتوای آن همان آیتم‌های واقعی برنامه است. */
 @Composable
 fun RdrGlassPopup(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    val appDir = if (LocalContext.current.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
+    val configuration = LocalConfiguration.current
+    val appDir = if (configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
         LayoutDirection.Rtl
     } else {
         LayoutDirection.Ltr
