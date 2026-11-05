@@ -70,6 +70,20 @@ private data class MonitorSample(
 private fun LiveMonitorScreen(onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    val monitorBatteryCharging = stringResource(R.string.monitor_battery_charging)
+    val monitorBatteryDischarging = stringResource(R.string.monitor_battery_discharging)
+    val monitorBatteryFull = stringResource(R.string.monitor_battery_full)
+    val monitorBatteryNotCharging = stringResource(R.string.monitor_battery_not_charging)
+    val monitorUnavailable = stringResource(R.string.monitor_unavailable)
+    val monitorThermalNormal = stringResource(R.string.monitor_thermal_normal)
+    val monitorThermalLight = stringResource(R.string.monitor_thermal_light)
+    val monitorThermalModerate = stringResource(R.string.monitor_thermal_moderate)
+    val monitorThermalSevere = stringResource(R.string.monitor_thermal_severe)
+    val monitorThermalCritical = stringResource(R.string.monitor_thermal_critical)
+    val monitorThermalEmergency = stringResource(R.string.monitor_thermal_emergency)
+    val monitorThermalShutdown = stringResource(R.string.monitor_thermal_shutdown)
+    val monitorAndroid10Required = stringResource(R.string.monitor_android10_required)
+    val monitorProcessUptime = stringResource(R.string.monitor_process_uptime)
     var sample by remember { mutableStateOf<MonitorSample?>(null) }
     val cpuHistory = remember { mutableStateListOf<Float>() }
     val ramHistory = remember { mutableStateListOf<Float>() }
@@ -105,11 +119,11 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
             val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
             val battery = if (level >= 0 && scale > 0) (level * 100 / scale).coerceIn(0, 100) else -1
             val batteryStatus = when (batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1) {
-                BatteryManager.BATTERY_STATUS_CHARGING -> context.getString(R.string.monitor_battery_charging)
-                BatteryManager.BATTERY_STATUS_DISCHARGING -> context.getString(R.string.monitor_battery_discharging)
-                BatteryManager.BATTERY_STATUS_FULL -> context.getString(R.string.monitor_battery_full)
-                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> context.getString(R.string.monitor_battery_not_charging)
-                else -> context.getString(R.string.monitor_unavailable)
+                BatteryManager.BATTERY_STATUS_CHARGING -> monitorBatteryCharging
+                BatteryManager.BATTERY_STATUS_DISCHARGING -> monitorBatteryDischarging
+                BatteryManager.BATTERY_STATUS_FULL -> monitorBatteryFull
+                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> monitorBatteryNotCharging
+                else -> monitorUnavailable
             }
             val tempRaw = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
             val temp = if (tempRaw >= 0) tempRaw / 10f else null
@@ -124,16 +138,16 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
             val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 when (power.currentThermalStatus) {
-                    PowerManager.THERMAL_STATUS_NONE -> context.getString(R.string.monitor_thermal_normal)
-                    PowerManager.THERMAL_STATUS_LIGHT -> context.getString(R.string.monitor_thermal_light)
-                    PowerManager.THERMAL_STATUS_MODERATE -> context.getString(R.string.monitor_thermal_moderate)
-                    PowerManager.THERMAL_STATUS_SEVERE -> context.getString(R.string.monitor_thermal_severe)
-                    PowerManager.THERMAL_STATUS_CRITICAL -> context.getString(R.string.monitor_thermal_critical)
-                    PowerManager.THERMAL_STATUS_EMERGENCY -> context.getString(R.string.monitor_thermal_emergency)
-                    PowerManager.THERMAL_STATUS_SHUTDOWN -> context.getString(R.string.monitor_thermal_shutdown)
-                    else -> context.getString(R.string.monitor_unavailable)
+                    PowerManager.THERMAL_STATUS_NONE -> monitorThermalNormal
+                    PowerManager.THERMAL_STATUS_LIGHT -> monitorThermalLight
+                    PowerManager.THERMAL_STATUS_MODERATE -> monitorThermalModerate
+                    PowerManager.THERMAL_STATUS_SEVERE -> monitorThermalSevere
+                    PowerManager.THERMAL_STATUS_CRITICAL -> monitorThermalCritical
+                    PowerManager.THERMAL_STATUS_EMERGENCY -> monitorThermalEmergency
+                    PowerManager.THERMAL_STATUS_SHUTDOWN -> monitorThermalShutdown
+                    else -> monitorUnavailable
                 }
-            } else context.getString(R.string.monitor_android10_required)
+            } else monitorAndroid10Required
             ticks++
             val headroom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && ticks % 10 == 0) {
                 runCatching { power.getThermalHeadroom(10).takeIf { it.isFinite() && it >= 0f } }
@@ -148,7 +162,7 @@ private fun LiveMonitorScreen(onBack: () -> Unit) {
             )
             sample = MonitorSample(
                 cpu, ramMb, battery, batteryStatus, current, temp, thermal, headroom, threads, uptime,
-                context.getString(R.string.monitor_process_uptime),
+                monitorProcessUptime,
                 cryptoProvider
             )
             cpuHistory.add(cpu)
