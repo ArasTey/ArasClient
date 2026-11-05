@@ -375,7 +375,7 @@ private fun ServerCard(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "‪${maskHost(s.host)}:${s.port}‬",
+                    androidx.core.text.BidiFormatter.getInstance().unicodeWrap("${maskHost(s.host)}:${s.port}"),
                     color = c.textSecondary,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
