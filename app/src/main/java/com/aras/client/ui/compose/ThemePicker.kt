@@ -84,69 +84,13 @@ fun ThemePicker(
     )
     val uiTheme by ThemeManager.uiTheme.collectAsState()
     val uiChoices = listOf(
-        ThemeChoice(
-            value = "default",
-            title = stringResource(R.string.theme_ui_default_title),
-            description = stringResource(R.string.theme_ui_default_summary),
-            background = Color(0xFFFAF6F0),
-            surface = Color(0xFFEFE6DA),
-            accent = Color(0xFF0284C7),
-            foreground = Color(0xFF222226)
-        ),
-        ThemeChoice(
-            value = "radar",
-            title = stringResource(R.string.theme_ui_radar_title),
-            description = stringResource(R.string.theme_ui_radar_summary),
-            background = Color(0xFF020A06),
-            surface = Color(0xFF06150C),
-            accent = Color(0xFF39FF88),
-            foreground = Color(0xFFB8FFD2)
-        ),
-        ThemeChoice(
-            value = "survival",
-            title = stringResource(R.string.theme_ui_survival_title),
-            description = stringResource(R.string.theme_ui_survival_summary),
-            background = Color(0xFF090E0B),
-            surface = Color(0xFF141B15),
-            accent = Color(0xFF9BCB72),
-            foreground = Color(0xFFD8D0B8)
-        ),
-        ThemeChoice(
-            value = "aurora",
-            title = stringResource(R.string.theme_ui_aurora_title),
-            description = stringResource(R.string.theme_ui_aurora_summary),
-            background = Color(0xFF070A0B),
-            surface = Color(0xFF0C1212),
-            accent = Color(0xFF54FFC0),
-            foreground = Color(0xFFF1F8F4)
-        ),
-        ThemeChoice(
-            value = "rdrn",
-            title = "RADAR VPN",
-            description = "Neon radar · six tabs · speed test with SIM and network info · animated bottom bar",
-            background = Color(0xFF040B07),
-            surface = Color(0xFF0A2216),
-            accent = Color(0xFF22E07A),
-            foreground = Color(0xFFE9F3EC)
-        ),
-        ThemeChoice(
-            value = "rdrx",
-            title = "RADAR Glass",
-            description = "Real radar connect button · iOS 26 liquid glass · Apple Watch style menu",
-            background = Color(0xFF05070D),
-            surface = Color(0xFF111A2B),
-            accent = Color(0xFF30D158),
-            foreground = Color(0xFFF5F6FA)
-            ThemeChoice(
-            value = "zx",
-            title = "ZX Liquid",
-            description = "ZX-inspired violet glass · cyan highlights · soft liquid gradients",
-            background = Color(0xFF090817),
-            surface = Color(0xFF1B1730),
-            accent = Color(0xFF8B7CFF),
-            foreground = Color(0xFFF4F1FF)
-        ),
-    ),
+        ThemeChoice("default", stringResource(R.string.theme_ui_default_title), stringResource(R.string.theme_ui_default_summary), Color(0xFFFAF6F0), Color(0xFFEFE6DA), Color(0xFF0284C7), Color(0xFF222226)),
+        ThemeChoice("radar", stringResource(R.string.theme_ui_radar_title), stringResource(R.string.theme_ui_radar_summary), Color(0xFF020A06), Color(0xFF06150C), Color(0xFF39FF88), Color(0xFFB8FFD2)),
+        ThemeChoice("survival", stringResource(R.string.theme_ui_survival_title), stringResource(R.string.theme_ui_survival_summary), Color(0xFF090E0B), Color(0xFF141B15), Color(0xFF9BCB72), Color(0xFFD8D0B8)),
+        ThemeChoice("aurora", stringResource(R.string.theme_ui_aurora_title), stringResource(R.string.theme_ui_aurora_summary), Color(0xFF070A0B), Color(0xFF0C1212), Color(0xFF54FFC0), Color(0xFFF1F8F4)),
+        ThemeChoice("rdrn", "RADAR VPN", "Neon radar · six tabs · speed test and animated navigation", Color(0xFF040B07), Color(0xFF0A2216), Color(0xFF22E07A), Color(0xFFE9F3EC)),
+        ThemeChoice("rdrx", "RADAR Glass", "Liquid glass · radar connect button · translucent surfaces", Color(0xFF05070D), Color(0xFF111A2B), Color(0xFF30D158), Color(0xFFF5F6FA)),
+        ThemeChoice("zx", "ZX Liquid", "Violet glass · cyan highlights · liquid gradients and soft glow", Color(0xFF090817), Color(0xFF1B1730), Color(0xFF8B7CFF), Color(0xFFF4F1FF)),
     )
 
     Column(
