@@ -3,16 +3,15 @@ package com.aras.client.ui.map
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import com.aras.client.ui.base.BaseComponentActivity
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -31,23 +30,28 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.aras.client.R
-import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import androidx.compose.ui.draw.clip
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Locale
 
 private data class IpPlace(
     val ip: String,
     val city: String,
     val country: String,
+    val countryCode: String = "",
     val latitude: Double,
     val longitude: Double
 ) {
     val label: String get() = listOf(city, country).filter { it.isNotBlank() }.joinToString(", ")
+
+    fun toMapPoint(): MapPoint {
+        val grid = WorldMap.gridOf(longitude.toFloat(), latitude.toFloat())
+        return MapPoint(grid.first, grid.second, label, countryCode)
+    }
 }
 
 class ConnectionMapActivity : BaseComponentActivity() {
@@ -66,19 +70,10 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
     var exit by remember { mutableStateOf(readSavedPlace(context, "exit")) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var mapView by remember { mutableStateOf<WebView?>(null) }
+    var countries by remember { mutableStateOf<List<WorldMap.Country>>(emptyList()) }
 
-    fun refreshMap() {
-        val from = origin
-        val to = exit
-        val script = if (from != null && to != null) {
-            "window.setConnectionPoints(${from.latitude},${from.longitude},${to.latitude},${to.longitude});"
-        } else if (from != null) {
-            "window.setConnectionPoints(${from.latitude},${from.longitude},null,null);"
-        } else if (to != null) {
-            "window.setConnectionPoints(null,null,${to.latitude},${to.longitude});"
-        } else "window.setConnectionPoints(null,null,null,null);"
-        mapView?.evaluateJavascript(script, null)
+    LaunchedEffect(context) {
+        countries = withContext(Dispatchers.IO) { WorldMap.countries(context) }
     }
 
     fun locateNetwork() {
@@ -96,7 +91,6 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                     origin = place
                     savePlace(context, "origin", place)
                 }
-                refreshMap()
             } catch (exception: Exception) {
                 error = exception.message ?: lookupFailedMessage
             } finally {
@@ -134,29 +128,24 @@ private fun ConnectionMapScreen(onBack: () -> Unit) {
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
-            AndroidView(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                factory = { viewContext ->
-                    WebView(viewContext).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView, url: String?) {
-                                mapView = view
-                                refreshMap()
-                            }
-                        }
-                        loadDataWithBaseURL(
-                            "https://unpkg.com/",
-                            MAP_HTML,
-                            "text/html",
-                            "UTF-8",
-                            null
-                        )
-                    }
-                },
-                update = { mapView = it }
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp))
+            ) {
+                if (countries.isEmpty()) {
+                    Text("Loading offline world map…", modifier = Modifier.padding(16.dp))
+                } else {
+                    WorldMapCanvas(
+                        countries = countries,
+                        origin = origin?.toMapPoint(),
+                        exit = exit?.toMapPoint(),
+                        accent = MaterialTheme.colorScheme.primary,
+                        originColor = MaterialTheme.colorScheme.secondary,
+                        landColor = MaterialTheme.colorScheme.onSurface,
+                        reduceMotion = false,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         }
     }
 }
@@ -167,6 +156,7 @@ private fun savePlace(context: Context, key: String, place: IpPlace) {
         .put("ip", place.ip)
         .put("city", place.city)
         .put("country", place.country)
+        .put("countryCode", place.countryCode)
         .put("latitude", place.latitude)
         .put("longitude", place.longitude)
         .toString()
@@ -182,6 +172,7 @@ private fun readSavedPlace(context: Context, key: String): IpPlace? = runCatchin
         ip = json.optString("ip", ""),
         city = json.optString("city", ""),
         country = json.optString("country", ""),
+        countryCode = json.optString("countryCode", ""),
         latitude = json.getDouble("latitude"),
         longitude = json.getDouble("longitude")
     )
@@ -216,6 +207,7 @@ private fun lookupPublicIpPlace(): IpPlace {
             ip = json.optString("ip", ""),
             city = json.optString("city", ""),
             country = json.optString("country", ""),
+            countryCode = json.optString("country_code", ""),
             latitude = latitude,
             longitude = longitude
         )
@@ -224,47 +216,3 @@ private fun lookupPublicIpPlace(): IpPlace {
     }
 }
 
-private val MAP_HTML = """
-<!doctype html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>
-html,body,#map{height:100%;width:100%;margin:0;background:#101820}
-.leaflet-container{background:#101820}
-.animated-route{stroke-dasharray:8 10;animation:route-flow 1.2s linear infinite}
-@keyframes route-flow{to{stroke-dashoffset:-18}}
-</style>
-</head>
-<body>
-<div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-const map=L.map('map',{worldCopyJump:true}).setView([22,8],2);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
- maxZoom:18, attribution:'&copy; OpenStreetMap contributors'
-}).addTo(map);
-let originMarker=null,exitMarker=null,route=null;
-window.setConnectionPoints=function(olat,olon,elat,elon){
- if(originMarker){map.removeLayer(originMarker);originMarker=null;}
- if(exitMarker){map.removeLayer(exitMarker);exitMarker=null;}
- if(route){map.removeLayer(route);route=null;}
- const points=[];
- if(olat!==null && olon!==null){
-  const p=[olat,olon]; points.push(p);
-  originMarker=L.marker(p).addTo(map).bindPopup('Origin network');
- }
- if(elat!==null && elon!==null){
-  const p=[elat,elon]; points.push(p);
-  exitMarker=L.marker(p).addTo(map).bindPopup('VPN exit');
- }
- if(points.length===2){
-  route=L.polyline(points,{color:'#31d6b0',weight:3,className:'animated-route'}).addTo(map);
-  map.fitBounds(route.getBounds().pad(0.25));
- }else if(points.length===1){map.setView(points[0],5);}
-};
-</script>
-</body>
-</html>
-""".trimIndent()
