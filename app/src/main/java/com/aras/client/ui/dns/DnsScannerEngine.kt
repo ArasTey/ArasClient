@@ -141,6 +141,9 @@ object DnsScannerEngine {
         checks += runCheck(resolver.primary, "NXDOMAIN", "$randomLabel.invalid", 1, timeoutMs, false, true)
         currentCoroutineContext().ensureActive()
         checks += runCheck(resolver.primary, "DPI heuristic", "probe-$randomLabel.invalid", 1, timeoutMs, false, true)
+        // Route-level secure DNS probes; these do not claim to test the selected UDP resolver.
+        checks += runGoogleDohCheck(timeoutMs)
+        checks += runCloudflareDotCheck(timeoutMs)
         return DnsResolverScanResult(resolver, checks)
     }
 
@@ -204,6 +207,55 @@ object DnsScannerEngine {
         }
     }
 
+    private fun runGoogleDohCheck(timeoutMs: Int): DnsScanCheck {
+        val started = System.nanoTime()
+        var connection: java.net.HttpURLConnection? = null
+        return try {
+            val url = java.net.URL("https://dns.google/resolve?name=example.com&type=A")
+            connection = (url.openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/dns-json")
+                setRequestProperty("User-Agent", "G-ST-VPN-DNS-Scanner")
+            }
+            val code = connection.responseCode
+            val body = (if (code in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val status = org.json.JSONObject(body).optInt("Status", -1)
+            val elapsed = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
+            DnsScanCheck("Google DoH (route)", code == 200 && status == 0, status, elapsed, "DoH/HTTPS", if (code == 200 && status == 0) "Secure DNS endpoint reachable" else "HTTP $code / DNS status $status")
+        } catch (error: Exception) {
+            DnsScanCheck("Google DoH (route)", false, null, null, "DoH/HTTPS", error.message ?: "DoH probe failed")
+        } finally { connection?.disconnect() }
+    }
+
+    private fun runCloudflareDotCheck(timeoutMs: Int): DnsScanCheck {
+        val started = System.nanoTime()
+        val id = Random.nextInt(0, 65536)
+        val query = buildQuery(id, "example.com", 1)
+        return try {
+            val socket = javax.net.ssl.SSLSocketFactory.getDefault().createSocket("one.one.one.one", 853) as javax.net.ssl.SSLSocket
+            socket.use { tls ->
+                tls.soTimeout = timeoutMs
+                tls.connect(InetSocketAddress("one.one.one.one", 853), timeoutMs)
+                tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+                tls.startHandshake()
+                val output = DataOutputStream(tls.outputStream)
+                output.writeShort(query.size)
+                output.write(query)
+                output.flush()
+                val input = DataInputStream(tls.inputStream)
+                val length = input.readUnsignedShort()
+                require(length in 12..MAX_RESPONSE_BYTES) { "Invalid DoT response length" }
+                val response = ByteArray(length).also { input.readFully(it) }
+                val rcode = parseResponse(response, id)
+                val elapsed = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
+                DnsScanCheck("Cloudflare DoT (route)", true, rcode, elapsed, "DoT/TLS", "TLS certificate and DNS response validated")
+            }
+        } catch (error: Exception) {
+            DnsScanCheck("Cloudflare DoT (route)", false, null, null, "DoT/TLS", error.message ?: "DoT probe failed")
+        }
+    }
     private fun tcpQuery(address: InetAddress, query: ByteArray, timeoutMs: Int): ByteArray {
         Socket().use { socket ->
             socket.connect(InetSocketAddress(address, 53), timeoutMs)
