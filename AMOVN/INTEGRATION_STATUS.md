@@ -30,7 +30,7 @@ The target scanner remains foreground and user-triggered. It does not yet have a
 |---|---|---|
 | Sing-box | ZX `SingBoxEngine`, `SingBoxConfigs`, `SingBoxJson`, `ZedVpnService` | ZX Gradle references `app/libs/zedcore.aar`, but that AAR is not present in the tracked ZX branch tree. Target has its own `aras-core.aar`, not a verified Libbox binding. Protocol-name parsing is not runtime support. |
 | Tor | ZX `TorController` / bridge settings; SlipNet `SnowflakeBridge` and `TorSocksBridge` | ZX controller launches `libtor.so`; no verified Tor binary is present in the tracked ZX tree or target ABI folders. SlipNet's Snowflake Go binding/runtime is also not present in the target. Existing `liblyrebird.so` alone is not a Tor engine. |
-| Psiphon | ZX `PsiphonController` and `PsiphonProfile` | ZX controller imports `ca.psiphon.PsiphonTunnel`. Target contains a Psiphon native .so, but the tracked target source has no verified Android SDK binding/call site. The Java SDK/AAR and ABI compatibility must be confirmed before connecting it to the service. |
+| Psiphon | Target already runs Psiphon through the native Aether helper: `AetherCoreManager` supplies `--psiphon*` options, `AETHER_PSIPHON_BIN`, configuration/work-directory environment, and readiness detection; `libpsiphon-tunnel-core.so` is packaged for arm64-v8a, armeabi-v7a and x86_64. | The ZX Java `PsiphonTunnel` controller is not wired into `CoreVpnService`, and should not be added blindly because the target already has a native Psiphon execution path. Validate Aether Psiphon connect/stop, profile chaining and region/CDN modes on device; x86 has no Psiphon/Aether binary. |
 | OpenVPN import | ZX `OvpnConfig`, `ConfigRepository.addOvpn`, `ServersScreen` | The importer converts .ovpn to a Sing-box OpenVPN outbound. It cannot be advertised as connectable until a verified Sing-box runtime is packaged and wired to the target VPN service. |
 | Full SlipNet Tor chain | SlipNet full-flavor bridge, service, profile and chain code | SlipNet's service, Hilt graph, database, tunnel clients and native build are app-specific. Port generic pieces only; do not copy a second `VpnService` or take ownership of a second TUN. |
 
@@ -47,5 +47,5 @@ The target scanner remains foreground and user-triggered. It does not yet have a
 
 - The DNS and native-map changes are committed to `not-SIGNAL/NOT-NET`.
 - GitHub Actions validation was triggered by the branch pushes; the latest run must complete before build status can be claimed.
-- No device-level VPN, Tor bootstrap, Psiphon handshake, Sing-box TUN, IPv6 leak, or OpenVPN end-to-end test is claimed here.
+- Aether's Tor/Psiphon command-line integration is present in the target source, but no device-level Tor bootstrap or Psiphon handshake is claimed. No Sing-box TUN, Snowflake bridge, IPv6 leak, or OpenVPN end-to-end test is claimed here.
 - `main` is not modified by these commits.
