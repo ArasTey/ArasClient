@@ -51,7 +51,7 @@ class DnsScannerActivity : BaseComponentActivity() {
         DnsScannerScreen(
             scanState = scanState,
             onBack = { finish() },
-            onScan = { resolvers -> DnsScanCoordinator.start(resolvers) },
+            onScan = { resolvers, timeoutMs, concurrency, mode -> DnsScanCoordinator.start(resolvers, timeoutMs, concurrency, mode) },
             onCancel = { DnsScanCoordinator.cancel() },
             onRestoreHistory = { entry -> DnsScanCoordinator.restoreHistory(entry) }
         )
@@ -62,7 +62,7 @@ class DnsScannerActivity : BaseComponentActivity() {
 private fun DnsScannerScreen(
     scanState: DnsScannerUiState,
     onBack: () -> Unit,
-    onScan: (List<DnsProfile>) -> Unit,
+    onScan: (List<DnsProfile>, Int, Int, DnsScanMode) -> Unit,
     onCancel: () -> Unit,
     onRestoreHistory: (DnsScanHistoryEntry) -> Unit,
 ) {
@@ -74,6 +74,9 @@ private fun DnsScannerScreen(
     var healthyOnly by remember { mutableStateOf(false) }
     var sortByScore by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var scanMode by remember { mutableStateOf(DnsScanMode.ADVANCED) }
+    var timeoutMs by remember { mutableStateOf(1800) }
+    var concurrency by remember { mutableStateOf(3) }
     val parsed = remember(rangeText) { DnsScanInput.parse(rangeText) }
     val resolvers = if (useRanges) DnsScanInput.toProfiles(parsed.ips) else builtIn
     val clipboard = LocalClipboardManager.current
@@ -118,7 +121,24 @@ private fun DnsScannerScreen(
                             FilterChip(selected = !useRanges, onClick = { useRanges = false }, label = { Text("Built-in list") })
                             FilterChip(selected = useRanges, onClick = { useRanges = true }, label = { Text("IP ranges / custom") })
                         }
-                        if (useRanges) {
+                                    Text("Scan mode", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = scanMode == DnsScanMode.SIMPLE, onClick = { scanMode = DnsScanMode.SIMPLE }, label = { Text("Simple") })
+                            FilterChip(selected = scanMode == DnsScanMode.ADVANCED, onClick = { scanMode = DnsScanMode.ADVANCED }, label = { Text("Advanced • DoH / DoT") })
+                        }
+                        Text("Timeout", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(1000, 1800, 3000, 5000).forEach { value ->
+                                FilterChip(selected = timeoutMs == value, onClick = { timeoutMs = value }, label = { Text((value / 1000f).toString() + "s") })
+                            }
+                        }
+                        Text("Parallel resolvers", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(1, 3, 6).forEach { value ->
+                                FilterChip(selected = concurrency == value, onClick = { concurrency = value }, label = { Text(value.toString()) })
+                            }
+                        }
+            if (useRanges) {
                             OutlinedTextField(
                                 value = rangeText,
                                 onValueChange = { rangeText = it },
@@ -140,7 +160,7 @@ private fun DnsScannerScreen(
                             onClick = {
                                 if (scanning) onCancel() else {
                                     selectionMessage = null
-                                    onScan(resolvers)
+                                    onScan(resolvers, timeoutMs, concurrency, scanMode)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
