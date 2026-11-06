@@ -120,6 +120,77 @@ object DnsChangerStore {
         )
     }
 
+    /** Persist a bounded scan history without storing arbitrary scan input text. */
+    fun saveScanHistory(results: List<DnsResolverScanResult>, timestamp: Long = System.currentTimeMillis()) {
+        val history = loadScanHistory().toMutableList()
+        history.add(0, DnsScanHistoryEntry(timestamp, results))
+        val array = JSONArray()
+        history.distinctBy { it.timestamp }.take(20).forEach { entry ->
+            val resultArray = JSONArray()
+            entry.results.forEach { result ->
+                val checks = JSONArray()
+                result.checks.forEach { check ->
+                    checks.put(JSONObject()
+                        .put("name", check.name)
+                        .put("passed", check.passed)
+                        .put("responseCode", check.responseCode ?: JSONObject.NULL)
+                        .put("latencyMs", check.latencyMs ?: JSONObject.NULL)
+                        .put("transport", check.transport)
+                        .put("detail", check.detail.take(300)))
+                }
+                resultArray.put(JSONObject()
+                    .put("name", result.resolver.name)
+                    .put("primary", result.resolver.primary)
+                    .put("secondary", result.resolver.secondary)
+                    .put("region", result.resolver.region)
+                    .put("custom", result.resolver.custom)
+                    .put("checks", checks))
+            }
+            array.put(JSONObject().put("timestamp", entry.timestamp).put("results", resultArray))
+        }
+        MmkvManager.encodeSettings(SCAN_HISTORY_KEY, array.toString())
+    }
+
+    fun loadScanHistory(): List<DnsScanHistoryEntry> {
+        val raw = MmkvManager.decodeSettingsString(SCAN_HISTORY_KEY).orEmpty()
+        return runCatching {
+            val array = JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                val item = array.optJSONObject(index) ?: return@mapNotNull null
+                val resultArray = item.optJSONArray("results") ?: JSONArray()
+                val results = (0 until resultArray.length()).mapNotNull { resultIndex ->
+                    val result = resultArray.optJSONObject(resultIndex) ?: return@mapNotNull null
+                    val primary = result.optString("primary")
+                    if (!isIpAddress(primary)) return@mapNotNull null
+                    val checksArray = result.optJSONArray("checks") ?: JSONArray()
+                    val checks = (0 until checksArray.length()).mapNotNull { checkIndex ->
+                        val check = checksArray.optJSONObject(checkIndex) ?: return@mapNotNull null
+                        DnsScanCheck(
+                            name = check.optString("name"),
+                            passed = check.optBoolean("passed"),
+                            responseCode = check.opt("responseCode")?.takeUnless { it == JSONObject.NULL }?.toString()?.toIntOrNull(),
+                            latencyMs = check.opt("latencyMs")?.takeUnless { it == JSONObject.NULL }?.toString()?.toLongOrNull(),
+                            transport = check.optString("transport"),
+                            detail = check.optString("detail"),
+                        )
+                    }
+                    DnsResolverScanResult(
+                        resolver = DnsProfile(
+                            name = result.optString("name", primary),
+                            primary = primary,
+                            secondary = result.optString("secondary"),
+                            region = result.optString("region", "History"),
+                            custom = result.optBoolean("custom"),
+                        ),
+                        checks = checks,
+                    )
+                }
+                DnsScanHistoryEntry(item.optLong("timestamp"), results)
+            }.filter { it.timestamp > 0L }
+        }.getOrDefault(emptyList())
+    }
+
+    private const val SCAN_HISTORY_KEY = "dns_scanner_history_v1"
     fun isIpAddress(value: String): Boolean = runCatching {
         if (value.isBlank() || value.any { it.isWhitespace() }) return false
         if (value.contains(':')) {
