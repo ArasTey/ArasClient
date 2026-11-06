@@ -32,7 +32,7 @@ object DnsScanCoordinator {
     @Volatile private var scanJob: Job? = null
 
     @Synchronized
-    fun start(resolvers: List<DnsProfile>) {
+    fun start(resolvers: List<DnsProfile>, timeoutMs: Int = 1800, concurrency: Int = 3, mode: DnsScanMode = DnsScanMode.ADVANCED) {
         if (scanJob?.isActive == true) return
         val unique = resolvers.distinctBy { it.primary }
         mutableState.value = DnsScannerUiState(
@@ -41,7 +41,7 @@ object DnsScanCoordinator {
         )
         scanJob = scope.launch {
             try {
-                val scanned = DnsScannerEngine.scan(unique, onProgress = { progress ->
+                val scanned = DnsScannerEngine.scan(unique, timeoutMs = timeoutMs, concurrency = concurrency, mode = mode, onProgress = { progress ->
                     mutableState.update { current ->
                         if (current.isScanning) current.copy(progress = progress) else current
                     }
