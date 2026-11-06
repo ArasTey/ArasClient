@@ -405,7 +405,7 @@ fun resolveDarkTheme(): Boolean {
     val mode by ThemeManager.themeMode.collectAsState()
     val uiTheme by ThemeManager.uiTheme.collectAsState()
     return when {
-        uiTheme == "radar" || uiTheme == "survival" || uiTheme == "aurora" || uiTheme == "rdrn" -> true
+        uiTheme == "radar" || uiTheme == "survival" || uiTheme == "aurora" || uiTheme == "rdrn" || uiTheme == "zx" -> true
         mode == "1" || mode == "4" -> false
         mode in setOf("2", "3") -> true
         else -> isSystemInDarkTheme()
