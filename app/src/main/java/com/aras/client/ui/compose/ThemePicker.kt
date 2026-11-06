@@ -240,8 +240,10 @@ fun ThemePicker(
                                     .height(if (choice.value == "rdrx" || choice.value == "zx") 96.dp else 42.dp)
                                     .clip(RoundedCornerShape(9.dp))
                                     .background(
-                                        if (choice.value == "rdrx" || choice.value == "zx") androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        if (choice.value == "rdrx") androidx.compose.ui.graphics.Brush.verticalGradient(
                                             listOf(Color(0xFF0B1B3A), Color(0xFF2A1250))
+                                        ) else if (choice.value == "zx") androidx.compose.ui.graphics.Brush.linearGradient(
+                                            listOf(Color(0xFF090817), Color(0xFF34205E), Color(0xFF0A3343))
                                         ) else androidx.compose.ui.graphics.SolidColor(choice.background)
                                     )
                                     .padding(7.dp)
@@ -262,6 +264,15 @@ fun ThemePicker(
                                             androidx.compose.ui.geometry.Size(size.width * 0.76f, size.height * 0.15f),
                                             androidx.compose.ui.geometry.CornerRadius(14f, 14f),
                                         )
+                                    }
+                                }
+                                if (choice.value == "zx") {
+                                    androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+                                        val left = androidx.compose.ui.geometry.Offset(size.width * 0.20f, size.height * 0.28f)
+                                        val right = androidx.compose.ui.geometry.Offset(size.width * 0.80f, size.height * 0.58f)
+                                        drawCircle(Color(0x668B7CFF), size.height * 0.38f, left)
+                                        drawCircle(Color(0x5544D5E8), size.height * 0.34f, right)
+                                        drawRoundRect(Color.White.copy(alpha = 0.18f), androidx.compose.ui.geometry.Offset(size.width * 0.12f, size.height * 0.70f), androidx.compose.ui.geometry.Size(size.width * 0.76f, size.height * 0.18f), androidx.compose.ui.geometry.CornerRadius(14f))
                                     }
                                 }
                                 if (choice.value != "rdrx" && choice.value != "zx") Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
