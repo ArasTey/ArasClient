@@ -77,7 +77,7 @@ class RadarConfigActivity : ComponentActivity() {
             AppTheme {
                 var scanning by remember { mutableStateOf(false) }
                 var message by remember { mutableStateOf("اسکن هوشمند: فقط بهترین کانفیگ‌های ضد DPI انتخاب می‌شوند.") }
-                var resultFilter by remember { mutableStateOf("reachable") }
+                var resultFilter by remember { mutableStateOf("all") }
                 var protocolFilter by remember { mutableStateOf("all") }
                 var countryFilter by remember { mutableStateOf("all") }
                 val results = remember { mutableStateListOf<RadarConfigCheck>() }
@@ -448,20 +448,25 @@ class RadarConfigActivity : ComponentActivity() {
                                 message = "بررسی $checked/${enriched.size} · TCP زنده: $reachable"
                             }
 
+                            // Keep failed probes visible as diagnostics instead of silently
+                            // dropping every discovered endpoint when none passes the pre-check.
                             val top = probed
-                                .filter { it.isImportable }
                                 .sortedByDescending { it.rankScore }
                                 .take(TOP_N)
+                            val importableCount = top.count { it.isImportable }
 
                             results.clear()
                             results.addAll(top)
-                            top20Ready = top.isNotEmpty()
+                            top20Ready = importableCount > 0
 
                             if (scanning) {
-                                message = if (top.isEmpty()) {
-                                    "هیچ گزینه قابل تست پیدا نشد؛ گزارش منابع را بررسی کن یا شبکه را تغییر بده."
-                                } else {
-                                    "۲۰ تای برتر انتخاب شد (${top.size} مورد). می‌تونی همه را برای تست هسته اضافه کنی."
+                                message = when {
+                                    top.isEmpty() ->
+                                        "هیچ کانفیگی از منابع استخراج نشد؛ گزارش سلامت منابع را بررسی کن."
+                                    importableCount == 0 ->
+                                        "${top.size} کانفیگ پیدا شد، اما هیچ‌کدام از بررسی اولیه عبور نکردند. جزئیات خطاها نمایش داده شده؛ شبکه یا منابع را تغییر بده."
+                                    else ->
+                                        "${top.size} کانفیگ بررسی شد؛ ${importableCount} مورد برای تست واقعی هسته آماده است."
                                 }
                             }
                         }
