@@ -82,6 +82,7 @@ import com.aras.client.ui.radar.RadarConfigActivity
 import com.aras.client.ui.repair.ConfigRepairActivity
 import com.aras.client.ui.dns.DnsChangerActivity
 import com.aras.client.ui.dns.DnsScannerActivity
+import com.aras.client.ui.zx.mtu.MtuOptimizeActivity
 import com.aras.client.ui.main.MainActivity
 import com.aras.client.ui.server.ProfileEditorResult
 import com.aras.client.ui.server.ServerAetherActivity
@@ -743,6 +744,7 @@ private fun ZxToolsPage(onOpen: (Class<out android.app.Activity>) -> Unit, onMan
         ZxQuickTile("تعمیر کانفیگ", "بررسی و اصلاح پروفایل", Modifier.fillMaxWidth()) { onOpen(ConfigRepairActivity::class.java) }
         ZxQuickTile("تغییر DNS", "مدیریت DNS محلی", Modifier.fillMaxWidth()) { onOpen(DnsChangerActivity::class.java) }
         ZxQuickTile("اسکنر DNS", "پیدا کردن و بررسی Resolverها", Modifier.fillMaxWidth()) { onOpen(DnsScannerActivity::class.java) }
+        ZxQuickTile("بهینه‌ساز MTU", "اندازه‌گیری MTU واقعی مسیر", Modifier.fillMaxWidth()) { onOpen(MtuOptimizeActivity::class.java) }
         ZxQuickTile("Psiphon CDN", "ساخت پروفایل مستقل سایفون", Modifier.fillMaxWidth(), onPsiphonCdn)
         ZxQuickTile("واردکردن کانفیگ و NPV", "QR، فایل .rdr و NPV، کلیپ‌بورد و لینک اشتراک", Modifier.fillMaxWidth(), onManageConfigs)
     }

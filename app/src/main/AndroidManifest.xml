@@ -111,6 +111,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.zx.mtu.MtuOptimizeActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.radar.DpiTestActivity"
             android:exported="false" />
 
