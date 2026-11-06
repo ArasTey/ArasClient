@@ -13,7 +13,11 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
-import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlin.random.Random
 
 data class DnsScanCheck(
@@ -23,6 +27,12 @@ data class DnsScanCheck(
     val latencyMs: Long?,
     val transport: String,
     val detail: String,
+)
+
+data class DnsScanProgress(
+    val completed: Int,
+    val total: Int,
+    val resolverName: String,
 )
 
 data class DnsResolverScanResult(
@@ -44,18 +54,22 @@ object DnsScannerEngine {
         resolvers: List<DnsProfile>,
         timeoutMs: Int = DEFAULT_TIMEOUT_MS,
         concurrency: Int = 3,
+        onProgress: (DnsScanProgress) -> Unit = {},
     ): List<DnsResolverScanResult> {
         require(timeoutMs in 300..10_000) { "Timeout must be between 300 and 10000 ms" }
         require(concurrency in 1..8) { "Concurrency must be between 1 and 8" }
+        val uniqueResolvers = resolvers.distinctBy { it.primary }
         val gate = Semaphore(concurrency)
+        val completed = AtomicInteger(0)
         return coroutineScope {
-            resolvers.distinctBy { it.primary }.map { resolver ->
+            uniqueResolvers.map { resolver ->
                 async(Dispatchers.IO) {
-                    gate.acquire()
-                    try {
-                        scanOne(resolver, timeoutMs)
-                    } finally {
-                        gate.release()
+                    gate.withPermit {
+                        currentCoroutineContext().ensureActive()
+                        val result = scanOne(resolver, timeoutMs)
+                        val count = completed.incrementAndGet()
+                        onProgress(DnsScanProgress(count, uniqueResolvers.size, resolver.name))
+                        result
                     }
                 }
             }.awaitAll()
@@ -102,7 +116,7 @@ object DnsScannerEngine {
         return rcode
     }
 
-    private fun scanOne(resolver: DnsProfile, timeoutMs: Int): DnsResolverScanResult {
+    private suspend fun scanOne(resolver: DnsProfile, timeoutMs: Int): DnsResolverScanResult {
         if (!DnsChangerStore.isIpAddress(resolver.primary)) {
             return DnsResolverScanResult(resolver, listOf(
                 DnsScanCheck("VALIDATION", false, null, null, "none", "Invalid resolver address")
@@ -110,12 +124,17 @@ object DnsScannerEngine {
         }
         val checks = mutableListOf<DnsScanCheck>()
         for ((label, type) in checkTypes) {
+            currentCoroutineContext().ensureActive()
             checks += runCheck(resolver.primary, label, "example.com", type, timeoutMs, false, false)
         }
+        currentCoroutineContext().ensureActive()
         checks += runCheck(resolver.primary, "EDNS", "example.com", 1, timeoutMs, true, false)
         val randomLabel = "radar-${Random.nextInt(1_000_000, 9_999_999)}"
+        currentCoroutineContext().ensureActive()
         checks += runCheck(resolver.primary, "RND", "$randomLabel.example.com", 1, timeoutMs, false, true)
+        currentCoroutineContext().ensureActive()
         checks += runCheck(resolver.primary, "NXDOMAIN", "$randomLabel.invalid", 1, timeoutMs, false, true)
+        currentCoroutineContext().ensureActive()
         checks += runCheck(resolver.primary, "DPI heuristic", "probe-$randomLabel.invalid", 1, timeoutMs, false, true)
         return DnsResolverScanResult(resolver, checks)
     }

@@ -7,7 +7,7 @@ This document records the source audit and the safe integration boundary for bri
 ## Implementation status (branch snapshot)
 
 - DNS Scanner: an initial native Kotlin scanner and Compose screen are now present. The screen is reachable from the + menu and probes A, AAAA, NS, TXT, EDNS, randomized subdomains, NXDOMAIN and a cautious wildcard/synthetic-answer heuristic. UDP is used first and truncated replies retry over TCP. Results include latency and an explicit action to apply a healthy resolver to the existing DNS profile.
-- DNS Scanner limitations: this is currently a foreground, user-triggered scan. It does not yet provide a persistent background ScanService, full result history/export, DNS-over-HTTPS/TLS probing, or a definitive DPI verdict. A wildcard/synthetic response is only a warning signal, not proof of DPI.
+- DNS Scanner update: the native target scanner now reports resolver-by-resolver progress and exposes cancellation from the screen. Cancellation is checked between DNS probes; an in-flight blocking socket operation can still take up to its configured timeout to return. The scan remains foreground and user-triggered. It does not yet provide a persistent background ScanService, full result history/export, DNS-over-HTTPS/TLS probing, or a definitive DPI verdict. A wildcard/synthetic response is only a warning signal, not proof of DPI.
 - Tor: no operational Tor runtime has been integrated into the target app yet. The Tor section below is the implementation contract, not a claim of working Tor support. Native Tor, Snowflake Go bindings, Lyrebird, process lifecycle, SOCKS data-plane wiring and device-level tests remain required.
 
 ## Repository architecture findings
