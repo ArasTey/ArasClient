@@ -137,7 +137,16 @@ fun ThemePicker(
             surface = Color(0xFF111A2B),
             accent = Color(0xFF30D158),
             foreground = Color(0xFFF5F6FA)
+            ThemeChoice(
+            value = "zx",
+            title = "ZX Liquid",
+            description = "ZX-inspired violet glass · cyan highlights · soft liquid gradients",
+            background = Color(0xFF090817),
+            surface = Color(0xFF1B1730),
+            accent = Color(0xFF8B7CFF),
+            foreground = Color(0xFFF4F1FF)
         ),
+    ),
     )
 
     Column(
