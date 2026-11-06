@@ -45,6 +45,8 @@ data class DnsResolverScanResult(
         get() = checks.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
 }
 
+enum class DnsScanMode { SIMPLE, ADVANCED }
+
 data class DnsScanHistoryEntry(
     val timestamp: Long,
     val results: List<DnsResolverScanResult>,
@@ -59,6 +61,7 @@ object DnsScannerEngine {
         resolvers: List<DnsProfile>,
         timeoutMs: Int = DEFAULT_TIMEOUT_MS,
         concurrency: Int = 3,
+        mode: DnsScanMode = DnsScanMode.ADVANCED,
         onProgress: (DnsScanProgress) -> Unit = {},
     ): List<DnsResolverScanResult> {
         require(timeoutMs in 300..10_000) { "Timeout must be between 300 and 10000 ms" }
@@ -71,7 +74,7 @@ object DnsScannerEngine {
                 async(Dispatchers.IO) {
                     gate.withPermit {
                         currentCoroutineContext().ensureActive()
-                        val result = scanOne(resolver, timeoutMs)
+                        val result = scanOne(resolver, timeoutMs, mode)
                         val count = completed.incrementAndGet()
                         onProgress(DnsScanProgress(count, uniqueResolvers.size, resolver.name))
                         result
@@ -121,29 +124,31 @@ object DnsScannerEngine {
         return rcode
     }
 
-    private suspend fun scanOne(resolver: DnsProfile, timeoutMs: Int): DnsResolverScanResult {
+    private suspend fun scanOne(resolver: DnsProfile, timeoutMs: Int, mode: DnsScanMode): DnsResolverScanResult {
         if (!DnsChangerStore.isIpAddress(resolver.primary)) {
             return DnsResolverScanResult(resolver, listOf(
                 DnsScanCheck("VALIDATION", false, null, null, "none", "Invalid resolver address")
             ))
         }
         val checks = mutableListOf<DnsScanCheck>()
-        for ((label, type) in checkTypes) {
+        val selectedChecks = if (mode == DnsScanMode.SIMPLE) listOf("A" to 1) else checkTypes
+        for ((label, type) in selectedChecks) {
             currentCoroutineContext().ensureActive()
             checks += runCheck(resolver.primary, label, "example.com", type, timeoutMs, false, false)
         }
-        currentCoroutineContext().ensureActive()
-        checks += runCheck(resolver.primary, "EDNS", "example.com", 1, timeoutMs, true, false)
-        val randomLabel = "radar-${Random.nextInt(1_000_000, 9_999_999)}"
-        currentCoroutineContext().ensureActive()
-        checks += runCheck(resolver.primary, "RND", "$randomLabel.example.com", 1, timeoutMs, false, true)
-        currentCoroutineContext().ensureActive()
-        checks += runCheck(resolver.primary, "NXDOMAIN", "$randomLabel.invalid", 1, timeoutMs, false, true)
-        currentCoroutineContext().ensureActive()
-        checks += runCheck(resolver.primary, "DPI heuristic", "probe-$randomLabel.invalid", 1, timeoutMs, false, true)
-        // Route-level secure DNS probes; these do not claim to test the selected UDP resolver.
-        checks += runGoogleDohCheck(timeoutMs)
-        checks += runCloudflareDotCheck(timeoutMs)
+        if (mode == DnsScanMode.ADVANCED) {
+            currentCoroutineContext().ensureActive()
+            checks += runCheck(resolver.primary, "EDNS", "example.com", 1, timeoutMs, true, false)
+            val randomLabel = "radar-" + Random.nextInt(1_000_000, 9_999_999)
+            currentCoroutineContext().ensureActive()
+            checks += runCheck(resolver.primary, "RND", randomLabel + ".example.com", 1, timeoutMs, false, true)
+            currentCoroutineContext().ensureActive()
+            checks += runCheck(resolver.primary, "NXDOMAIN", randomLabel + ".invalid", 1, timeoutMs, false, true)
+            currentCoroutineContext().ensureActive()
+            checks += runCheck(resolver.primary, "DPI heuristic", "probe-" + randomLabel + ".invalid", 1, timeoutMs, false, true)
+            checks += runGoogleDohCheck(timeoutMs)
+            checks += runCloudflareDotCheck(timeoutMs)
+        }
         return DnsResolverScanResult(resolver, checks)
     }
 
