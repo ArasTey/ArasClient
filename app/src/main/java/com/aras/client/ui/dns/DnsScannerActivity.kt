@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,47 +38,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import com.aras.client.ui.base.BaseComponentActivity
 import kotlinx.coroutines.launch
 
 class DnsScannerActivity : BaseComponentActivity() {
-    private var scanJob: kotlinx.coroutines.Job? = null
-
     @Composable
     override fun ScreenContent() {
+        val scanState by DnsScanCoordinator.state.collectAsState()
         DnsScannerScreen(
+            scanState = scanState,
             onBack = { finish() },
-            onCancel = { scanJob?.cancel(); scanJob = null },
-            onScan = { resolvers, onProgress, onComplete ->
-                scanJob = lifecycleScope.launch {
-                    val result = runCatching {
-                        DnsScannerEngine.scan(resolvers, onProgress = { progress ->
-                            runOnUiThread { onProgress(progress) }
-                        })
-                    }
-                    onComplete(result.getOrNull(), result.exceptionOrNull()?.message)
-                    scanJob = null
-                }
-            }
+            onScan = { resolvers -> DnsScanCoordinator.start(resolvers) },
+            onCancel = { DnsScanCoordinator.cancel() }
         )
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DnsScannerScreen(
+    scanState: DnsScannerUiState,
     onBack: () -> Unit,
+    onScan: (List<DnsProfile>) -> Unit,
     onCancel: () -> Unit,
-    onScan: (List<DnsProfile>, (DnsScanProgress) -> Unit, (List<DnsResolverScanResult>?, String?) -> Unit) -> Unit,
 ) {
     val resolvers = remember {
         (DnsChangerStore.presets + DnsChangerStore.customProfiles()).distinctBy { it.primary }
     }
-    val results = remember { mutableStateListOf<DnsResolverScanResult>() }
-    var scanning by remember { mutableStateOf(false) }
-    var progress by remember { mutableStateOf(DnsScanProgress(0, resolvers.size, "")) }
-    var message by remember { mutableStateOf<String?>(null) }
+    val results = scanState.results
+    val scanning = scanState.isScanning
+    val progress = scanState.progress
+    val message = scanState.message
 
     BackHandler(onBack = onBack)
     Scaffold(
@@ -109,40 +99,14 @@ private fun DnsScannerScreen(
                         Text("A, AAAA, NS, TXT, EDNS and randomized NXDOMAIN checks. UDP is used first; truncated replies retry over TCP.")
                         Button(
                             onClick = {
-                                if (scanning) {
-                                    onCancel()
-                                    scanning = false
-                                    message = "Scan cancelled"
-                                } else {
-                                    results.clear()
-                                    message = null
-                                    progress = DnsScanProgress(0, resolvers.size, "")
-                                    scanning = true
-                                    onScan(resolvers, { update ->
-                                        progress = update
-                                    }) { scanned, error ->
-                                        scanning = false
-                                        if (scanned != null) {
-                                            results.addAll(scanned.sortedWith(
-                                                compareByDescending<DnsResolverScanResult> { it.isHealthy }
-                                                    .thenBy { it.averageLatencyMs ?: Long.MAX_VALUE }
-                                            ))
-                                            message = "Scan completed: ${scanned.count { it.isHealthy }} healthy of ${scanned.size}"
-                                        } else message = error ?: "Scan failed"
-                                    }
-                                }
+                                if (scanning) onCancel() else onScan(resolvers)
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            if (scanning) {
-                                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.size(8.dp))
-                                Text("CANCEL SCAN")
-                            } else {
-                                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                                Spacer(Modifier.size(8.dp))
-                                Text("SCAN ALL RESOLVERS")
-                            }
+                            if (scanning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            else Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.size(8.dp))
+                            Text(if (scanning) "CANCEL SCAN" else "SCAN ALL RESOLVERS")
                         }
                         if (scanning) {
                             Text(
