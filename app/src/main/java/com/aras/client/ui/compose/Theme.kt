@@ -3,6 +3,8 @@ package com.aras.client.ui.compose
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +20,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.ExperimentalTextApi
@@ -411,6 +415,34 @@ fun resolveDarkTheme(): Boolean {
 val LocalDarkTheme = compositionLocalOf { false }
 
 @Composable
+private fun ZxLiquidBackdrop(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF090817), Color(0xFF17102D), Color(0xFF0A1B2A))
+                )
+            )
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val violetCenter = Offset(size.width * 0.16f, size.height * 0.18f)
+            val cyanCenter = Offset(size.width * 0.88f, size.height * 0.62f)
+            drawCircle(
+                brush = Brush.radialGradient(listOf(Color(0x665F4BCE), Color.Transparent), center = violetCenter, radius = size.minDimension * 0.72f),
+                radius = size.minDimension * 0.72f,
+                center = violetCenter
+            )
+            drawCircle(
+                brush = Brush.radialGradient(listOf(Color(0x5544D5E8), Color.Transparent), center = cyanCenter, radius = size.minDimension * 0.68f),
+                radius = size.minDimension * 0.68f,
+                center = cyanCenter
+            )
+        }
+        content()
+    }
+}
+@Composable
 fun AppTheme(
     darkTheme: Boolean = resolveDarkTheme(),
     content: @Composable () -> Unit
@@ -477,14 +509,13 @@ fun AppTheme(
                     AppSnackbarHost(hostState = snackbarController.hostState)
                 }
             }
-            if (uiTheme == "rdrx") {
-                // RADAR Glass: گرادیان متحرک زیر همه‌ی صفحه‌ها + رنگ/اجزای شیشه‌ای مشترک
-                val rdrState = rememberRdrThemeState()
-                RdrTheme(rdrState, darkOverride = darkTheme) {
-                    RdrBackground { body() }
+            when {
+                uiTheme == "rdrx" -> {
+                    val rdrState = rememberRdrThemeState()
+                    RdrTheme(rdrState, darkOverride = darkTheme) { RdrBackground { body() } }
                 }
-            } else {
-                body()
+                isZxLiquidTheme -> ZxLiquidBackdrop { body() }
+                else -> body()
             }
         }
     }
