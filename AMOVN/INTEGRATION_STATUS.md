@@ -5,7 +5,7 @@ Target branch: `not-SIGNAL/NOT-NET`
 Upstream ZX source ref: `AMINOPY/ZX-VPN-@config-finder-liquid-integration` (`41796b68fc171a351fa668d7991499cca395c0d0`)  
 Upstream SlipNet source ref: `anonvector/SlipNet@main` (`2ed00fd0072ad0b558e30ec6b5e8b30948f98894`)
 
-This file distinguishes code already adapted into the Android app from source that has only been audited. A source mirror or UI entry is not evidence that an engine is operational.
+This file distinguishes code already adapted into the Android app from source that has only been audited. Pinned ZX and SlipNet source files are now mirrored under `AMOVN/ZX-source/` and `AMOVN/SlipNet-source/`; these are reference snapshots, not Android source sets. A source mirror or UI entry is not evidence that an engine is operational.
 
 ## Adapted into the target app
 
