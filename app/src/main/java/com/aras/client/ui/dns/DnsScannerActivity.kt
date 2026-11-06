@@ -121,7 +121,7 @@ private fun DnsScannerScreen(
                             FilterChip(selected = !useRanges, onClick = { useRanges = false }, label = { Text("Built-in list") })
                             FilterChip(selected = useRanges, onClick = { useRanges = true }, label = { Text("IP ranges / custom") })
                         }
-                                    Text("Scan mode", fontWeight = FontWeight.SemiBold)
+                        Text("Scan mode", fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(selected = scanMode == DnsScanMode.SIMPLE, onClick = { scanMode = DnsScanMode.SIMPLE }, label = { Text("Simple") })
                             FilterChip(selected = scanMode == DnsScanMode.ADVANCED, onClick = { scanMode = DnsScanMode.ADVANCED }, label = { Text("Advanced • DoH / DoT") })
@@ -154,7 +154,7 @@ private fun DnsScannerScreen(
                             }
                         }
                         Text("${resolvers.size} resolvers ready", fontWeight = FontWeight.Bold)
-                        Text("A, AAAA, NS, TXT, EDNS and randomized NXDOMAIN checks. Also validates independent Google DoH and Cloudflare DoT reachability. UDP replies retry over TCP when truncated.")
+                        Text(if (scanMode == DnsScanMode.SIMPLE) "Quick A-record reachability and latency check." else "A, AAAA, NS, TXT, EDNS, randomized NXDOMAIN, plus independent Google DoH and Cloudflare DoT route checks. Truncated UDP replies retry over TCP.")
                         Button(
                             enabled = scanning || resolvers.isNotEmpty(),
                             onClick = {
