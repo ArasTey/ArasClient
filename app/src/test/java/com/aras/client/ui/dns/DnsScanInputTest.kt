@@ -10,6 +10,16 @@ class DnsScanInputTest {
         val p = DnsScanInput.parse("9.9.9.9\n1.1.1.1-1.1.1.3, 1.2.3.4:53")
         assertEquals(listOf("9.9.9.9", "1.1.1.1", "1.1.1.2", "1.1.1.3", "1.2.3.4"), p.ips)
         assertTrue(p.invalid.isEmpty())
+        assertEquals(53, p.targets[0].port)
+        assertEquals(53, p.targets[1].port)
+    }
+
+    @Test
+    fun preservesCustomPortsAndRejectsInvalidPorts() {
+        val parsed = DnsScanInput.parse("1.2.3.4:5353, [2001:4860:4860::8888]:853, 9.9.9.9:0, 8.8.8.8:70000")
+        assertEquals(listOf("1.2.3.4", "2001:4860:4860::8888"), parsed.ips)
+        assertEquals(listOf(5353, 853), parsed.targets.map { it.port })
+        assertEquals(listOf("9.9.9.9:0", "8.8.8.8:70000"), parsed.invalid)
     }
 
     @Test

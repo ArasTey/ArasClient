@@ -78,7 +78,7 @@ private fun DnsScannerScreen(
     var timeoutMs by remember { mutableStateOf(1800) }
     var concurrency by remember { mutableStateOf(3) }
     val parsed = remember(rangeText) { DnsScanInput.parse(rangeText) }
-    val resolvers = if (useRanges) DnsScanInput.toProfiles(parsed.ips) else builtIn
+    val resolvers = if (useRanges) DnsScanInput.toProfiles(parsed.targets) else builtIn
     val clipboard = LocalClipboardManager.current
     val results = scanState.results
         .filter { !healthyOnly || it.isHealthy }
@@ -213,7 +213,7 @@ private fun DnsScannerScreen(
                                 appendLine("resolver,ip,healthy,passed,total,check,transport,latency_ms,detail")
                                 results.forEach { result ->
                                     result.checks.forEach { check ->
-                                        val cells = listOf(result.resolver.name, result.resolver.primary, result.isHealthy.toString(), result.passedCount.toString(), result.probeCount.toString(), check.name, check.transport, check.latencyMs?.toString().orEmpty(), check.detail)
+                                        val cells = listOf(result.resolver.name, if (result.resolver.port == 53) result.resolver.primary else "${result.resolver.primary}:${result.resolver.port}", result.isHealthy.toString(), result.passedCount.toString(), result.probeCount.toString(), check.name, check.transport, check.latencyMs?.toString().orEmpty(), check.detail)
                                         appendLine(cells.joinToString(",") { "\"" + it.replace("\"", "\"\"") + "\"" })
                                     }
                                 }
@@ -239,7 +239,10 @@ private fun DnsScannerScreen(
                             Spacer(Modifier.size(8.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(result.resolver.name, fontWeight = FontWeight.Bold)
-                                Text(result.resolver.primary, style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    if (result.resolver.port == 53) result.resolver.primary else "${result.resolver.primary}:${result.resolver.port}",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
                             Text("${result.passedCount}/${result.probeCount}", fontWeight = FontWeight.Bold)
                         }
@@ -256,13 +259,13 @@ private fun DnsScannerScreen(
                             )
                         }
                         Button(
-                            enabled = result.isHealthy && !scanning,
+                            enabled = result.isHealthy && !scanning && result.resolver.port == 53,
                             onClick = {
                                 DnsChangerStore.activate(result.resolver)
                                 selectionMessage = "${result.resolver.name} selected. Open DNS Changer to connect."
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("USE THIS RESOLVER") }
+                        ) { Text(if (result.resolver.port == 53) "USE THIS RESOLVER" else "SCANNER ONLY • DNS CHANGER USES PORT 53") }
                     }
                 }
             }

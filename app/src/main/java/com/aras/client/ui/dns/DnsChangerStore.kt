@@ -15,6 +15,7 @@ data class DnsProfile(
     val secondary: String,
     val region: String = "Global",
     val custom: Boolean = false,
+    val port: Int = 53,
 )
 
 object DnsChangerStore {
@@ -73,6 +74,7 @@ object DnsChangerStore {
                     secondary = item.optString("secondary"),
                     region = "Custom",
                     custom = true,
+                    port = item.optInt("port", 53).takeIf { it in 1..65535 } ?: 53,
                 )
             }
         }.getOrDefault(emptyList())
@@ -83,7 +85,7 @@ object DnsChangerStore {
         profiles.add(profile.copy(custom = true))
         val array = JSONArray()
         profiles.forEach { item ->
-            array.put(JSONObject().put("name", item.name).put("primary", item.primary).put("secondary", item.secondary))
+            array.put(JSONObject().put("name", item.name).put("primary", item.primary).put("secondary", item.secondary).put("port", item.port))
         }
         MmkvManager.encodeSettings(PROFILES_KEY, array.toString())
     }
@@ -97,6 +99,7 @@ object DnsChangerStore {
     }
 
     fun activate(profile: DnsProfile) {
+        require(profile.port == 53) { "Android DNS Changer supports standard DNS port 53 only" }
         MmkvManager.encodeSettings(PRIMARY_KEY, profile.primary)
         MmkvManager.encodeSettings(SECONDARY_KEY, profile.secondary)
         MmkvManager.encodeSettings(ENABLED_KEY, true)
@@ -142,6 +145,7 @@ object DnsChangerStore {
                     .put("name", result.resolver.name)
                     .put("primary", result.resolver.primary)
                     .put("secondary", result.resolver.secondary)
+                    .put("port", result.resolver.port)
                     .put("region", result.resolver.region)
                     .put("custom", result.resolver.custom)
                     .put("checks", checks))
@@ -181,6 +185,7 @@ object DnsChangerStore {
                             secondary = result.optString("secondary"),
                             region = result.optString("region", "History"),
                             custom = result.optBoolean("custom"),
+                            port = result.optInt("port", 53).takeIf { it in 1..65535 } ?: 53,
                         ),
                         checks = checks,
                     )

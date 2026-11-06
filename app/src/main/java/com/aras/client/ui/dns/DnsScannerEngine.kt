@@ -137,7 +137,7 @@ object DnsScannerEngine {
     }
 
     private suspend fun scanOne(resolver: DnsProfile, timeoutMs: Int, mode: DnsScanMode): DnsResolverScanResult {
-        if (!DnsChangerStore.isIpAddress(resolver.primary)) {
+        if (!DnsChangerStore.isIpAddress(resolver.primary) || resolver.port !in 1..65535) {
             return DnsResolverScanResult(resolver, listOf(
                 DnsScanCheck("VALIDATION", false, null, null, "none", "Invalid resolver address")
             ))
@@ -146,18 +146,18 @@ object DnsScannerEngine {
         val selectedChecks = checkTypes
         for ((label, type) in selectedChecks) {
             currentCoroutineContext().ensureActive()
-            checks += runCheck(resolver.primary, label, "example.com", type, timeoutMs, false, false)
+            checks += runCheck(resolver.primary, label, "example.com", type, timeoutMs, false, false, resolver.port)
         }
         if (mode == DnsScanMode.ADVANCED) {
             currentCoroutineContext().ensureActive()
-            checks += runCheck(resolver.primary, "EDNS", "example.com", 1, timeoutMs, true, false)
+            checks += runCheck(resolver.primary, "EDNS", "example.com", 1, timeoutMs, true, false, resolver.port)
             val randomLabel = "radar-" + Random.nextInt(1_000_000, 9_999_999)
             currentCoroutineContext().ensureActive()
-            checks += runCheck(resolver.primary, "RND", randomLabel + ".example.com", 1, timeoutMs, false, true)
+            checks += runCheck(resolver.primary, "RND", randomLabel + ".example.com", 1, timeoutMs, false, true, resolver.port)
             currentCoroutineContext().ensureActive()
-            checks += runCheck(resolver.primary, "NXDOMAIN", randomLabel + ".invalid", 1, timeoutMs, false, true)
+            checks += runCheck(resolver.primary, "NXDOMAIN", randomLabel + ".invalid", 1, timeoutMs, false, true, resolver.port)
             currentCoroutineContext().ensureActive()
-            checks += runCheck(resolver.primary, "DPI heuristic", "probe-" + randomLabel + ".invalid", 1, timeoutMs, false, true)
+            checks += runCheck(resolver.primary, "DPI heuristic", "probe-" + randomLabel + ".invalid", 1, timeoutMs, false, true, resolver.port)
         }
         return DnsResolverScanResult(resolver, checks)
     }
@@ -170,6 +170,7 @@ object DnsScannerEngine {
         timeoutMs: Int,
         edns: Boolean,
         expectNxDomain: Boolean,
+        port: Int = 53,
     ): DnsScanCheck {
         val id = Random.nextInt(0, 65536)
         val query = try { buildQuery(id, domain, type, edns) } catch (e: Exception) {
@@ -181,7 +182,7 @@ object DnsScannerEngine {
             val address = InetAddress.getByName(server)
             val udp = DatagramSocket().use { socket ->
                 socket.soTimeout = timeoutMs
-                socket.connect(address, 53)
+                socket.connect(address, port)
                 socket.send(DatagramPacket(query, query.size))
                 val buffer = ByteArray(MAX_RESPONSE_BYTES)
                 val response = DatagramPacket(buffer, buffer.size)
@@ -189,7 +190,7 @@ object DnsScannerEngine {
                 buffer.copyOf(response.length)
             }
             val truncated = udp.size >= 4 && (udp[2].toInt() and 0x02) != 0
-            val response = if (truncated) tcpQuery(address, query, timeoutMs) else udp
+            val response = if (truncated) tcpQuery(address, query, timeoutMs, port) else udp
             receivedResponse = response
             val rcode = try {
                 parseResponse(response, id, expectNxDomain)
@@ -274,9 +275,9 @@ object DnsScannerEngine {
             DnsScanCheck("Cloudflare DoT (route)", false, null, null, "DoT/TLS", error.message ?: "DoT probe failed")
         }
     }
-    private fun tcpQuery(address: InetAddress, query: ByteArray, timeoutMs: Int): ByteArray {
+    private fun tcpQuery(address: InetAddress, query: ByteArray, timeoutMs: Int, port: Int): ByteArray {
         Socket().use { socket ->
-            socket.connect(InetSocketAddress(address, 53), timeoutMs)
+            socket.connect(InetSocketAddress(address, port), timeoutMs)
             socket.soTimeout = timeoutMs
             val output = DataOutputStream(socket.getOutputStream())
             output.writeShort(query.size)
