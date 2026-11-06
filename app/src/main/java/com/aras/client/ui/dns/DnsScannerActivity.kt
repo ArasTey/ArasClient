@@ -154,7 +154,7 @@ private fun DnsScannerScreen(
                             }
                         }
                         Text("${resolvers.size} resolvers ready", fontWeight = FontWeight.Bold)
-                        Text(if (scanMode == DnsScanMode.SIMPLE) "Quick A-record reachability and latency check." else "Simple checks A/AAAA/NS/TXT. Advanced adds EDNS, randomized NXDOMAIN, DPI heuristics, and one route-level DoH/DoT validation. Truncated UDP replies retry over TCP.")
+                        Text(if (scanMode == DnsScanMode.SIMPLE) "Quick A/AAAA/NS/TXT DNS record and latency check." else "Simple checks A/AAAA/NS/TXT. Advanced adds EDNS, randomized NXDOMAIN, DPI heuristics, and one route-level DoH/DoT validation. Truncated UDP replies retry over TCP.")
                         Button(
                             enabled = scanning || resolvers.isNotEmpty(),
                             onClick = {
@@ -241,7 +241,7 @@ private fun DnsScannerScreen(
                                 Text(result.resolver.name, fontWeight = FontWeight.Bold)
                                 Text(result.resolver.primary, style = MaterialTheme.typography.labelSmall)
                             }
-                            Text("${result.passedCount}/${result.checks.size}", fontWeight = FontWeight.Bold)
+                            Text("${result.passedCount}/${result.probeCount}", fontWeight = FontWeight.Bold)
                         }
                         Text(
                             "Average: ${result.averageLatencyMs?.let { "$it ms" } ?: "—"} • " +
