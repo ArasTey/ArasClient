@@ -85,7 +85,7 @@ object DnsScannerEngine {
                 }
             }.awaitAll()
         }
-        if (mode == DnsScanMode.ADVANCED && scanned.isNotEmpty()) {
+        return if (mode == DnsScanMode.ADVANCED && scanned.isNotEmpty()) {
             onProgress(DnsScanProgress(uniqueResolvers.size, uniqueResolvers.size, "Secure DNS route"))
             val routeChecks = withContext(Dispatchers.IO) {
                 listOf(runGoogleDohCheck(timeoutMs), runCloudflareDotCheck(timeoutMs))
