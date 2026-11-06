@@ -234,11 +234,14 @@ object DnsScannerEngine {
         val id = Random.nextInt(0, 65536)
         val query = buildQuery(id, "example.com", 1)
         return try {
-            val socket = javax.net.ssl.SSLSocketFactory.getDefault().createSocket("one.one.one.one", 853) as javax.net.ssl.SSLSocket
+            val socket = javax.net.ssl.SSLSocketFactory.getDefault().createSocket() as javax.net.ssl.SSLSocket
             socket.use { tls ->
                 tls.soTimeout = timeoutMs
                 tls.connect(InetSocketAddress("one.one.one.one", 853), timeoutMs)
-                tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+                tls.sslParameters = tls.sslParameters.apply {
+                    endpointIdentificationAlgorithm = "HTTPS"
+                    serverNames = listOf(javax.net.ssl.SNIHostName("one.one.one.one"))
+                }
                 tls.startHandshake()
                 val output = DataOutputStream(tls.outputStream)
                 output.writeShort(query.size)
