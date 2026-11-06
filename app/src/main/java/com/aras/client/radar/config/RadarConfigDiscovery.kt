@@ -97,6 +97,19 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
                 .onFailure { errors += it.message ?: "feed fetch failed" }
         }
 
+        // Large direct subscriptions already provide a useful candidate set. Avoid
+        // spending two unauthenticated GitHub API requests on repository metadata/tree
+        // for those sources; keep tree discovery as a fallback for sparse or stale feeds.
+        if (found.size >= DIRECT_FEED_TREE_SKIP_THRESHOLD) {
+            return SourceResult(
+                found.values.toList(),
+                RadarSourceReport(
+                    label, fetched, found.size,
+                    errors.take(4).joinToString("; ").takeIf { errors.isNotEmpty() }
+                )
+            )
+        }
+
         try {
             val metadata = JsonParser.parseString(get("https://api.github.com/repos/" + label)).asJsonObject
             val branch = metadata.get("default_branch")?.asString?.takeIf { it.isNotBlank() } ?: "main"
@@ -245,6 +258,8 @@ class RadarConfigDiscovery(private val client: OkHttpClient = defaultClient()) {
     private companion object {
         const val MAX_FILE_BYTES = 2_500_000
         const val MAX_FILES_PER_REPOSITORY = 10
+        // A populated direct feed is preferable to an expensive secondary tree crawl.
+        const val DIRECT_FEED_TREE_SKIP_THRESHOLD = 20
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(8, TimeUnit.SECONDS)
