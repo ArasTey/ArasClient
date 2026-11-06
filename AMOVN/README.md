@@ -1,19 +1,23 @@
-# AMOVN — Android ZX Integration
+# AMOVN — Android-only ZX integration workspace
 
-This directory is the isolated workspace for the Android-only integration of the authorized ZX VPN features into G-ST-VPN.
+This folder contains verbatim source snapshots from the authorized ZX VPN branch.
 
-## Scope
-- Live Monitor UI, animations, Android metrics, and supporting resources.
-- Connection Map UI, map rendering, geographic lookup, and map assets.
-- Relevant Settings and theme UI, including Liquid styling and transitions.
-- DNS Scanner behavior and UI improvements based on the approved SlipNet reference.
+- Source repository: https://github.com/AMINOPY/ZX-VPN-
+- Source ref: `config-finder-liquid-integration`
+- Target: `AMINOPY/G-ST-VPN` branch `not-SIGNAL/NOT-NET`
+- Platform target: Android only
 
-## Rules
-- Android-only implementation using the target app's Kotlin/Jetpack Compose architecture.
-- Adapt platform-specific dependencies to G-ST-VPN; do not add desktop or other KMP targets.
-- Keep unrelated G-ST-VPN features untouched.
-- All work stays on `not-SIGNAL/NOT-NET`; never modify `main`.
-- Preserve explicit user confirmation for applying DNS resolver changes.
-- Do not treat DNS timeouts as definitive proof of DPI.
+## Copied source inventory
 
-Source files and resources will be organized here only when they can be integrated cleanly into the Android build; runtime source code must be wired into the app's source sets as needed.
+The files under `ZX-source/` preserve the original relative paths and source contents:
+- Live Monitor page, Android platform metrics, and platform data model
+- Settings screen source
+- Connection Map screen, view model, canvas renderer, and route badge
+- World map model, geographic lookup, and payload model
+- Binary world map resource (`world.bin`)
+
+## Integration status
+
+These are staged source copies, not yet wired into G-ST-VPN's Android source sets. The Settings screen and map implementation reference ZX-specific resources, models, navigation, and KMP-generated APIs. The next integration phase must port/adapt those dependencies to the existing Kotlin/Jetpack Compose Android app and connect the screens to its settings/theme navigation.
+
+No desktop/KMP target was added. No unrelated app source files were changed by this staging step. DNS Scanner / SlipNet work remains a separate implementation task and is not represented as completed by these source copies.
