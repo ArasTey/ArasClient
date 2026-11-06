@@ -45,6 +45,11 @@ data class DnsResolverScanResult(
         get() = checks.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
 }
 
+data class DnsScanHistoryEntry(
+    val timestamp: Long,
+    val results: List<DnsResolverScanResult>,
+)
+
 object DnsScannerEngine {
     private const val DEFAULT_TIMEOUT_MS = 1800
     private const val MAX_RESPONSE_BYTES = 4096
