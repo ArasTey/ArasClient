@@ -16,6 +16,7 @@ data class DnsScannerUiState(
     val isScanning: Boolean = false,
     val progress: DnsScanProgress = DnsScanProgress(0, 0, ""),
     val results: List<DnsResolverScanResult> = emptyList(),
+    val history: List<DnsScanHistoryEntry> = DnsChangerStore.loadScanHistory(),
     val message: String? = null,
 )
 
@@ -49,10 +50,13 @@ object DnsScanCoordinator {
                     compareByDescending<DnsResolverScanResult> { it.isHealthy }
                         .thenBy { it.averageLatencyMs ?: Long.MAX_VALUE }
                 )
+                DnsChangerStore.saveScanHistory(sorted)
+                val history = DnsChangerStore.loadScanHistory()
                 mutableState.update {
                     it.copy(
                         isScanning = false,
                         results = sorted,
+                        history = history,
                         message = "Scan completed: ${sorted.count { result -> result.isHealthy }} healthy of ${sorted.size}",
                     )
                 }
@@ -71,6 +75,19 @@ object DnsScanCoordinator {
 
     fun cancel() {
         scanJob?.cancel()
+    }
+
+    fun restoreHistory(entry: DnsScanHistoryEntry) {
+        if (scanJob?.isActive != true) {
+            mutableState.update {
+                it.copy(
+                    isScanning = false,
+                    results = entry.results,
+                    history = DnsChangerStore.loadScanHistory(),
+                    message = "Restored previous scan: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.timestamp)),
+                )
+            }
+        }
     }
 
     fun clearResults() {
