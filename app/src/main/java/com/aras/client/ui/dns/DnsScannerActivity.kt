@@ -138,7 +138,7 @@ private fun DnsScannerScreen(
                                 FilterChip(selected = concurrency == value, onClick = { concurrency = value }, label = { Text(value.toString()) })
                             }
                         }
-            if (useRanges) {
+                        if (useRanges) {
                             OutlinedTextField(
                                 value = rangeText,
                                 onValueChange = { rangeText = it },
@@ -197,7 +197,8 @@ private fun DnsScannerScreen(
                             Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.timestamp)), fontWeight = FontWeight.Bold)
                             val healthyCount = entry.results.count { it.isHealthy }
                             Text(entry.results.size.toString() + " resolvers • " + healthyCount + " healthy")
-                            OutlinedButton(onClick = { onRestoreHistory(entry); showHistory = false }, modifier = Modifier.fillMaxWidth()) { Text("CONTINUE / RESTORE THIS SCAN") }
+                            OutlinedButton(onClick = { onRestoreHistory(entry); showHistory = false }, modifier = Modifier.fillMaxWidth()) { Text("RESTORE RESULTS") }
+                            OutlinedButton(onClick = { onScan(entry.results.map { it.resolver }, timeoutMs, concurrency, scanMode); showHistory = false }, modifier = Modifier.fillMaxWidth()) { Text("RUN THIS SCAN AGAIN") }
                         }
                     }
                 }
