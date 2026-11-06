@@ -30,7 +30,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aras.client.ui.base.BaseComponentActivity
-import kotlinx.coroutines.launch
 
 class DnsScannerActivity : BaseComponentActivity() {
     @Composable
@@ -67,7 +65,8 @@ private fun DnsScannerScreen(
     val results = scanState.results
     val scanning = scanState.isScanning
     val progress = scanState.progress
-    val message = scanState.message
+    var selectionMessage by remember { mutableStateOf<String?>(null) }
+    val message = selectionMessage ?: scanState.message
 
     BackHandler(onBack = onBack)
     Scaffold(
@@ -99,7 +98,10 @@ private fun DnsScannerScreen(
                         Text("A, AAAA, NS, TXT, EDNS and randomized NXDOMAIN checks. UDP is used first; truncated replies retry over TCP.")
                         Button(
                             onClick = {
-                                if (scanning) onCancel() else onScan(resolvers)
+                                if (scanning) onCancel() else {
+                                    selectionMessage = null
+                                    onScan(resolvers)
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -158,7 +160,7 @@ private fun DnsScannerScreen(
                             enabled = result.isHealthy && !scanning,
                             onClick = {
                                 DnsChangerStore.activate(result.resolver)
-                                message = "${result.resolver.name} selected. Open DNS Changer to connect."
+                                selectionMessage = "${result.resolver.name} selected. Open DNS Changer to connect."
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("USE THIS RESOLVER") }
