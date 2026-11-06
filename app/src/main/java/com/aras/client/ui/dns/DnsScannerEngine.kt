@@ -69,7 +69,7 @@ object DnsScannerEngine {
     ): List<DnsResolverScanResult> {
         require(timeoutMs in 300..10_000) { "Timeout must be between 300 and 10000 ms" }
         require(concurrency in 1..8) { "Concurrency must be between 1 and 8" }
-        val uniqueResolvers = resolvers.distinctBy { it.primary }
+        val uniqueResolvers = resolvers.distinctBy { it.primary + ":" + it.port }
         val gate = Semaphore(concurrency)
         val completed = AtomicInteger(0)
         val scanned = coroutineScope {

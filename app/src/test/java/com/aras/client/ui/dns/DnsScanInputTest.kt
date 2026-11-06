@@ -23,6 +23,13 @@ class DnsScanInputTest {
     }
 
     @Test
+    fun sameAddressWithDifferentPortsRemainsDistinct() {
+        val parsed = DnsScanInput.parse("1.1.1.1:53, 1.1.1.1:5353")
+        assertEquals(2, parsed.targets.size)
+        assertEquals(listOf(53, 5353), parsed.targets.map { it.port })
+    }
+
+    @Test
     fun parsesShortRangeAndCidr() {
         assertEquals(listOf("5.5.5.1", "5.5.5.2"), DnsScanInput.parse("5.5.5.1-2").ips)
         val c = DnsScanInput.parse("8.8.8.0/30").ips

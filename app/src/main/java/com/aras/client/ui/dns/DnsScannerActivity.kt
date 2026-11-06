@@ -227,7 +227,7 @@ private fun DnsScannerScreen(
             if (results.isEmpty() && !scanning) {
                 item { Text("Run a scan to compare resolver health and protocol compatibility.") }
             }
-            items(results, key = { it.resolver.primary }) { result ->
+            items(results, key = { it.resolver.primary + ":" + it.resolver.port }) { result ->
                 Card {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

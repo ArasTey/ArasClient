@@ -93,7 +93,7 @@ object DnsChangerStore {
     fun removeCustom(profile: DnsProfile) {
         val array = JSONArray()
         customProfiles().filterNot { it == profile }.forEach { item ->
-            array.put(JSONObject().put("name", item.name).put("primary", item.primary).put("secondary", item.secondary))
+            array.put(JSONObject().put("name", item.name).put("primary", item.primary).put("secondary", item.secondary).put("port", item.port))
         }
         MmkvManager.encodeSettings(PROFILES_KEY, array.toString())
     }

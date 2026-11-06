@@ -34,7 +34,7 @@ object DnsScanCoordinator {
     @Synchronized
     fun start(resolvers: List<DnsProfile>, timeoutMs: Int = 1800, concurrency: Int = 3, mode: DnsScanMode = DnsScanMode.ADVANCED) {
         if (scanJob?.isActive == true) return
-        val unique = resolvers.distinctBy { it.primary }
+        val unique = resolvers.distinctBy { it.primary + ":" + it.port }
         mutableState.value = DnsScannerUiState(
             isScanning = true,
             progress = DnsScanProgress(0, unique.size, ""),
