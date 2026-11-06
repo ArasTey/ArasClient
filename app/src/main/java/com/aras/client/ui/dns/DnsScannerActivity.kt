@@ -17,6 +17,9 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.aras.client.ui.base.BaseComponentActivity
 
@@ -59,10 +64,22 @@ private fun DnsScannerScreen(
     onScan: (List<DnsProfile>) -> Unit,
     onCancel: () -> Unit,
 ) {
-    val resolvers = remember {
+    val builtIn = remember {
         (DnsChangerStore.presets + DnsChangerStore.customProfiles()).distinctBy { it.primary }
     }
+    var useRanges by remember { mutableStateOf(false) }
+    var rangeText by remember { mutableStateOf("") }
+    var healthyOnly by remember { mutableStateOf(false) }
+    var sortByScore by remember { mutableStateOf(false) }
+    val parsed = remember(rangeText) { DnsScanInput.parse(rangeText) }
+    val resolvers = if (useRanges) DnsScanInput.toProfiles(parsed.ips) else builtIn
+    val clipboard = LocalClipboardManager.current
     val results = scanState.results
+        .filter { !healthyOnly || it.isHealthy }
+        .let { list ->
+            if (sortByScore) list.sortedByDescending { it.passedCount }
+            else list.sortedBy { it.averageLatencyMs ?: Long.MAX_VALUE }
+        }
     val scanning = scanState.isScanning
     val progress = scanState.progress
     var selectionMessage by remember { mutableStateOf<String?>(null) }
@@ -94,9 +111,29 @@ private fun DnsScannerScreen(
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = !useRanges, onClick = { useRanges = false }, label = { Text("Built-in list") })
+                            FilterChip(selected = useRanges, onClick = { useRanges = true }, label = { Text("IP ranges / custom") })
+                        }
+                        if (useRanges) {
+                            OutlinedTextField(
+                                value = rangeText,
+                                onValueChange = { rangeText = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("8.8.8.0/24 • 1.1.1.1-1.1.1.10 • 9.9.9.9 • 1.2.3.4:53") },
+                                minLines = 3,
+                            )
+                            if (parsed.invalid.isNotEmpty()) {
+                                Text("Ignored: ${parsed.invalid.take(5).joinToString()}", style = MaterialTheme.typography.labelSmall)
+                            }
+                            if (parsed.truncated) {
+                                Text("Limited to ${DnsScanInput.MAX_TARGETS} addresses", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                         Text("${resolvers.size} resolvers ready", fontWeight = FontWeight.Bold)
                         Text("A, AAAA, NS, TXT, EDNS and randomized NXDOMAIN checks. UDP is used first; truncated replies retry over TCP.")
                         Button(
+                            enabled = scanning || resolvers.isNotEmpty(),
                             onClick = {
                                 if (scanning) onCancel() else {
                                     selectionMessage = null
@@ -122,6 +159,21 @@ private fun DnsScannerScreen(
                             )
                         }
                         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            }
+            if (scanState.results.isNotEmpty()) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(selected = healthyOnly, onClick = { healthyOnly = !healthyOnly }, label = { Text("Healthy only") })
+                        FilterChip(selected = sortByScore, onClick = { sortByScore = !sortByScore }, label = { Text("Sort: score") })
+                        OutlinedButton(onClick = {
+                            val text = results.filter { it.isHealthy }.joinToString("\n") {
+                                "${it.resolver.primary}\t${it.averageLatencyMs ?: 0} ms\t${it.passedCount}/${it.checks.size}"
+                            }
+                            clipboard.setText(AnnotatedString(text))
+                            selectionMessage = "Healthy resolvers copied"
+                        }) { Text("Copy") }
                     }
                 }
             }
