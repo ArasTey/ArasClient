@@ -11,7 +11,7 @@ package com.aras.client.extension
  * Use this for display only: the marks are part of the string, so a file name or URL
  * built from it would carry them.
  */
-fun String.ltrIsolated(): String = "⁦" + this + "⁩"
+fun String.ltrIsolated(): String = "\u2066" + this + "\u2069"
 
 /**
  * Removes all whitespace from the string.
