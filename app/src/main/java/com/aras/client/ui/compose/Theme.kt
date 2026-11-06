@@ -110,6 +110,40 @@ private val AuroraDarkColor = darkColorScheme(
     surfaceContainerHighest = Color(0xFF1D2C26), // High Glass
 )
 
+private val ZxLiquidColor = darkColorScheme(
+    primary = Color(0xFF9B8CFF),
+    onPrimary = Color(0xFF17112F),
+    primaryContainer = Color(0xFF352B68),
+    onPrimaryContainer = Color(0xFFE8E2FF),
+    secondary = Color(0xFF65DDF2),
+    onSecondary = Color(0xFF06252D),
+    secondaryContainer = Color(0xFF164B59),
+    onSecondaryContainer = Color(0xFFC7F7FF),
+    tertiary = Color(0xFFFF78C8),
+    onTertiary = Color(0xFF35102A),
+    error = Color(0xFFFF6B83),
+    errorContainer = Color(0xFF5B1D32),
+    onError = Color(0xFF39000C),
+    onErrorContainer = Color(0xFFFFDCE2),
+    background = Color(0xFF090817),
+    onBackground = Color(0xFFF4F1FF),
+    surface = Color(0xE61B1730),
+    onSurface = Color(0xFFF4F1FF),
+    surfaceVariant = Color(0xCC292344),
+    onSurfaceVariant = Color(0xFFC2BCE0),
+    outline = Color(0x668B7CFF),
+    outlineVariant = Color(0x443F3766),
+    inverseSurface = Color(0xFFECE8FF),
+    inverseOnSurface = Color(0xFF1B1730),
+    inversePrimary = Color(0xFF5D4BC7),
+    scrim = Color(0x99000000),
+    surfaceTint = Color(0xFF9B8CFF),
+    surfaceContainerLowest = Color(0xE6090817),
+    surfaceContainerLow = Color(0xE61B1730),
+    surfaceContainer = Color(0xE6221D3B),
+    surfaceContainerHigh = Color(0xE62A2448),
+    surfaceContainerHighest = Color(0xE6342D55),
+)
 private val DarkColor = darkColorScheme(
     primary = Color(0xFF90CAF9),
     onPrimary = Color(0xFF102A43),
@@ -285,13 +319,13 @@ object ThemeManager {
 
     private val _uiTheme = MutableStateFlow(
         MmkvManager.decodeSettingsString(PREF_UI_THEME, "default")?.takeIf {
-            it in setOf("default", "radar", "survival", "aurora", "rdrx", "rdrn")
+            it in setOf("default", "radar", "survival", "aurora", "rdrx", "rdrn", "zx")
         } ?: "default"
     )
     val uiTheme: StateFlow<String> = _uiTheme.asStateFlow()
 
     fun setUiTheme(value: String) {
-        val safeValue = value.takeIf { it in setOf("default", "radar", "survival", "aurora", "rdrx", "rdrn") } ?: "default"
+        val safeValue = value.takeIf { it in setOf("default", "radar", "survival", "aurora", "rdrx", "rdrn", "zx") } ?: "default"
         MmkvManager.encodeSettings(PREF_UI_THEME, safeValue)
         _uiTheme.value = safeValue
     }
@@ -326,7 +360,7 @@ object ThemeManager {
     fun refresh() {
         _themeMode.value = readThemeMode()
         _uiTheme.value = MmkvManager.decodeSettingsString(PREF_UI_THEME, "default")?.takeIf {
-            it in setOf("default", "radar", "survival", "aurora", "rdrx", "rdrn")
+            it in setOf("default", "radar", "survival", "aurora", "rdrx", "rdrn", "zx")
         } ?: "default"
         _dynamicColorEnabled.value =
             MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, false)
@@ -389,16 +423,18 @@ fun AppTheme(
     val isSurvivalTheme = uiTheme == "survival"
     val isAuroraTheme = uiTheme == "aurora"
     val isRdrnTheme = uiTheme == "rdrn"
+    val isZxLiquidTheme = uiTheme == "zx"
     val isPersepolisTheme = themeMode == "4"
     // Persepolis uses a light parchment palette; keep system-bar icons dark there.
     val effectiveDarkTheme = when {
         isPersepolisTheme -> false
-        isRadarTheme || isSurvivalTheme || isAuroraTheme || isRdrnTheme || themeMode == "3" -> true
+        isRadarTheme || isSurvivalTheme || isAuroraTheme || isRdrnTheme || isZxLiquidTheme || themeMode == "3" -> true
         else -> darkTheme
     }
     // Ordinary system appearance is the default; special themes are opt-in.
     val colorScheme = when {
         isRdrnTheme -> com.aras.client.ui.rdrn.RadarNeonColorScheme
+        isZxLiquidTheme -> ZxLiquidColor
         isRadarTheme -> RadarColorScheme
         isSurvivalTheme -> SurvivalColorScheme
         isPersepolisTheme -> PersepolisColorScheme
