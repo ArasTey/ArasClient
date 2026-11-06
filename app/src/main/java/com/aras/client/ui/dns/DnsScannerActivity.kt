@@ -134,7 +134,7 @@ private fun DnsScannerScreen(
                             }
                         }
                         Text("${resolvers.size} resolvers ready", fontWeight = FontWeight.Bold)
-                        Text("A, AAAA, NS, TXT, EDNS and randomized NXDOMAIN checks. UDP is used first; truncated replies retry over TCP.")
+                        Text("A, AAAA, NS, TXT, EDNS and randomized NXDOMAIN checks. Also validates independent Google DoH and Cloudflare DoT reachability. UDP replies retry over TCP when truncated.")
                         Button(
                             enabled = scanning || resolvers.isNotEmpty(),
                             onClick = {
@@ -188,12 +188,18 @@ private fun DnsScannerScreen(
                         FilterChip(selected = healthyOnly, onClick = { healthyOnly = !healthyOnly }, label = { Text("Healthy only") })
                         FilterChip(selected = sortByScore, onClick = { sortByScore = !sortByScore }, label = { Text("Sort: score") })
                         OutlinedButton(onClick = {
-                            val text = results.filter { it.isHealthy }.joinToString("\n") {
-                                "${it.resolver.primary}\t${it.averageLatencyMs ?: 0} ms\t${it.passedCount}/${it.checks.size}"
+                            val csv = buildString {
+                                appendLine("resolver,ip,healthy,passed,total,check,transport,latency_ms,detail")
+                                results.forEach { result ->
+                                    result.checks.forEach { check ->
+                                        val cells = listOf(result.resolver.name, result.resolver.primary, result.isHealthy.toString(), result.passedCount.toString(), result.checks.size.toString(), check.name, check.transport, check.latencyMs?.toString().orEmpty(), check.detail)
+                                        appendLine(cells.joinToString(",") { "\"" + it.replace("\"", "\"\"") + "\"" })
+                                    }
+                                }
                             }
-                            clipboard.setText(AnnotatedString(text))
-                            selectionMessage = "Healthy resolvers copied"
-                        }) { Text("Copy") }
+                            clipboard.setText(AnnotatedString(csv))
+                            selectionMessage = "CSV results copied"
+                        }) { Text("Copy CSV") }
                     }
                 }
             }
