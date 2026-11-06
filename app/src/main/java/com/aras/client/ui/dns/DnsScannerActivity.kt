@@ -154,7 +154,7 @@ private fun DnsScannerScreen(
                             }
                         }
                         Text("${resolvers.size} resolvers ready", fontWeight = FontWeight.Bold)
-                        Text(if (scanMode == DnsScanMode.SIMPLE) "Quick A-record reachability and latency check." else "A, AAAA, NS, TXT, EDNS, randomized NXDOMAIN, plus independent Google DoH and Cloudflare DoT route checks. Truncated UDP replies retry over TCP.")
+                        Text(if (scanMode == DnsScanMode.SIMPLE) "Quick A-record reachability and latency check." else "Simple checks A/AAAA/NS/TXT. Advanced adds EDNS, randomized NXDOMAIN, DPI heuristics, and one route-level DoH/DoT validation. Truncated UDP replies retry over TCP.")
                         Button(
                             enabled = scanning || resolvers.isNotEmpty(),
                             onClick = {
@@ -213,7 +213,7 @@ private fun DnsScannerScreen(
                                 appendLine("resolver,ip,healthy,passed,total,check,transport,latency_ms,detail")
                                 results.forEach { result ->
                                     result.checks.forEach { check ->
-                                        val cells = listOf(result.resolver.name, result.resolver.primary, result.isHealthy.toString(), result.passedCount.toString(), result.checks.size.toString(), check.name, check.transport, check.latencyMs?.toString().orEmpty(), check.detail)
+                                        val cells = listOf(result.resolver.name, result.resolver.primary, result.isHealthy.toString(), result.passedCount.toString(), result.probeCount.toString(), check.name, check.transport, check.latencyMs?.toString().orEmpty(), check.detail)
                                         appendLine(cells.joinToString(",") { "\"" + it.replace("\"", "\"\"") + "\"" })
                                     }
                                 }

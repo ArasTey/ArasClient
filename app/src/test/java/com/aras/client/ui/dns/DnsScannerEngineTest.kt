@@ -48,6 +48,31 @@ class DnsScannerEngineTest {
     }
 
     @Test
+    fun routeLevelSecureDnsChecksDoNotInflateResolverHealth() {
+        val resolver = DnsProfile("test", "1.1.1.1", "")
+        val checks = listOf(
+            DnsScanCheck("A", true, 0, 20, "UDP", "ok"),
+            DnsScanCheck("DoH", true, 0, 10, "DoH/HTTPS", "route ok"),
+            DnsScanCheck("DoT", true, 0, 12, "DoT/TLS", "route ok"),
+        )
+        val result = DnsResolverScanResult(resolver, checks)
+        assertEquals(1, result.passedCount)
+        assertEquals(1, result.probeCount)
+        assertFalse(result.isHealthy)
+    }
+
+    @Test
+    fun simpleModeResolverHealthUsesFourDnsRecordChecks() {
+        val resolver = DnsProfile("test", "1.1.1.1", "")
+        val checks = listOf("A", "AAAA", "NS", "TXT").map {
+            DnsScanCheck(it, true, 0, 20, "UDP", "ok")
+        }
+        val result = DnsResolverScanResult(resolver, checks)
+        assertEquals(4, result.passedCount)
+        assertTrue(result.isHealthy)
+    }
+
+    @Test
     fun rejectsMalformedDomainNames() {
         assertFalse(runCatching {
             DnsScannerEngine.buildQuery(1, "bad..example", 1)

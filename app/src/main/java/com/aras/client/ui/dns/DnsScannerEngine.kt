@@ -39,10 +39,13 @@ data class DnsResolverScanResult(
     val resolver: DnsProfile,
     val checks: List<DnsScanCheck>,
 ) {
-    val passedCount: Int get() = checks.count { it.passed }
-    val isHealthy: Boolean get() = passedCount >= 4 && checks.any { it.name == "A" && it.passed }
+    private val resolverChecks: List<DnsScanCheck>
+        get() = checks.filterNot { it.transport == "DoH/HTTPS" || it.transport == "DoT/TLS" }
+    val passedCount: Int get() = resolverChecks.count { it.passed }
+    val probeCount: Int get() = resolverChecks.size
+    val isHealthy: Boolean get() = passedCount >= 4 && resolverChecks.any { it.name == "A" && it.passed }
     val averageLatencyMs: Long?
-        get() = checks.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
+        get() = resolverChecks.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
 }
 
 enum class DnsScanMode { SIMPLE, ADVANCED }
@@ -69,7 +72,7 @@ object DnsScannerEngine {
         val uniqueResolvers = resolvers.distinctBy { it.primary }
         val gate = Semaphore(concurrency)
         val completed = AtomicInteger(0)
-        return coroutineScope {
+        val scanned = coroutineScope {
             uniqueResolvers.map { resolver ->
                 async(Dispatchers.IO) {
                     gate.withPermit {
@@ -81,6 +84,15 @@ object DnsScannerEngine {
                     }
                 }
             }.awaitAll()
+        }
+        if (mode == DnsScanMode.ADVANCED && scanned.isNotEmpty()) {
+            onProgress(DnsScanProgress(uniqueResolvers.size, uniqueResolvers.size, "Secure DNS route"))
+            val routeChecks = withContext(Dispatchers.IO) {
+                listOf(runGoogleDohCheck(timeoutMs), runCloudflareDotCheck(timeoutMs))
+            }
+            scanned.map { result -> result.copy(checks = result.checks + routeChecks) }
+        } else {
+            scanned
         }
     }
 
@@ -131,7 +143,7 @@ object DnsScannerEngine {
             ))
         }
         val checks = mutableListOf<DnsScanCheck>()
-        val selectedChecks = if (mode == DnsScanMode.SIMPLE) listOf("A" to 1) else checkTypes
+        val selectedChecks = checkTypes
         for ((label, type) in selectedChecks) {
             currentCoroutineContext().ensureActive()
             checks += runCheck(resolver.primary, label, "example.com", type, timeoutMs, false, false)
@@ -146,8 +158,6 @@ object DnsScannerEngine {
             checks += runCheck(resolver.primary, "NXDOMAIN", randomLabel + ".invalid", 1, timeoutMs, false, true)
             currentCoroutineContext().ensureActive()
             checks += runCheck(resolver.primary, "DPI heuristic", "probe-" + randomLabel + ".invalid", 1, timeoutMs, false, true)
-            checks += runGoogleDohCheck(timeoutMs)
-            checks += runCloudflareDotCheck(timeoutMs)
         }
         return DnsResolverScanResult(resolver, checks)
     }
