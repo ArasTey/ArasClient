@@ -2,7 +2,6 @@ package com.aras.client.ui.zx.mtu
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 /** Port of ZX MtuOptimizer: binary-searches the path MTU with don't-fragment pings. */
 enum class MtuVerdict { Fits, TooBig, NoReply, Unavailable }
@@ -78,9 +77,15 @@ object MtuOptimizer {
     fun pingProbe(host: String, payload: Int): MtuVerdict {
         val process = ProcessBuilder("ping", "-c", "1", "-W", "2", "-M", "do", "-s", payload.toString(), host)
             .redirectErrorStream(true).start()
-        val finished = process.waitFor(4, TimeUnit.SECONDS)
-        if (!finished) { process.destroyForcibly(); return MtuVerdict.NoReply }
-        val out = process.inputStream.bufferedReader().readText().lowercase()
+        // API 24 safe timeout: watchdog destroys the process if ping hangs.
+        val watchdog = Thread {
+            try { Thread.sleep(4_000); process.destroy() } catch (_: InterruptedException) { }
+        }.apply { isDaemon = true; start() }
+        val out = try {
+            process.inputStream.bufferedReader().readText().lowercase().also { process.waitFor() }
+        } finally {
+            watchdog.interrupt()
+        }
         return when {
             "frag needed" in out || "message too long" in out || "too long" in out -> MtuVerdict.TooBig
             "invalid option" in out || "usage" in out || "not found" in out -> MtuVerdict.Unavailable
