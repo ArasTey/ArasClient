@@ -8,9 +8,11 @@ This document records the source audit and the safe integration boundary for bri
 
 - DNS Scanner: an initial native Kotlin scanner and Compose screen are now present. The screen is reachable from the + menu and probes A, AAAA, NS, TXT, EDNS, randomized subdomains, NXDOMAIN and a cautious wildcard/synthetic-answer heuristic. UDP is used first and truncated replies retry over TCP. Results include latency and an explicit action to apply a healthy resolver to the existing DNS profile.
 - DNS Scanner update: the native target scanner now reports resolver-by-resolver progress, exposes cancellation, and uses a process-scoped coordinator so navigation or Activity recreation does not discard an in-flight scan. Cancellation is checked between DNS probes; an in-flight blocking socket operation can still take up to its configured timeout to return. The scan remains user-triggered and is not yet backed by a foreground service. It does not yet provide a persistent background ScanService, full result history/export, DNS-over-HTTPS/TLS probing, or a definitive DPI verdict. A wildcard/synthetic response is only a warning signal, not proof of DPI.
-- Tor: no operational Tor runtime has been integrated into the target app yet. The Tor section below is the implementation contract, not a claim of working Tor support. Native Tor, Snowflake Go bindings, Lyrebird, process lifecycle, SOCKS data-plane wiring and device-level tests remain required.
+- Tor: no operational Tor runtime has been integrated into the target app yet. The ZX source references `libtor.so`, and SlipNet's full Tor path depends on Tor/Snowflake/Lyrebird runtime components; the current target tree does not contain a verified `libtor.so` or Snowflake Go runtime. Existing `liblyrebird.so` alone is not sufficient. The Tor section below is the implementation contract, not a claim of working Tor support. Native Tor, Snowflake Go bindings, Lyrebird, process lifecycle, SOCKS data-plane wiring and device-level tests remain required.
 
 ## Repository architecture findings
+
+The target map is now a native Compose Canvas renderer using the ZX-derived `WorldMapCanvas` and an offline map asset under `app/src/main/assets/map/world.bin`; IP lookup and saved endpoints remain target-native.
 
 The target app currently uses the Xray-based service stack and a `hev-socks5-tunnel` TUN-to-SOCKS5 layer (`TProxyService`). It is not built on SlipNet's Hilt/Repository/ViewModel architecture. Copying SlipNet classes verbatim would therefore introduce unresolved dependencies and lifecycle assumptions.
 
