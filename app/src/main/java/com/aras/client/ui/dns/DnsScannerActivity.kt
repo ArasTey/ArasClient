@@ -24,7 +24,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -136,7 +135,7 @@ private fun DnsScannerScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             if (scanning) {
-                                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.size(8.dp))
                                 Text("CANCEL SCAN")
                             } else {
