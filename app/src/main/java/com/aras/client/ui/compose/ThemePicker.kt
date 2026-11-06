@@ -293,10 +293,10 @@ fun ThemePicker(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(if (choice.value == "rdrx") 96.dp else 42.dp)
+                                    .height(if (choice.value == "rdrx" || choice.value == "zx") 96.dp else 42.dp)
                                     .clip(RoundedCornerShape(9.dp))
                                     .background(
-                                        if (choice.value == "rdrx") androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        if (choice.value == "rdrx" || choice.value == "zx") androidx.compose.ui.graphics.Brush.verticalGradient(
                                             listOf(Color(0xFF0B1B3A), Color(0xFF2A1250))
                                         ) else androidx.compose.ui.graphics.SolidColor(choice.background)
                                     )
@@ -320,7 +320,7 @@ fun ThemePicker(
                                         )
                                     }
                                 }
-                                if (choice.value != "rdrx") Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                if (choice.value != "rdrx" && choice.value != "zx") Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Box(
                                         Modifier.fillMaxWidth(0.55f).height(4.dp)
                                             .clip(CircleShape).background(choice.accent)
