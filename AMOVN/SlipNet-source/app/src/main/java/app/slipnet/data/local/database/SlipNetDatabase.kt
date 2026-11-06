@@ -1,0 +1,648 @@
+package app.slipnet.data.local.database
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
+@Database(
+    entities = [ProfileEntity::class, ChainEntity::class],
+    version = 44,
+    exportSchema = true
+)
+abstract class SlipNetDatabase : RoomDatabase() {
+    abstract fun profileDao(): ProfileDao
+    abstract fun chainDao(): ChainDao
+
+    companion object {
+        const val DATABASE_NAME = "slipstream_database"
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ssh_port INTEGER NOT NULL DEFAULT 22")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN forward_dns_through_ssh INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ssh_host TEXT NOT NULL DEFAULT '127.0.0.1'")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // use_server_dns column removed — no-op migration to preserve chain
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN doh_url TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN last_connected_at INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN dns_transport TEXT NOT NULL DEFAULT 'udp'")
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ssh_auth_type TEXT NOT NULL DEFAULT 'password'")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ssh_private_key TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ssh_key_passphrase TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN tor_bridge_lines TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+                // Assign sequential sort_order preserving current updated_at DESC order
+                db.execSQL("""
+                    UPDATE server_profiles SET sort_order = (
+                        SELECT COUNT(*) FROM server_profiles AS sp2
+                        WHERE sp2.updated_at > server_profiles.updated_at
+                           OR (sp2.updated_at = server_profiles.updated_at AND sp2.id < server_profiles.id)
+                    )
+                """.trimIndent())
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Check if the deprecated use_server_dns column exists (was added in old
+                // migration 8→9, later removed from Entity when it became a global setting).
+                // Room requires exact schema match, so we must drop the orphaned column.
+                val cursor = db.query("PRAGMA table_info(server_profiles)")
+                var hasUseServerDns = false
+                while (cursor.moveToNext()) {
+                    val nameIdx = cursor.getColumnIndex("name")
+                    if (nameIdx >= 0 && cursor.getString(nameIdx) == "use_server_dns") {
+                        hasUseServerDns = true
+                        break
+                    }
+                }
+                cursor.close()
+
+                if (hasUseServerDns) {
+                    // Recreate table without use_server_dns, adding dnstt_authoritative.
+                    // ALTER TABLE DROP COLUMN requires SQLite 3.35.0+ (Android 13+),
+                    // so we use the table-recreation approach for minSdk 24 compatibility.
+                    db.execSQL("""
+                        CREATE TABLE server_profiles_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            name TEXT NOT NULL,
+                            domain TEXT NOT NULL,
+                            resolvers_json TEXT NOT NULL,
+                            authoritative_mode INTEGER NOT NULL,
+                            keep_alive_interval INTEGER NOT NULL,
+                            congestion_control TEXT NOT NULL,
+                            gso_enabled INTEGER NOT NULL,
+                            tcp_listen_port INTEGER NOT NULL,
+                            tcp_listen_host TEXT NOT NULL,
+                            socks_username TEXT NOT NULL DEFAULT '',
+                            socks_password TEXT NOT NULL DEFAULT '',
+                            is_active INTEGER NOT NULL,
+                            created_at INTEGER NOT NULL,
+                            updated_at INTEGER NOT NULL,
+                            tunnel_type TEXT NOT NULL DEFAULT 'slipstream',
+                            dnstt_public_key TEXT NOT NULL DEFAULT '',
+                            ssh_enabled INTEGER NOT NULL DEFAULT 0,
+                            ssh_username TEXT NOT NULL DEFAULT '',
+                            ssh_password TEXT NOT NULL DEFAULT '',
+                            ssh_port INTEGER NOT NULL DEFAULT 22,
+                            forward_dns_through_ssh INTEGER NOT NULL DEFAULT 0,
+                            ssh_host TEXT NOT NULL DEFAULT '127.0.0.1',
+                            doh_url TEXT NOT NULL DEFAULT '',
+                            last_connected_at INTEGER NOT NULL DEFAULT 0,
+                            dns_transport TEXT NOT NULL DEFAULT 'udp',
+                            ssh_auth_type TEXT NOT NULL DEFAULT 'password',
+                            ssh_private_key TEXT NOT NULL DEFAULT '',
+                            ssh_key_passphrase TEXT NOT NULL DEFAULT '',
+                            tor_bridge_lines TEXT NOT NULL DEFAULT '',
+                            sort_order INTEGER NOT NULL DEFAULT 0,
+                            dnstt_authoritative INTEGER NOT NULL DEFAULT 0
+                        )
+                    """.trimIndent())
+                    db.execSQL("""
+                        INSERT INTO server_profiles_new (
+                            id, name, domain, resolvers_json, authoritative_mode,
+                            keep_alive_interval, congestion_control, gso_enabled,
+                            tcp_listen_port, tcp_listen_host, socks_username, socks_password,
+                            is_active, created_at, updated_at, tunnel_type, dnstt_public_key,
+                            ssh_enabled, ssh_username, ssh_password, ssh_port,
+                            forward_dns_through_ssh, ssh_host, doh_url, last_connected_at,
+                            dns_transport, ssh_auth_type, ssh_private_key, ssh_key_passphrase,
+                            tor_bridge_lines, sort_order
+                        )
+                        SELECT
+                            id, name, domain, resolvers_json, authoritative_mode,
+                            keep_alive_interval, congestion_control, gso_enabled,
+                            tcp_listen_port, tcp_listen_host, socks_username, socks_password,
+                            is_active, created_at, updated_at, tunnel_type, dnstt_public_key,
+                            ssh_enabled, ssh_username, ssh_password, ssh_port,
+                            forward_dns_through_ssh, ssh_host, doh_url, last_connected_at,
+                            dns_transport, ssh_auth_type, ssh_private_key, ssh_key_passphrase,
+                            tor_bridge_lines, sort_order
+                        FROM server_profiles
+                    """.trimIndent())
+                    db.execSQL("DROP TABLE server_profiles")
+                    db.execSQL("ALTER TABLE server_profiles_new RENAME TO server_profiles")
+                } else {
+                    // Column doesn't exist (fresh install path) — just add dnstt_authoritative
+                    db.execSQL("ALTER TABLE server_profiles ADD COLUMN dnstt_authoritative INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Drop use_server_dns column if it still exists (v1.8.5 had it in the Entity
+                // at version 16; v1.8.7 removed it from the Entity without bumping the version,
+                // so users on v1.8.5 DB still have the column but MIGRATION_15_16 never ran for them).
+                val cursor = db.query("PRAGMA table_info(server_profiles)")
+                var hasUseServerDns = false
+                while (cursor.moveToNext()) {
+                    val nameIdx = cursor.getColumnIndex("name")
+                    if (nameIdx >= 0 && cursor.getString(nameIdx) == "use_server_dns") {
+                        hasUseServerDns = true
+                        break
+                    }
+                }
+                cursor.close()
+
+                if (hasUseServerDns) {
+                    // Recreate table without use_server_dns, adding naive_* columns.
+                    // ALTER TABLE DROP COLUMN requires SQLite 3.35.0+ (Android 13+),
+                    // so use table-recreation for minSdk 24 compatibility.
+                    db.execSQL("""
+                        CREATE TABLE server_profiles_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            name TEXT NOT NULL,
+                            domain TEXT NOT NULL,
+                            resolvers_json TEXT NOT NULL,
+                            authoritative_mode INTEGER NOT NULL,
+                            keep_alive_interval INTEGER NOT NULL,
+                            congestion_control TEXT NOT NULL,
+                            gso_enabled INTEGER NOT NULL,
+                            tcp_listen_port INTEGER NOT NULL,
+                            tcp_listen_host TEXT NOT NULL,
+                            socks_username TEXT NOT NULL DEFAULT '',
+                            socks_password TEXT NOT NULL DEFAULT '',
+                            is_active INTEGER NOT NULL,
+                            created_at INTEGER NOT NULL,
+                            updated_at INTEGER NOT NULL,
+                            tunnel_type TEXT NOT NULL DEFAULT 'slipstream',
+                            dnstt_public_key TEXT NOT NULL DEFAULT '',
+                            ssh_enabled INTEGER NOT NULL DEFAULT 0,
+                            ssh_username TEXT NOT NULL DEFAULT '',
+                            ssh_password TEXT NOT NULL DEFAULT '',
+                            ssh_port INTEGER NOT NULL DEFAULT 22,
+                            forward_dns_through_ssh INTEGER NOT NULL DEFAULT 0,
+                            ssh_host TEXT NOT NULL DEFAULT '127.0.0.1',
+                            doh_url TEXT NOT NULL DEFAULT '',
+                            last_connected_at INTEGER NOT NULL DEFAULT 0,
+                            dns_transport TEXT NOT NULL DEFAULT 'udp',
+                            ssh_auth_type TEXT NOT NULL DEFAULT 'password',
+                            ssh_private_key TEXT NOT NULL DEFAULT '',
+                            ssh_key_passphrase TEXT NOT NULL DEFAULT '',
+                            tor_bridge_lines TEXT NOT NULL DEFAULT '',
+                            sort_order INTEGER NOT NULL DEFAULT 0,
+                            dnstt_authoritative INTEGER NOT NULL DEFAULT 0,
+                            naive_port INTEGER NOT NULL DEFAULT 443,
+                            naive_username TEXT NOT NULL DEFAULT '',
+                            naive_password TEXT NOT NULL DEFAULT ''
+                        )
+                    """.trimIndent())
+                    db.execSQL("""
+                        INSERT INTO server_profiles_new (
+                            id, name, domain, resolvers_json, authoritative_mode,
+                            keep_alive_interval, congestion_control, gso_enabled,
+                            tcp_listen_port, tcp_listen_host, socks_username, socks_password,
+                            is_active, created_at, updated_at, tunnel_type, dnstt_public_key,
+                            ssh_enabled, ssh_username, ssh_password, ssh_port,
+                            forward_dns_through_ssh, ssh_host, doh_url, last_connected_at,
+                            dns_transport, ssh_auth_type, ssh_private_key, ssh_key_passphrase,
+                            tor_bridge_lines, sort_order, dnstt_authoritative
+                        )
+                        SELECT
+                            id, name, domain, resolvers_json, authoritative_mode,
+                            keep_alive_interval, congestion_control, gso_enabled,
+                            tcp_listen_port, tcp_listen_host, socks_username, socks_password,
+                            is_active, created_at, updated_at, tunnel_type, dnstt_public_key,
+                            ssh_enabled, ssh_username, ssh_password, ssh_port,
+                            forward_dns_through_ssh, ssh_host, doh_url, last_connected_at,
+                            dns_transport, ssh_auth_type, ssh_private_key, ssh_key_passphrase,
+                            tor_bridge_lines, sort_order, dnstt_authoritative
+                        FROM server_profiles
+                    """.trimIndent())
+                    db.execSQL("DROP TABLE server_profiles")
+                    db.execSQL("ALTER TABLE server_profiles_new RENAME TO server_profiles")
+                } else {
+                    // Column already removed (fresh install or MIGRATION_15_16 handled it)
+                    db.execSQL("ALTER TABLE server_profiles ADD COLUMN naive_port INTEGER NOT NULL DEFAULT 443")
+                    db.execSQL("ALTER TABLE server_profiles ADD COLUMN naive_username TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE server_profiles ADD COLUMN naive_password TEXT NOT NULL DEFAULT ''")
+                }
+            }
+        }
+
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN lock_password_hash TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN expiration_date INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN allow_sharing INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN bound_device_id TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN noizdns_stealth INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN dns_payload_size INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN resolvers_hidden INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS profile_chains (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        profile_ids_json TEXT NOT NULL DEFAULT '[]',
+                        is_active INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        sort_order INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+            }
+        }
+
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN socks5_server_port INTEGER NOT NULL DEFAULT 1080")
+            }
+        }
+
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN default_resolvers_json TEXT NOT NULL DEFAULT '[]'")
+                // Copy current resolvers as defaults for profiles that already have hidden resolvers
+                db.execSQL("UPDATE server_profiles SET default_resolvers_json = resolvers_json WHERE resolvers_hidden = 1")
+            }
+        }
+
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_dnstt_compat INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_record_type TEXT NOT NULL DEFAULT 'txt'")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_max_qname_len INTEGER NOT NULL DEFAULT 101")
+            }
+        }
+
+        val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_rps REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
+        val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_idle_timeout INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_keepalive INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_udp_timeout INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_max_num_labels INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vaydns_clientid_size INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN resolver_mode TEXT NOT NULL DEFAULT 'fanout'")
+            }
+        }
+
+        val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Some users already have these columns (added to Entity at v30 without
+                // a migration in earlier beta builds). Check before adding to avoid crash.
+                val existing = mutableSetOf<String>()
+                val cursor = db.query("PRAGMA table_info(server_profiles)")
+                while (cursor.moveToNext()) {
+                    val nameIdx = cursor.getColumnIndex("name")
+                    if (nameIdx >= 0) existing.add(cursor.getString(nameIdx))
+                }
+                cursor.close()
+
+                fun addIfMissing(col: String, def: String) {
+                    if (col !in existing) {
+                        db.execSQL("ALTER TABLE server_profiles ADD COLUMN $col $def")
+                    }
+                }
+
+                // SSH over TLS
+                addIfMissing("ssh_tls_enabled", "INTEGER NOT NULL DEFAULT 0")
+                addIfMissing("ssh_tls_sni", "TEXT NOT NULL DEFAULT ''")
+                // SSH over HTTP CONNECT proxy
+                addIfMissing("ssh_http_proxy_host", "TEXT NOT NULL DEFAULT ''")
+                addIfMissing("ssh_http_proxy_port", "INTEGER NOT NULL DEFAULT 8080")
+                addIfMissing("ssh_http_proxy_custom_host", "TEXT NOT NULL DEFAULT ''")
+                // SSH over WebSocket
+                addIfMissing("ssh_ws_enabled", "INTEGER NOT NULL DEFAULT 0")
+                addIfMissing("ssh_ws_path", "TEXT NOT NULL DEFAULT '/'")
+                addIfMissing("ssh_ws_use_tls", "INTEGER NOT NULL DEFAULT 1")
+                addIfMissing("ssh_ws_custom_host", "TEXT NOT NULL DEFAULT ''")
+                // Raw payload before SSH handshake
+                addIfMissing("ssh_payload", "TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN rr_spread_count INTEGER NOT NULL DEFAULT 3")
+            }
+        }
+
+        val MIGRATION_32_33 = object : Migration(32, 33) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // VLESS fields
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vless_uuid TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vless_ws_path TEXT NOT NULL DEFAULT '/'")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN cdn_ip TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN cdn_port INTEGER NOT NULL DEFAULT 443")
+                // SNI fragmentation
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN sni_fragment_enabled INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN sni_fragment_strategy TEXT NOT NULL DEFAULT 'sni_split'")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN sni_fragment_delay_ms INTEGER NOT NULL DEFAULT 100")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN fake_sni TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vless_security TEXT NOT NULL DEFAULT 'tls'")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vless_transport TEXT NOT NULL DEFAULT 'ws'")
+            }
+        }
+
+        val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ch_padding_enabled INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ws_header_obfuscation INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN ws_padding_enabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN sni_spoof_ttl INTEGER NOT NULL DEFAULT 8")
+            }
+        }
+
+        val MIGRATION_36_37 = object : Migration(36, 37) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN fake_decoy_host TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_37_38 = object : Migration(37, 38) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN tcp_max_seg INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Splits the legacy single `fake_sni` column into two fields:
+        //   vless_sni — authoritative CDN SNI (may differ from WS Host legitimately)
+        //   fake_sni  — DPI-evasion override that *replaces* the real SNI
+        // Old imports stuffed any URI `sni=` that differed from `host=` into
+        // `fake_sni`, which incorrectly activated the "breaks CDN routing"
+        // override path. Migrate by copying existing fake_sni values into the
+        // new vless_sni column for VLESS profiles so legitimate CDN configs
+        // start working, and clear fake_sni so the override is no longer active
+        // on those profiles.
+        val MIGRATION_38_39 = object : Migration(38, 39) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN vless_sni TEXT NOT NULL DEFAULT ''")
+                db.execSQL("UPDATE server_profiles SET vless_sni = fake_sni, fake_sni = '' WHERE tunnel_type = 'vless' AND fake_sni != ''")
+            }
+        }
+
+        val MIGRATION_39_40 = object : Migration(39, 40) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN dns_auto_tune INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_40_41 = object : Migration(40, 41) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // dns_pool / dns_pool_enabled were briefly here for the
+                // per-profile DNS pool; that feature became a global Settings
+                // pref before shipping, so this migration is now a no-op.
+            }
+        }
+
+        // Drops three legacy/redundant columns via table recreation:
+        //   fake_sni            — cleared by v39 migration, never read since
+        //   ssh_enabled         — derived from tunnel_type, never read back
+        //   forward_dns_through_ssh — old removed feature, always written false
+        val MIGRATION_41_42 = object : Migration(41, 42) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE server_profiles_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        domain TEXT NOT NULL DEFAULT '',
+                        resolvers_json TEXT NOT NULL DEFAULT '[]',
+                        authoritative_mode INTEGER NOT NULL,
+                        keep_alive_interval INTEGER NOT NULL,
+                        congestion_control TEXT NOT NULL,
+                        gso_enabled INTEGER NOT NULL,
+                        tcp_listen_port INTEGER NOT NULL,
+                        tcp_listen_host TEXT NOT NULL,
+                        socks_username TEXT NOT NULL DEFAULT '',
+                        socks_password TEXT NOT NULL DEFAULT '',
+                        is_active INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        tunnel_type TEXT NOT NULL DEFAULT 'slipstream',
+                        dnstt_public_key TEXT NOT NULL DEFAULT '',
+                        ssh_username TEXT NOT NULL DEFAULT '',
+                        ssh_password TEXT NOT NULL DEFAULT '',
+                        ssh_port INTEGER NOT NULL DEFAULT 22,
+                        ssh_host TEXT NOT NULL DEFAULT '127.0.0.1',
+                        doh_url TEXT NOT NULL DEFAULT '',
+                        last_connected_at INTEGER NOT NULL DEFAULT 0,
+                        dns_transport TEXT NOT NULL DEFAULT 'udp',
+                        ssh_auth_type TEXT NOT NULL DEFAULT 'password',
+                        ssh_private_key TEXT NOT NULL DEFAULT '',
+                        ssh_key_passphrase TEXT NOT NULL DEFAULT '',
+                        tor_bridge_lines TEXT NOT NULL DEFAULT '',
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        dnstt_authoritative INTEGER NOT NULL DEFAULT 0,
+                        naive_port INTEGER NOT NULL DEFAULT 443,
+                        naive_username TEXT NOT NULL DEFAULT '',
+                        naive_password TEXT NOT NULL DEFAULT '',
+                        is_locked INTEGER NOT NULL DEFAULT 0,
+                        lock_password_hash TEXT NOT NULL DEFAULT '',
+                        expiration_date INTEGER NOT NULL DEFAULT 0,
+                        allow_sharing INTEGER NOT NULL DEFAULT 0,
+                        bound_device_id TEXT NOT NULL DEFAULT '',
+                        noizdns_stealth INTEGER NOT NULL DEFAULT 0,
+                        dns_payload_size INTEGER NOT NULL DEFAULT 0,
+                        resolvers_hidden INTEGER NOT NULL DEFAULT 0,
+                        default_resolvers_json TEXT NOT NULL DEFAULT '[]',
+                        socks5_server_port INTEGER NOT NULL DEFAULT 1080,
+                        vaydns_dnstt_compat INTEGER NOT NULL DEFAULT 0,
+                        vaydns_record_type TEXT NOT NULL DEFAULT 'txt',
+                        vaydns_max_qname_len INTEGER NOT NULL DEFAULT 101,
+                        vaydns_rps REAL NOT NULL DEFAULT 0.0,
+                        vaydns_idle_timeout INTEGER NOT NULL DEFAULT 0,
+                        vaydns_keepalive INTEGER NOT NULL DEFAULT 0,
+                        vaydns_udp_timeout INTEGER NOT NULL DEFAULT 0,
+                        vaydns_max_num_labels INTEGER NOT NULL DEFAULT 0,
+                        vaydns_clientid_size INTEGER NOT NULL DEFAULT 0,
+                        is_pinned INTEGER NOT NULL DEFAULT 0,
+                        ssh_tls_enabled INTEGER NOT NULL DEFAULT 0,
+                        ssh_tls_sni TEXT NOT NULL DEFAULT '',
+                        ssh_http_proxy_host TEXT NOT NULL DEFAULT '',
+                        ssh_http_proxy_port INTEGER NOT NULL DEFAULT 8080,
+                        ssh_http_proxy_custom_host TEXT NOT NULL DEFAULT '',
+                        ssh_ws_enabled INTEGER NOT NULL DEFAULT 0,
+                        ssh_ws_path TEXT NOT NULL DEFAULT '/',
+                        ssh_ws_use_tls INTEGER NOT NULL DEFAULT 1,
+                        ssh_ws_custom_host TEXT NOT NULL DEFAULT '',
+                        ssh_payload TEXT NOT NULL DEFAULT '',
+                        resolver_mode TEXT NOT NULL DEFAULT 'fanout',
+                        rr_spread_count INTEGER NOT NULL DEFAULT 3,
+                        vless_uuid TEXT NOT NULL DEFAULT '',
+                        vless_security TEXT NOT NULL DEFAULT 'tls',
+                        vless_transport TEXT NOT NULL DEFAULT 'ws',
+                        vless_ws_path TEXT NOT NULL DEFAULT '/',
+                        cdn_ip TEXT NOT NULL DEFAULT '',
+                        cdn_port INTEGER NOT NULL DEFAULT 443,
+                        sni_fragment_enabled INTEGER NOT NULL DEFAULT 1,
+                        sni_fragment_strategy TEXT NOT NULL DEFAULT 'sni_split',
+                        sni_fragment_delay_ms INTEGER NOT NULL DEFAULT 100,
+                        sni_spoof_ttl INTEGER NOT NULL DEFAULT 8,
+                        vless_sni TEXT NOT NULL DEFAULT '',
+                        fake_decoy_host TEXT NOT NULL DEFAULT '',
+                        tcp_max_seg INTEGER NOT NULL DEFAULT 0,
+                        ch_padding_enabled INTEGER NOT NULL DEFAULT 0,
+                        ws_header_obfuscation INTEGER NOT NULL DEFAULT 0,
+                        ws_padding_enabled INTEGER NOT NULL DEFAULT 0,
+                        dns_auto_tune INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    INSERT INTO server_profiles_new (
+                        id, name, domain, resolvers_json, authoritative_mode,
+                        keep_alive_interval, congestion_control, gso_enabled,
+                        tcp_listen_port, tcp_listen_host, socks_username, socks_password,
+                        is_active, created_at, updated_at, tunnel_type, dnstt_public_key,
+                        ssh_username, ssh_password, ssh_port, ssh_host, doh_url,
+                        last_connected_at, dns_transport, ssh_auth_type, ssh_private_key,
+                        ssh_key_passphrase, tor_bridge_lines, sort_order, dnstt_authoritative,
+                        naive_port, naive_username, naive_password, is_locked, lock_password_hash,
+                        expiration_date, allow_sharing, bound_device_id, noizdns_stealth,
+                        dns_payload_size, resolvers_hidden, default_resolvers_json,
+                        socks5_server_port, vaydns_dnstt_compat, vaydns_record_type,
+                        vaydns_max_qname_len, vaydns_rps, vaydns_idle_timeout, vaydns_keepalive,
+                        vaydns_udp_timeout, vaydns_max_num_labels, vaydns_clientid_size,
+                        is_pinned, ssh_tls_enabled, ssh_tls_sni, ssh_http_proxy_host,
+                        ssh_http_proxy_port, ssh_http_proxy_custom_host, ssh_ws_enabled,
+                        ssh_ws_path, ssh_ws_use_tls, ssh_ws_custom_host, ssh_payload,
+                        resolver_mode, rr_spread_count, vless_uuid, vless_security,
+                        vless_transport, vless_ws_path, cdn_ip, cdn_port,
+                        sni_fragment_enabled, sni_fragment_strategy, sni_fragment_delay_ms,
+                        sni_spoof_ttl, vless_sni, fake_decoy_host, tcp_max_seg,
+                        ch_padding_enabled, ws_header_obfuscation, ws_padding_enabled, dns_auto_tune
+                    )
+                    SELECT
+                        id, name, domain, resolvers_json, authoritative_mode,
+                        keep_alive_interval, congestion_control, gso_enabled,
+                        tcp_listen_port, tcp_listen_host, socks_username, socks_password,
+                        is_active, created_at, updated_at, tunnel_type, dnstt_public_key,
+                        ssh_username, ssh_password, ssh_port, ssh_host, doh_url,
+                        last_connected_at, dns_transport, ssh_auth_type, ssh_private_key,
+                        ssh_key_passphrase, tor_bridge_lines, sort_order, dnstt_authoritative,
+                        naive_port, naive_username, naive_password, is_locked, lock_password_hash,
+                        expiration_date, allow_sharing, bound_device_id, noizdns_stealth,
+                        dns_payload_size, resolvers_hidden, default_resolvers_json,
+                        socks5_server_port, vaydns_dnstt_compat, vaydns_record_type,
+                        vaydns_max_qname_len, vaydns_rps, vaydns_idle_timeout, vaydns_keepalive,
+                        vaydns_udp_timeout, vaydns_max_num_labels, vaydns_clientid_size,
+                        is_pinned, ssh_tls_enabled, ssh_tls_sni, ssh_http_proxy_host,
+                        ssh_http_proxy_port, ssh_http_proxy_custom_host, ssh_ws_enabled,
+                        ssh_ws_path, ssh_ws_use_tls, ssh_ws_custom_host, ssh_payload,
+                        resolver_mode, rr_spread_count, vless_uuid, vless_security,
+                        vless_transport, vless_ws_path, cdn_ip, cdn_port,
+                        sni_fragment_enabled, sni_fragment_strategy, sni_fragment_delay_ms,
+                        sni_spoof_ttl, vless_sni, fake_decoy_host, tcp_max_seg,
+                        ch_padding_enabled, ws_header_obfuscation, ws_padding_enabled, dns_auto_tune
+                    FROM server_profiles
+                """.trimIndent())
+                db.execSQL("DROP TABLE server_profiles")
+                db.execSQL("ALTER TABLE server_profiles_new RENAME TO server_profiles")
+            }
+        }
+
+        val MIGRATION_42_43 = object : Migration(42, 43) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN soar_discovery INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN soar_country TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN soar_tcp_mode TEXT NOT NULL DEFAULT 'auto'")
+            }
+        }
+
+        val MIGRATION_43_44 = object : Migration(43, 44) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN soar_discovery_list TEXT NOT NULL DEFAULT 'soar'")
+                db.execSQL("ALTER TABLE server_profiles ADD COLUMN soar_discovery_custom TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+    }
+}

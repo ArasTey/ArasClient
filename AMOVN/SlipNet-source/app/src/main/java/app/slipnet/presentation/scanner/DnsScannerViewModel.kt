@@ -1,0 +1,3507 @@
+package app.slipnet.presentation.scanner
+
+import android.content.Intent
+import android.os.PowerManager
+import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.slipnet.service.ScanService
+import app.slipnet.service.ScanServiceState
+import app.slipnet.service.ScanStateHolder
+import app.slipnet.domain.model.DnsTransport
+import app.slipnet.domain.model.DnsTunnelTestResult
+import app.slipnet.domain.model.E2eScannerState
+import app.slipnet.domain.model.E2eTestResult
+import app.slipnet.domain.model.ResolverScanResult
+import app.slipnet.domain.model.ResolverStatus
+import app.slipnet.domain.model.ScannerState
+import app.slipnet.domain.model.ServerProfile
+import app.slipnet.domain.model.SimpleModeE2eState
+import app.slipnet.domain.model.TunnelType
+import app.slipnet.data.local.datastore.PreferencesDataStore
+import app.slipnet.domain.repository.ProfileRepository
+import app.slipnet.domain.repository.ResolverScannerRepository
+import app.slipnet.domain.repository.VpnRepository
+import java.util.concurrent.atomic.AtomicInteger
+import app.slipnet.tunnel.DnsttBridge
+import app.slipnet.tunnel.VaydnsBridge
+import app.slipnet.tunnel.DomainRouter
+import app.slipnet.tunnel.GeoBypassCountry
+import app.slipnet.tunnel.SlipstreamBridge
+import com.google.gson.Gson
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
+import javax.inject.Inject
+
+data class CidrGroup(
+    val firstOctet: Int,
+    val label: String,
+    val rangeCount: Int,
+    val totalIps: Long,
+    val ranges: List<Pair<Long, Long>>
+)
+
+enum class E2eSortOption {
+    NONE, SPEED, IP, SCORE, E2E_SPEED, PRISM_SCORE
+}
+
+data class DnsScannerUiState(
+    val profileId: Long? = null,
+    val testDomain: String = "google.com",
+    val scanPort: String = "53",
+    val timeoutMs: String = "3000",
+    val concurrency: String = "50",
+    val resolverList: List<String> = emptyList(),
+    val scannerState: ScannerState = ScannerState(),
+    val selectedResolvers: Set<String> = emptySet(),
+    val recentDnsResolvers: List<String> = emptyList(),
+    val isLoadingList: Boolean = false,
+    val error: String? = null,
+    val listSource: ListSource = ListSource.DEFAULT,
+    val importedFileName: String? = null,
+    val selectedCountry: GeoBypassCountry = GeoBypassCountry.IR,
+    val sampleCount: Int = 2000,
+    val customRangeInput: String = "",
+    val customRangePreviewCount: Long = 0,
+    val useCustomSampleCount: Boolean = false,
+    val customSampleCountText: String = "",
+    val cidrGroups: List<CidrGroup> = emptyList(),
+    val selectedOctets: Set<Int> = emptySet(),
+    val shuffleList: Boolean = true,
+    val expandNeighbors: Boolean = false,
+    val showResumeDialog: Boolean = false,
+    val transparentProxyDetected: Boolean = false,
+    // E2E tunnel test state
+    val e2eScannerState: E2eScannerState = E2eScannerState(),
+    val testUrl: String = "http://www.gstatic.com/generate_204",
+    val e2eTimeoutMs: String = "15000",
+    val isVpnActive: Boolean = false,
+    val profile: ServerProfile? = null,
+    // Simple scan mode
+    val scanMode: ScanMode = ScanMode.SIMPLE,
+    val simpleModeE2eState: SimpleModeE2eState = SimpleModeE2eState(),
+    val e2eMinScore: Int = 2,
+    val e2eSortOption: E2eSortOption = E2eSortOption.NONE,
+    val e2eConcurrency: String = "6",
+    val e2eFullVerification: Boolean = false,
+    // Prism probe settings
+    val prismTimeoutMs: String = "2000",
+    val prismProbeCount: String = "5",
+    val prismPassThreshold: String = "2",
+    val prismResponseSize: String = "0",
+    val prismPrefilter: Boolean = false,
+    val prismPrefilterTimeoutMs: String = "1500",
+    // Last scan IPs dialog
+    val showLastScanIpsDialog: Boolean = false,
+    /** Transport mode for DNS scan probes: UDP, TCP, or BOTH (UDP and TCP probed in parallel). */
+    val scanTransport: ScanTransportMode = ScanTransportMode.UDP,
+    /**
+     * Per-host transport support from BOTH-mode scans: host -> (udpOk, tcpOk).
+     * Empty outside BOTH mode. Used to render per-row badges and to recommend a
+     * transport when selected resolvers are applied to a profile.
+     */
+    val hostTransportSupport: Map<String, Pair<Boolean, Boolean>> = emptyMap(),
+    // Saved DNS pool (explicitly saved by user from results screen)
+    val savedPoolLabel: String? = null,
+    val savedPoolSize: Int = 0,
+) {
+    companion object {
+        const val MAX_SELECTED_RESOLVERS = 8
+        const val MAX_SAMPLE_COUNT = 100_000
+        private val E2E_SUPPORTED_TUNNEL_TYPES = setOf(
+            TunnelType.SLIPSTREAM, TunnelType.SLIPSTREAM_SSH,
+            TunnelType.DNSTT, TunnelType.DNSTT_SSH,
+            TunnelType.NOIZDNS, TunnelType.NOIZDNS_SSH,
+            TunnelType.VAYDNS, TunnelType.VAYDNS_SSH
+        )
+        // Reserved for tunnel types where DNS tunnel compatibility scores are irrelevant.
+        // Currently empty — all supported tunnel types use DNS encoding.
+        val SCORE_IRRELEVANT_TUNNEL_TYPES = emptySet<TunnelType>()
+
+        /** Check if a hex string is a valid 32-byte Noise public key. */
+        fun isValidPubkey(key: String): Boolean =
+            key.length == 64 && key.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+    }
+
+    val effectiveTestDomain: String
+        get() = testDomain.ifBlank { profile?.domain ?: "google.com" }
+
+    val effectiveSampleCount: Int
+        get() = if (useCustomSampleCount) {
+            customSampleCountText.toIntOrNull()?.coerceIn(1, MAX_SAMPLE_COUNT) ?: sampleCount
+        } else sampleCount
+
+    val countryTotalIps: Long
+        get() = cidrGroups.sumOf { it.totalIps }
+
+    val selectedTotalIps: Long
+        get() = cidrGroups.filter { it.firstOctet in selectedOctets }.sumOf { it.totalIps }
+
+    val isSelectionLimitReached: Boolean
+        get() = selectedResolvers.size >= MAX_SELECTED_RESOLVERS
+
+    val selectionLimitMessage: String
+        get() = "Maximum $MAX_SELECTED_RESOLVERS resolvers can be selected"
+
+    /** The profile's public key, used directly for Prism mode. */
+    val profilePubkey: String get() = profile?.dnsttPublicKey.orEmpty()
+
+    /** True when the profile has a valid 32-byte hex public key for Prism. */
+    val profilePubkeyValid: Boolean get() = isValidPubkey(profilePubkey)
+
+    /** Prism requires a profile with a valid Noise public key. */
+    val canUsePrismMode: Boolean get() = profile != null && profilePubkeyValid
+
+    /** Per-probe timeout for Prism mode. */
+    val prismPerProbeMs: Long get() {
+        val timeout = prismTimeoutMs.toLongOrNull() ?: 2000L
+        val threshold = prismPassThreshold.toIntOrNull()?.coerceAtLeast(1) ?: 2
+        return timeout / threshold
+    }
+
+    /** True when prism settings would result in per-probe timeout below 200ms. */
+    val prismSettingsInvalid: Boolean get() = prismPerProbeMs < 200
+
+    val canUseSimpleMode: Boolean
+        get() {
+            if (profileId == null || profile == null) return false
+            if (profile.tunnelType !in E2E_SUPPORTED_TUNNEL_TYPES) return false
+            if ((profile.tunnelType == TunnelType.DNSTT || profile.tunnelType == TunnelType.DNSTT_SSH)
+                && profile.dnsTransport == DnsTransport.DOH) return false
+            return true
+        }
+
+    /** True when the profile supports E2E testing (ignoring scan progress) */
+    val e2eSupported: Boolean
+        get() {
+            if (scanMode == ScanMode.SIMPLE || scanMode == ScanMode.E2E) return false
+            if (profileId == null || profile == null) return false
+            if (profile.tunnelType !in E2E_SUPPORTED_TUNNEL_TYPES) return false
+            if ((profile.tunnelType == TunnelType.DNSTT || profile.tunnelType == TunnelType.DNSTT_SSH)
+                && profile.dnsTransport == DnsTransport.DOH) return false
+            return true
+        }
+
+    val canRunE2e: Boolean
+        get() {
+            if (!e2eSupported) return false
+            if (isVpnActive) return false
+            if (e2eScannerState.isRunning) return false
+            val workingResolvers = scannerState.results.count { it.status == ResolverStatus.WORKING }
+            return workingResolvers > 0
+        }
+
+    /** True when some working resolvers have E2E results but others don't (paused mid-test) */
+    val canResumeE2e: Boolean
+        get() {
+            if (!canRunE2e) return false
+            val working = scannerState.results.filter { it.status == ResolverStatus.WORKING }
+            val tested = working.count { it.e2eTestResult != null }
+            return tested > 0 && tested < working.size
+        }
+
+    /** True when all working resolvers already have E2E results */
+    val e2eComplete: Boolean
+        get() {
+            val working = scannerState.results.filter { it.status == ResolverStatus.WORKING }
+            return working.isNotEmpty() && working.all { it.e2eTestResult != null }
+        }
+
+    /** IPs from the last scan that passed stage-1 (WORKING status). */
+    val lastScanWorkingIps: List<String>
+        get() = scannerState.results
+            .filter { it.status == ResolverStatus.WORKING }
+            .map { it.host }
+
+    /** IPs from the last scan that passed E2E testing. */
+    val lastScanE2ePassedIps: List<String>
+        get() = scannerState.results
+            .filter { it.e2eTestResult?.success == true }
+            .map { it.host }
+
+    /** True when there are any last-scan results to load. */
+    val hasLastScanIps: Boolean
+        get() = lastScanWorkingIps.isNotEmpty()
+
+    val hasSavedPool: Boolean get() = savedPoolLabel != null && savedPoolSize > 0
+}
+
+enum class ListSource {
+    DEFAULT,
+    IMPORTED,
+    COUNTRY_RANGE,
+    CUSTOM_RANGE,
+    IR_DNS_RANGE,
+    IR_DNS_LITE_RANGE
+}
+
+/**
+ * Generate all IPs in the /24 subnet of the given IP, excluding the IP itself.
+ * E.g., "2.177.150.38" → ["2.177.150.1", "2.177.150.2", ..., "2.177.150.254"]
+ */
+private fun expandSlash24(ip: String): List<String> {
+    val parts = ip.split(".")
+    if (parts.size != 4) return emptyList()
+    val prefix = "${parts[0]}.${parts[1]}.${parts[2]}"
+    return (1..254).map { "$prefix.$it" }.filter { it != ip }
+}
+
+/**
+ * Expand the /24 subnet of [host] if it hasn't been expanded yet,
+ * adding up to [maxFocusRange] - current queue size neighbor IPs.
+ */
+private fun tryExpandSubnet(
+    host: String,
+    focusRangeQueue: MutableList<String>,
+    expandedSubnets: MutableSet<String>,
+    scannedSet: MutableSet<String>,
+    maxFocusRange: Int = 5000
+) {
+    if (focusRangeQueue.size >= maxFocusRange) return
+    val parts = host.split(".")
+    if (parts.size != 4) return
+    val subnet = "${parts[0]}.${parts[1]}.${parts[2]}"
+    if (subnet in expandedSubnets) return
+    expandedSubnets.add(subnet)
+    val neighbors = expandSlash24(host).filter { it !in scannedSet }
+    if (neighbors.isNotEmpty()) {
+        val capped = neighbors.take(maxFocusRange - focusRangeQueue.size)
+        focusRangeQueue.addAll(capped)
+        scannedSet.addAll(capped)
+        Log.d("DnsScanner", "Focus range: expanding $subnet.0/24 (+${capped.size} IPs)")
+    }
+}
+
+enum class ScanMode {
+    ADVANCED,
+    SIMPLE,
+    PRISM,
+    E2E
+}
+
+/**
+ * Transport mode selector for the DNS scanner. BOTH runs a UDP pass first,
+ * then retries only the hosts that didn't pass over TCP.
+ */
+enum class ScanTransportMode(val displayName: String) {
+    UDP("UDP"),
+    TCP("TCP"),
+    BOTH("Both");
+
+    companion object {
+        fun fromName(value: String?): ScanTransportMode = when (value) {
+            "TCP" -> TCP
+            "BOTH" -> BOTH
+            else -> UDP
+        }
+    }
+}
+
+private data class ScannerSettings(
+    val timeoutMs: String,
+    val concurrency: String,
+    val e2eTimeoutMs: String,
+    val testUrl: String,
+    val e2eConcurrency: String,
+    val prismProbeCount: String,
+    val prismPassThreshold: String,
+    val prismResponseSize: String
+)
+
+// Lightweight models for JSON serialization of scan sessions.
+private data class SavedScanSession(
+    val resolverList: List<String>,
+    val testDomain: String,
+    val timeoutMs: String,
+    val concurrency: String,
+    val listSource: String,
+    val scannedCount: Int,
+    val workingCount: Int,
+    val results: List<SavedResult>,
+    val customRangeInput: String? = null,
+    val scanMode: String? = null,
+    val prismPubkey: String? = null
+)
+
+private data class SavedResult(
+    val host: String,
+    val status: String,
+    val responseTimeMs: Long?,
+    val errorMessage: String?,
+    val nsSupport: Boolean?,
+    val txtSupport: Boolean?,
+    val randomSub: Boolean?,
+    val tunnelRealism: Boolean?,
+    val edns0Support: Boolean?,
+    // E2E fields (simple mode)
+    val e2eSuccess: Boolean? = null,
+    val e2eTotalMs: Long? = null,
+    val e2eTunnelSetupMs: Long? = null,
+    val e2eHttpLatencyMs: Long? = null,
+    val e2eHttpStatusCode: Int? = null,
+    val e2eErrorMessage: String? = null,
+    // Prism mode
+    val prismVerified: Boolean? = null
+)
+
+/**
+ * Thread-safe queue that can be re-sorted mid-flight.
+ * Used to control E2E test order based on the user's sort selection.
+ */
+private class SortableQueue<T>(
+    initial: List<T> = emptyList(),
+    private var comparator: Comparator<T>? = null
+) {
+    private val lock = java.util.concurrent.locks.ReentrantLock()
+    private val notEmpty = lock.newCondition()
+    private val items = java.util.LinkedList<T>()
+    @Volatile private var closed = false
+
+    init {
+        if (initial.isNotEmpty()) {
+            items.addAll(if (comparator != null) initial.sortedWith(comparator!!) else initial)
+        }
+    }
+
+    fun add(item: T) {
+        lock.lock()
+        try {
+            if (comparator != null) {
+                // Insert in sorted position
+                val idx = items.indexOfFirst { comparator!!.compare(item, it) < 0 }
+                if (idx >= 0) items.add(idx, item) else items.addLast(item)
+            } else {
+                items.addLast(item)
+            }
+            notEmpty.signal()
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    /** Blocks until an item is available. Returns null when closed and empty
+     *  or when the thread is interrupted (coroutine cancellation). */
+    fun take(): T? {
+        lock.lock()
+        try {
+            while (items.isEmpty()) {
+                if (closed || Thread.currentThread().isInterrupted) return null
+                try {
+                    notEmpty.await()
+                } catch (_: InterruptedException) {
+                    return null
+                }
+            }
+            return items.removeFirst()
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    /** Re-sort pending items. Uses tryLock to avoid blocking the caller
+     *  (typically UI thread) when the consumer holds the lock in take(). */
+    fun resort(newComparator: Comparator<T>?) {
+        if (!lock.tryLock(50, java.util.concurrent.TimeUnit.MILLISECONDS)) return
+        try {
+            comparator = newComparator
+            if (newComparator != null && items.size > 1) {
+                val sorted = items.sortedWith(newComparator)
+                items.clear()
+                items.addAll(sorted)
+            }
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    fun close() {
+        lock.lock()
+        try {
+            closed = true
+            notEmpty.signalAll()
+        } finally {
+            lock.unlock()
+        }
+    }
+}
+
+@HiltViewModel
+class DnsScannerViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val scannerRepository: ResolverScannerRepository,
+    private val profileRepository: ProfileRepository,
+    private val preferencesDataStore: PreferencesDataStore,
+    private val vpnRepository: VpnRepository,
+    @ApplicationContext private val appContext: android.content.Context
+) : ViewModel() {
+
+    private val profileId: Long? = savedStateHandle.get<Long>("profileId")?.takeIf { it != -1L }
+
+    private val _uiState = MutableStateFlow(DnsScannerUiState(
+        profileId = profileId,
+        scanMode = if (profileId != null) ScanMode.SIMPLE else ScanMode.ADVANCED
+    ))
+    val uiState: StateFlow<DnsScannerUiState> = _uiState.asStateFlow()
+
+    private var scanJob: Job? = null
+    private var e2eJob: Job? = null
+    private var customRangeParseJob: Job? = null
+    private var simpleModeE2eJob: Job? = null
+    private var e2ePendingQueue: SortableQueue<Pair<String, Int>>? = null
+    private val gson = Gson()
+    @Volatile private var lastPeriodicSaveMs = 0L
+    private val periodicSaveIntervalMs = 30_000L
+    /** Set by the UI when user presses back — tells onCleared to stop scans. */
+    @Volatile private var userNavigatedBack = false
+
+    // Wake lock to keep CPU alive during scanning when app is backgrounded
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = appContext.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SlipNet:ScanWakeLock").apply {
+            acquire(4 * 60 * 60 * 1000L) // 4-hour safety timeout
+        }
+        Log.d("DnsScanner", "WakeLock acquired")
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+            Log.d("DnsScanner", "WakeLock released")
+        }
+        wakeLock = null
+    }
+
+    init {
+        restoreFromScanStateHolder()
+        loadSavedSession()
+        loadRecentDns()
+        loadCountryCidrInfo()
+        loadProfile()
+        observeVpnState()
+        observeScanServiceState()
+        observeSavedPool()
+    }
+
+    /**
+     * If a scan is still running (activity was recreated but process survived),
+     * restore results from ScanStateHolder so progress isn't lost.
+     */
+    private fun restoreFromScanStateHolder() {
+        val holder = ScanStateHolder.state.value
+        if (holder.results.isNotEmpty()) {
+            Log.i("DnsScanner", "Restoring ${holder.results.size} results from ScanStateHolder (profileId=${holder.profileId})")
+            _uiState.update { s ->
+                s.copy(
+                    profileId = s.profileId ?: holder.profileId,
+                    scannerState = s.scannerState.copy(
+                        isScanning = holder.isScanning,
+                        scannedCount = holder.scannedCount,
+                        totalCount = holder.totalCount,
+                        workingCount = holder.workingCount,
+                        results = holder.results
+                    )
+                )
+            }
+            // Load profile if not already set from nav args
+            if (profileId == null && holder.profileId != null) {
+                viewModelScope.launch {
+                    try {
+                        val profile = profileRepository.getProfileById(holder.profileId)
+                        if (profile != null) {
+                            _uiState.update { it.copy(profile = profile) }
+                        }
+                    } catch (e: Exception) {
+                        Log.w("DnsScanner", "Failed to restore profile from ScanStateHolder", e)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun observeScanServiceState() {
+        viewModelScope.launch {
+            ScanStateHolder.state.collect { s ->
+                if (s.stopRequested) {
+                    ScanStateHolder.update { it.copy(stopRequested = false) }
+                    stopScan()
+                }
+            }
+        }
+        // Forward live scan progress from ScanStateHolder → _uiState so the UI
+        // stays current even after ViewModel recreation (scan jobs write directly
+        // to ScanStateHolder from the process-scoped scanScope).
+        viewModelScope.launch {
+            ScanStateHolder.state.collect { s ->
+                if (s.isScanning || s.isE2eRunning) {
+                    _uiState.update { ui ->
+                        // Only overwrite scannerState.results when a DNS scan is
+                        // actively running. When only E2E is running, the ViewModel
+                        // updates results directly via onResult — overwriting from
+                        // ScanStateHolder would race and erase E2E data.
+                        val updatedScannerState = if (s.isScanning && s.results.isNotEmpty()) {
+                            ui.scannerState.copy(
+                                isScanning = s.isScanning,
+                                scannedCount = s.scannedCount,
+                                totalCount = s.totalCount,
+                                workingCount = s.workingCount,
+                                results = s.results
+                            )
+                        } else {
+                            ui.scannerState.copy(isScanning = s.isScanning)
+                        }
+                        ui.copy(
+                            scannerState = updatedScannerState,
+                            e2eScannerState = ui.e2eScannerState.copy(
+                                isRunning = s.isE2eRunning && s.e2eTotalCount > 0,
+                                totalCount = s.e2eTotalCount,
+                                testedCount = s.e2eTestedCount,
+                                passedCount = s.e2ePassedCount,
+                                activeResolvers = s.e2eActiveResolvers,
+                                currentResolver = s.e2eActiveResolvers.keys.firstOrNull(),
+                                currentPhase = s.e2eActiveResolvers.values.firstOrNull() ?: ""
+                            ),
+                            simpleModeE2eState = ui.simpleModeE2eState.copy(
+                                isRunning = s.isE2eRunning && s.simpleE2eQueuedCount > 0,
+                                queuedCount = s.simpleE2eQueuedCount,
+                                testedCount = s.simpleE2eTestedCount,
+                                passedCount = s.simpleE2ePassedCount,
+                                activeResolvers = s.e2eActiveResolvers,
+                                currentResolver = s.e2eActiveResolvers.keys.firstOrNull(),
+                                currentPhase = s.e2eActiveResolvers.values.firstOrNull() ?: ""
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /** One-shot read of persisted scanner settings. Must be called before session restore. */
+    private suspend fun loadScannerSettings() {
+        try {
+            val timeout = preferencesDataStore.scannerTimeoutMs.first()
+            val concurrency = preferencesDataStore.scannerConcurrency.first()
+            val e2eTimeout = preferencesDataStore.scannerE2eTimeoutMs.first()
+            val testUrl = preferencesDataStore.scannerTestUrl.first()
+            val e2eConcurrency = preferencesDataStore.scannerE2eConcurrency.first()
+            val prismTimeoutMs = preferencesDataStore.scannerPrismTimeoutMs.first()
+            val prismProbeCount = preferencesDataStore.scannerPrismProbeCount.first()
+            val prismPassThreshold = preferencesDataStore.scannerPrismPassThreshold.first()
+            val prismResponseSize = preferencesDataStore.scannerPrismResponseSize.first()
+            val prismPrefilter = preferencesDataStore.scannerPrismPrefilter.first()
+            val prismPrefilterTimeoutMs = preferencesDataStore.scannerPrismPrefilterTimeoutMs.first()
+            val transportValue = preferencesDataStore.scannerTransport.first()
+            val scanTransport = ScanTransportMode.fromName(transportValue)
+            _uiState.value = _uiState.value.copy(
+                timeoutMs = timeout,
+                concurrency = concurrency,
+                e2eTimeoutMs = e2eTimeout,
+                testUrl = testUrl,
+                e2eConcurrency = e2eConcurrency,
+                prismTimeoutMs = prismTimeoutMs,
+                prismProbeCount = prismProbeCount,
+                prismPassThreshold = prismPassThreshold,
+                prismResponseSize = prismResponseSize,
+                prismPrefilter = prismPrefilter,
+                prismPrefilterTimeoutMs = prismPrefilterTimeoutMs,
+                scanTransport = scanTransport
+            )
+        } catch (e: Exception) {
+            Log.w("DnsScanner", "Failed to load scanner settings", e)
+        }
+        // Load last resolver list selection
+        try {
+            val source = preferencesDataStore.scannerListSource.first()
+            val country = preferencesDataStore.scannerCountry.first()
+            val sampleCount = preferencesDataStore.scannerSampleCount.first()
+            val customRange = preferencesDataStore.scannerCustomRange.first()
+            val listSource = try { ListSource.valueOf(source) } catch (_: Exception) { ListSource.DEFAULT }
+            val geoCountry = GeoBypassCountry.fromCode(country)
+            _uiState.value = _uiState.value.copy(
+                listSource = listSource,
+                selectedCountry = geoCountry,
+                sampleCount = sampleCount,
+                customRangeInput = customRange
+            )
+        } catch (e: Exception) {
+            Log.w("DnsScanner", "Failed to load scanner list selection", e)
+        }
+    }
+
+    private fun saveScannerSettings() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            try {
+                preferencesDataStore.saveScannerSettings(
+                    timeoutMs = state.timeoutMs,
+                    concurrency = state.concurrency,
+                    e2eTimeoutMs = state.e2eTimeoutMs,
+                    testUrl = state.testUrl,
+                    e2eConcurrency = state.e2eConcurrency,
+                    prismTimeoutMs = state.prismTimeoutMs,
+                    prismProbeCount = state.prismProbeCount,
+                    prismPassThreshold = state.prismPassThreshold,
+                    prismResponseSize = state.prismResponseSize,
+                    prismPrefilter = state.prismPrefilter,
+                    prismPrefilterTimeoutMs = state.prismPrefilterTimeoutMs
+                )
+            } catch (e: Exception) {
+                Log.w("DnsScanner", "Failed to save scanner settings", e)
+            }
+        }
+    }
+
+    private fun saveListSelection() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            try {
+                preferencesDataStore.saveScannerListSelection(
+                    listSource = state.listSource.name,
+                    country = state.selectedCountry.code,
+                    sampleCount = state.sampleCount,
+                    customRange = state.customRangeInput
+                )
+            } catch (e: Exception) {
+                Log.w("DnsScanner", "Failed to save list selection", e)
+            }
+        }
+    }
+
+    private fun loadRecentDns() {
+        viewModelScope.launch {
+            preferencesDataStore.recentDnsResolvers.collect { resolvers ->
+                _uiState.value = _uiState.value.copy(recentDnsResolvers = resolvers)
+            }
+        }
+    }
+
+    private fun loadProfile() {
+        val id = profileId ?: return
+        viewModelScope.launch {
+            try {
+                val profile = profileRepository.getProfileById(id)
+                if (profile != null) {
+                    _uiState.value = _uiState.value.copy(profile = profile)
+                }
+            } catch (e: Exception) {
+                Log.w("DnsScanner", "Failed to load profile", e)
+            }
+        }
+    }
+
+    private fun observeVpnState() {
+        viewModelScope.launch {
+            vpnRepository.connectionState.collect {
+                _uiState.value = _uiState.value.copy(isVpnActive = vpnRepository.isConnected())
+            }
+        }
+    }
+
+    private suspend fun loadProfileDomain() {
+        val id = profileId ?: return
+        try {
+            val profile = profileRepository.getProfileById(id) ?: return
+            if (profile.domain.isNotBlank()) {
+                if (profile.isLocked) {
+                    // Keep testDomain empty — effectiveTestDomain falls back to profile.domain
+                    _uiState.value = _uiState.value.copy(testDomain = "")
+                } else {
+                    _uiState.value = _uiState.value.copy(testDomain = profile.domain)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("DnsScanner", "Failed to load profile domain", e)
+        }
+    }
+
+    fun saveRecentDns() {
+        val selected = _uiState.value.selectedResolvers.toList()
+        viewModelScope.launch {
+            withContext(NonCancellable) {
+                preferencesDataStore.addRecentDnsResolvers(selected)
+            }
+        }
+    }
+
+    // --- Saved session persistence ---
+
+    private fun loadSavedSession() {
+        viewModelScope.launch {
+            // Load persisted scanner settings first (timeout, concurrency, etc.)
+            // so they serve as defaults. A restored session will override them.
+            loadScannerSettings()
+
+            // If results were already restored from ScanStateHolder (in-memory),
+            // don't overwrite with potentially stale DataStore data.
+            if (_uiState.value.scannerState.results.isNotEmpty()) {
+                loadProfileDomain()
+                return@launch
+            }
+
+            try {
+                val json = preferencesDataStore.getSavedScanSession()
+                    ?: try {
+                        // Fallback: read from cache file (written synchronously in onCleared
+                        // as a safety net in case the DataStore write didn't complete).
+                        val cacheFile = java.io.File(appContext.cacheDir, "scan_session.json")
+                        if (cacheFile.exists()) cacheFile.readText().also {
+                            // Migrate to DataStore so subsequent loads are consistent
+                            preferencesDataStore.saveScanSession(it)
+                            cacheFile.delete()
+                        } else null
+                    } catch (_: Exception) { null }
+                if (json != null) {
+                    val session = gson.fromJson(json, SavedScanSession::class.java)
+                    val savedMode = try { session.scanMode?.let { ScanMode.valueOf(it) } } catch (_: Exception) { null }
+                    val isSimple = savedMode == ScanMode.SIMPLE
+                    val isE2eOnly = savedMode == ScanMode.E2E
+                    // In simple/E2E mode, a completed DNS scan is still resumable (E2E may be partial).
+                    // In advanced mode, also restore completed DNS scans that have E2E data.
+                    val hasE2eData = session.results.any { it.e2eSuccess != null }
+                    val isResumable = if (isSimple || isE2eOnly) {
+                        session != null && session.resolverList.isNotEmpty() &&
+                            (session.scannedCount > 0 || hasE2eData)
+                    } else {
+                        session != null && session.resolverList.isNotEmpty() &&
+                            session.scannedCount > 0 && (session.scannedCount < session.resolverList.size || hasE2eData)
+                    }
+                    if (isResumable && session != null) {
+                        // Restore the previous scan state.
+                        val savedByHost = session.results.associateBy { it.host }
+                        val results = session.resolverList.map { host ->
+                            savedByHost[host]?.toScanResult() ?: ResolverScanResult(host = host)
+                        }
+                        // Rebuild simpleModeE2eState from restored results
+                        val simpleModeE2e = if (isE2eOnly) {
+                            val testedCount = results.count { it.e2eTestResult != null }
+                            SimpleModeE2eState(
+                                queuedCount = session.resolverList.size,
+                                testedCount = testedCount,
+                                passedCount = results.count { it.e2eTestResult?.success == true }
+                            )
+                        } else if (isSimple) {
+                            val working = results.filter { it.status == ResolverStatus.WORKING }
+                            SimpleModeE2eState(
+                                queuedCount = working.size,
+                                testedCount = working.count { it.e2eTestResult != null },
+                                passedCount = working.count { it.e2eTestResult?.success == true }
+                            )
+                        } else SimpleModeE2eState()
+
+                        // Don't restore PRISM mode from a saved session — Prism depends
+                        // on a loaded profile (for pubkey + domain) which isn't available yet.
+                        // The profile loads asynchronously; restoring PRISM before it loads
+                        // causes the scan to use stale/empty keys. Fall back to ADVANCED.
+                        val restoredMode = if (savedMode == ScanMode.PRISM) {
+                            ScanMode.ADVANCED
+                        } else {
+                            savedMode ?: _uiState.value.scanMode
+                        }
+
+                        _uiState.value = _uiState.value.copy(
+                            resolverList = session.resolverList,
+                            testDomain = session.testDomain,
+                            timeoutMs = session.timeoutMs,
+                            concurrency = session.concurrency,
+                            listSource = try { ListSource.valueOf(session.listSource) } catch (_: Exception) { ListSource.DEFAULT },
+                            scannerState = ScannerState(
+                                isScanning = false,
+                                totalCount = session.resolverList.size,
+                                scannedCount = session.scannedCount,
+                                workingCount = session.workingCount,
+                                results = results
+                            ),
+                            selectedResolvers = emptySet(),
+                            customRangeInput = session.customRangeInput ?: "",
+                            scanMode = restoredMode,
+                            simpleModeE2eState = simpleModeE2e
+                        )
+                        // Override testDomain with profile domain (profile takes priority)
+                        loadProfileDomain()
+                        return@launch
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("DnsScanner", "Failed to load saved session", e)
+            }
+            // No valid saved session — load resolver list based on last selection.
+            when (_uiState.value.listSource) {
+                ListSource.COUNTRY_RANGE, ListSource.CUSTOM_RANGE, ListSource.IR_DNS_RANGE, ListSource.IR_DNS_LITE_RANGE -> {
+                    // Only restore the selection state (country/custom/IR DNS panel);
+                    // the actual IP list must be regenerated by the user.
+                    _uiState.value = _uiState.value.copy(
+                        resolverList = scannerRepository.getDefaultResolvers(),
+                        scannerState = ScannerState(),
+                        selectedResolvers = emptySet()
+                    )
+                }
+                else -> loadDefaultList()
+            }
+            loadProfileDomain()
+        }
+    }
+
+    private fun saveScanSessionToStore() {
+        val state = _uiState.value
+        val scanState = state.scannerState
+        // In simple/prism mode, save whenever there's partial progress.
+        // In advanced mode, also save completed scans that have E2E results.
+        if (state.scanMode == ScanMode.SIMPLE || state.scanMode == ScanMode.PRISM || state.scanMode == ScanMode.E2E) {
+            if (state.scanMode == ScanMode.E2E) {
+                if (state.simpleModeE2eState.testedCount <= 0) return
+            } else if (scanState.scannedCount <= 0) return
+        } else {
+            val hasE2eData = scanState.results.any { it.e2eTestResult != null }
+            if (scanState.scannedCount <= 0 || (!hasE2eData && scanState.scannedCount >= scanState.totalCount + scanState.focusRangeCount)) return
+        }
+
+        // Capture values on Main, serialize and save on IO to avoid blocking UI
+        val results = scanState.results
+        val resolverList = state.resolverList
+        val testDomain = state.effectiveTestDomain
+        val timeoutMs = state.timeoutMs
+        val concurrency = state.concurrency
+        val listSource = state.listSource.name
+        // For E2E mode, persist tested count so resume can skip already-tested resolvers
+        val scannedCount = if (state.scanMode == ScanMode.E2E) state.simpleModeE2eState.testedCount else scanState.scannedCount
+        val workingCount = if (state.scanMode == ScanMode.E2E) state.simpleModeE2eState.passedCount else scanState.workingCount
+        val customRange = state.customRangeInput.ifEmpty { null }
+        val scanMode = state.scanMode.name
+
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            try {
+                val savedResults = results
+                    .filter { it.status != ResolverStatus.PENDING && it.status != ResolverStatus.SCANNING }
+                    .map { it.toSavedResult() }
+                val session = SavedScanSession(
+                    resolverList = resolverList,
+                    testDomain = testDomain,
+                    timeoutMs = timeoutMs,
+                    concurrency = concurrency,
+                    listSource = listSource,
+                    scannedCount = scannedCount,
+                    workingCount = workingCount,
+                    results = savedResults,
+                    customRangeInput = customRange,
+                    scanMode = scanMode
+                )
+                preferencesDataStore.saveScanSession(gson.toJson(session))
+            } catch (e: Exception) {
+                Log.w("DnsScanner", "Failed to save scan session", e)
+            }
+        }
+    }
+
+    /** Throttled periodic save — call from hot paths (emitState). */
+    private fun periodicSaveIfNeeded() {
+        val now = System.currentTimeMillis()
+        if (now - lastPeriodicSaveMs < periodicSaveIntervalMs) return
+        lastPeriodicSaveMs = now
+        saveScanSessionToStore()
+    }
+
+    private fun clearSavedSession() {
+        viewModelScope.launch {
+            try {
+                preferencesDataStore.clearScanSession()
+            } catch (_: Exception) {}
+        }
+    }
+
+    // --- List loading ---
+
+    fun loadDefaultList() {
+        clearSavedSession()
+        e2eJob?.cancel()
+        simpleModeE2eJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            resolverList = scannerRepository.getDefaultResolvers(),
+            listSource = ListSource.DEFAULT,
+            scannerState = ScannerState(),
+            selectedResolvers = emptySet(),
+            e2eScannerState = E2eScannerState(),
+            simpleModeE2eState = SimpleModeE2eState()
+        )
+        saveListSelection()
+    }
+
+    fun importList(uri: android.net.Uri) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingList = true)
+            try {
+                val (result, fileName) = withContext(Dispatchers.IO) {
+                    val name = try {
+                        appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (cursor.moveToFirst() && idx >= 0) cursor.getString(idx) else null
+                        }
+                    } catch (_: Exception) { null }
+                    // Stream line-by-line to avoid loading entire file into memory
+                    val ranges = mutableListOf<Pair<Long, Long>>()
+                    val plainIpsSeen = mutableSetOf<String>()
+                    val plainIps = mutableListOf<String>()
+
+                    appContext.contentResolver.openInputStream(uri)?.use { stream ->
+                        stream.bufferedReader().forEachLine { line ->
+                            val trimmed = line.trim()
+                            if (trimmed.isBlank() || trimmed.startsWith("#")) return@forEachLine
+                            val range = parseIpRange(trimmed)
+                            if (range != null && range.first != range.second) {
+                                ranges.add(range)
+                            } else {
+                                // Extract individual IPs from this line
+                                scannerRepository.parseResolverList(line).forEach { ip ->
+                                    if (plainIpsSeen.add(ip)) plainIps.add(ip)
+                                }
+                            }
+                        }
+                    }
+
+                    // Pre-check total count before expanding to avoid OOM
+                    var rangeTotal = 0L
+                    for ((start, end) in ranges) {
+                        rangeTotal += (end - start + 1)
+                    }
+                    val totalEstimate = rangeTotal + plainIps.size
+
+                    if (totalEstimate > 100_000) {
+                        Pair(emptyList<String>() to true, name)
+                    } else {
+                        // Expand ranges and merge with plain IPs, deduplicating
+                        val seen = mutableSetOf<String>()
+                        val merged = mutableListOf<String>()
+
+                        if (ranges.isNotEmpty()) {
+                            val expanded = scannerRepository.expandIpRanges(ranges)
+                            for (ip in expanded) {
+                                if (seen.add(ip)) merged.add(ip)
+                            }
+                        }
+                        for (ip in plainIps) {
+                            if (seen.add(ip)) merged.add(ip)
+                        }
+
+                        Pair(merged to false, name)
+                    }
+                }
+
+                val tooMany = result.first.isEmpty() && result.second
+                val ips = result.first
+                if (tooMany) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "Too many IPs (over 100,000). Use smaller ranges."
+                    )
+                } else if (ips.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "No valid IP addresses or ranges found in file"
+                    )
+                } else {
+                    clearSavedSession()
+                    e2eJob?.cancel()
+                    simpleModeE2eJob?.cancel()
+                    _uiState.value = _uiState.value.copy(
+                        resolverList = ips,
+                        listSource = ListSource.IMPORTED,
+                        importedFileName = fileName,
+                        scannerState = ScannerState(),
+                        selectedResolvers = emptySet(),
+                        e2eScannerState = E2eScannerState(),
+                        simpleModeE2eState = SimpleModeE2eState(),
+                        isLoadingList = false
+                    )
+                    saveListSelection()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingList = false,
+                    error = "Failed to parse file: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun updateTestDomain(domain: String) {
+        _uiState.value = _uiState.value.copy(testDomain = domain)
+    }
+
+    fun updateScanPort(port: String) {
+        _uiState.value = _uiState.value.copy(scanPort = port)
+    }
+
+    fun updateTimeout(timeout: String) {
+        _uiState.value = _uiState.value.copy(timeoutMs = timeout)
+        saveScannerSettings()
+    }
+
+    fun updateConcurrency(concurrency: String) {
+        _uiState.value = _uiState.value.copy(concurrency = concurrency)
+        saveScannerSettings()
+    }
+
+    fun updateScanTransport(mode: ScanTransportMode) {
+        _uiState.value = _uiState.value.copy(scanTransport = mode)
+        viewModelScope.launch {
+            try {
+                preferencesDataStore.setScannerTransport(mode.name)
+            } catch (e: Exception) {
+                Log.w("DnsScanner", "Failed to save scan transport", e)
+            }
+        }
+    }
+
+    fun updatePrismTimeout(value: String) {
+        _uiState.value = _uiState.value.copy(prismTimeoutMs = value)
+        saveScannerSettings()
+    }
+
+    fun updatePrismProbeCount(value: String) {
+        val clamped = value.toIntOrNull()?.let { if (it > 30) "30" else value } ?: value
+        _uiState.value = _uiState.value.copy(prismProbeCount = clamped)
+        saveScannerSettings()
+    }
+
+    fun updatePrismPassThreshold(value: String) {
+        _uiState.value = _uiState.value.copy(prismPassThreshold = value)
+        saveScannerSettings()
+    }
+
+    fun updatePrismResponseSize(value: String) {
+        val clamped = value.toIntOrNull()?.let { if (it > 4096) "4096" else value } ?: value
+        _uiState.value = _uiState.value.copy(prismResponseSize = clamped)
+        saveScannerSettings()
+    }
+
+    fun resetPrismSettings() {
+        _uiState.value = _uiState.value.copy(
+            prismTimeoutMs = "2000",
+            prismProbeCount = "5",
+            prismPassThreshold = "2",
+            prismResponseSize = "0",
+            prismPrefilter = false,
+            prismPrefilterTimeoutMs = "1500"
+        )
+        saveScannerSettings()
+    }
+
+    fun updatePrismPrefilter(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(prismPrefilter = enabled)
+        saveScannerSettings()
+    }
+
+    fun updatePrismPrefilterTimeout(value: String) {
+        val clamped = value.toIntOrNull()?.let { if (it < 200) "200" else value } ?: value
+        _uiState.value = _uiState.value.copy(prismPrefilterTimeoutMs = clamped)
+        saveScannerSettings()
+    }
+
+    fun showLastScanIpsDialog() {
+        _uiState.value = _uiState.value.copy(showLastScanIpsDialog = true)
+    }
+
+    fun dismissLastScanIpsDialog() {
+        _uiState.value = _uiState.value.copy(showLastScanIpsDialog = false)
+    }
+
+    fun loadLastScanWorkingIps() {
+        val ips = _uiState.value.lastScanWorkingIps
+        if (ips.isEmpty()) return
+        clearSavedSession()
+        _uiState.value = _uiState.value.copy(
+            resolverList = ips,
+            listSource = ListSource.IMPORTED,
+            scannerState = ScannerState(),
+            selectedResolvers = emptySet(),
+            showLastScanIpsDialog = false
+        )
+    }
+
+    fun loadLastScanE2ePassedIps() {
+        val ips = _uiState.value.lastScanE2ePassedIps
+        if (ips.isEmpty()) return
+        clearSavedSession()
+        _uiState.value = _uiState.value.copy(
+            resolverList = ips,
+            listSource = ListSource.IMPORTED,
+            scannerState = ScannerState(),
+            selectedResolvers = emptySet(),
+            showLastScanIpsDialog = false
+        )
+    }
+
+    // --- Saved DNS pool ---
+
+    private fun observeSavedPool() {
+        viewModelScope.launch {
+            preferencesDataStore.savedDnsPoolLabel.collect { label ->
+                if (label != null) {
+                    val count = withContext(Dispatchers.IO) {
+                        preferencesDataStore.getSavedDnsPoolCount()
+                    }
+                    _uiState.update { it.copy(savedPoolLabel = label, savedPoolSize = count) }
+                } else {
+                    _uiState.update { it.copy(savedPoolLabel = null, savedPoolSize = 0) }
+                }
+            }
+        }
+    }
+
+    fun saveToPool(ips: List<String>, label: String) {
+        if (ips.isEmpty()) return
+        viewModelScope.launch {
+            preferencesDataStore.saveDnsPool(ips, label)
+            _uiState.update { it.copy(savedPoolLabel = label, savedPoolSize = ips.size) }
+        }
+    }
+
+    fun loadSavedPool() {
+        viewModelScope.launch {
+            val ips = withContext(Dispatchers.IO) {
+                preferencesDataStore.getSavedDnsPool()
+            } ?: return@launch
+            clearSavedSession()
+            e2eJob?.cancel()
+            simpleModeE2eJob?.cancel()
+            _uiState.update {
+                it.copy(
+                    resolverList = ips,
+                    listSource = ListSource.IMPORTED,
+                    scannerState = ScannerState(),
+                    selectedResolvers = emptySet(),
+                    e2eScannerState = E2eScannerState(),
+                    simpleModeE2eState = SimpleModeE2eState()
+                )
+            }
+            saveListSelection()
+        }
+    }
+
+    fun updateSelectedCountry(country: GeoBypassCountry) {
+        _uiState.value = _uiState.value.copy(
+            selectedCountry = country,
+            cidrGroups = emptyList(),
+            selectedOctets = emptySet()
+        )
+        saveListSelection()
+        loadCountryCidrInfo()
+    }
+
+    fun updateSampleCount(count: Int) {
+        _uiState.value = _uiState.value.copy(
+            sampleCount = count,
+            useCustomSampleCount = false
+        )
+        saveListSelection()
+    }
+
+    fun setUseCustomSampleCount(use: Boolean) {
+        _uiState.value = _uiState.value.copy(useCustomSampleCount = use)
+    }
+
+    fun updateCustomSampleCount(text: String) {
+        _uiState.value = _uiState.value.copy(
+            customSampleCountText = text.filter { it.isDigit() },
+            useCustomSampleCount = true
+        )
+    }
+
+    fun loadCountryCidrInfo() {
+        val state = _uiState.value
+        viewModelScope.launch(Dispatchers.Default) {
+            val ranges = scannerRepository.loadCountryCidrRanges(appContext, state.selectedCountry.code)
+            val groups = ranges.groupBy { ((it.first shr 24) and 0xFF).toInt() }
+                .map { (octet, rangeList) ->
+                    CidrGroup(
+                        firstOctet = octet,
+                        label = "$octet.x.x.x",
+                        rangeCount = rangeList.size,
+                        totalIps = rangeList.sumOf { it.second - it.first + 1 },
+                        ranges = rangeList
+                    )
+                }
+                .sortedBy { it.firstOctet }
+
+            _uiState.value = _uiState.value.copy(
+                cidrGroups = groups,
+                selectedOctets = groups.map { it.firstOctet }.toSet()
+            )
+        }
+    }
+
+    fun toggleOctetGroup(octet: Int) {
+        val current = _uiState.value.selectedOctets
+        _uiState.value = _uiState.value.copy(
+            selectedOctets = if (octet in current) current - octet else current + octet
+        )
+    }
+
+    fun selectAllOctetGroups() {
+        _uiState.value = _uiState.value.copy(
+            selectedOctets = _uiState.value.cidrGroups.map { it.firstOctet }.toSet()
+        )
+    }
+
+    fun deselectAllOctetGroups() {
+        _uiState.value = _uiState.value.copy(selectedOctets = emptySet())
+    }
+
+    fun loadCountryRangeList() {
+        val state = _uiState.value
+        val effectiveCount = state.effectiveSampleCount
+        _uiState.value = state.copy(isLoadingList = true)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val selectedRanges = if (state.cidrGroups.isNotEmpty()) {
+                    state.cidrGroups
+                        .filter { it.firstOctet in state.selectedOctets }
+                        .flatMap { it.ranges }
+                } else {
+                    scannerRepository.loadCountryCidrRanges(appContext, state.selectedCountry.code)
+                }
+
+                if (selectedRanges.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "No IP ranges selected"
+                    )
+                    return@launch
+                }
+
+                val ips = scannerRepository.generateFromRanges(selectedRanges, effectiveCount)
+                if (ips.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "No CIDR ranges found for ${state.selectedCountry.displayName}"
+                    )
+                } else {
+                    clearSavedSession()
+                    e2eJob?.cancel()
+                    simpleModeE2eJob?.cancel()
+                    _uiState.value = _uiState.value.copy(
+                        resolverList = ips,
+                        listSource = ListSource.COUNTRY_RANGE,
+                        scannerState = ScannerState(),
+                        selectedResolvers = emptySet(),
+                        e2eScannerState = E2eScannerState(),
+                        simpleModeE2eState = SimpleModeE2eState(),
+                        isLoadingList = false,
+                        timeoutMs = _uiState.value.timeoutMs
+                    )
+                    saveListSelection()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingList = false,
+                    error = "Failed to generate IPs: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun loadIrDnsCidrInfo() {
+        viewModelScope.launch(Dispatchers.Default) {
+            val ranges = scannerRepository.loadCountryCidrRanges(appContext, "ir_dns")
+            val groups = ranges.groupBy { ((it.first shr 24) and 0xFF).toInt() }
+                .map { (octet, rangeList) ->
+                    CidrGroup(
+                        firstOctet = octet,
+                        label = "$octet.x.x.x",
+                        rangeCount = rangeList.size,
+                        totalIps = rangeList.sumOf { it.second - it.first + 1 },
+                        ranges = rangeList
+                    )
+                }
+                .sortedBy { it.firstOctet }
+
+            _uiState.value = _uiState.value.copy(
+                cidrGroups = groups,
+                selectedOctets = groups.map { it.firstOctet }.toSet()
+            )
+        }
+    }
+
+    fun loadIrDnsRangeList() {
+        val state = _uiState.value
+        val effectiveCount = state.effectiveSampleCount
+        _uiState.value = state.copy(isLoadingList = true)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val selectedRanges = if (state.cidrGroups.isNotEmpty()) {
+                    state.cidrGroups
+                        .filter { it.firstOctet in state.selectedOctets }
+                        .flatMap { it.ranges }
+                } else {
+                    scannerRepository.loadCountryCidrRanges(appContext, "ir_dns")
+                }
+
+                if (selectedRanges.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "No IP ranges selected"
+                    )
+                    return@launch
+                }
+
+                val ips = scannerRepository.generateFromRanges(selectedRanges, effectiveCount)
+                if (ips.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "No CIDR ranges found in IR DNS list"
+                    )
+                } else {
+                    clearSavedSession()
+                    e2eJob?.cancel()
+                    simpleModeE2eJob?.cancel()
+                    _uiState.value = _uiState.value.copy(
+                        resolverList = ips,
+                        listSource = ListSource.IR_DNS_RANGE,
+                        scannerState = ScannerState(),
+                        selectedResolvers = emptySet(),
+                        e2eScannerState = E2eScannerState(),
+                        simpleModeE2eState = SimpleModeE2eState(),
+                        isLoadingList = false,
+                        timeoutMs = _uiState.value.timeoutMs
+                    )
+                    saveListSelection()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingList = false,
+                    error = "Failed to load IR DNS IPs: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun loadIrDnsLiteCidrInfo() {
+        viewModelScope.launch(Dispatchers.Default) {
+            val ranges = scannerRepository.loadCountryCidrRanges(appContext, "ir_dns_lite")
+            // Group by first TWO octets for finer granularity (e.g. 2.188.x.x vs 2.189.x.x)
+            val groups = ranges.groupBy {
+                val o1 = ((it.first shr 24) and 0xFF).toInt()
+                val o2 = ((it.first shr 16) and 0xFF).toInt()
+                (o1 shl 8) or o2
+            }
+                .map { (key, rangeList) ->
+                    val o1 = (key shr 8) and 0xFF
+                    val o2 = key and 0xFF
+                    CidrGroup(
+                        firstOctet = key,
+                        label = "$o1.$o2.x.x",
+                        rangeCount = rangeList.size,
+                        totalIps = rangeList.sumOf { it.second - it.first + 1 },
+                        ranges = rangeList
+                    )
+                }
+                .sortedBy { it.firstOctet }
+
+            _uiState.value = _uiState.value.copy(
+                cidrGroups = groups,
+                selectedOctets = groups.map { it.firstOctet }.toSet()
+            )
+        }
+    }
+
+    fun loadIrDnsLiteRangeList() {
+        val state = _uiState.value
+        val effectiveCount = state.effectiveSampleCount
+        _uiState.value = state.copy(isLoadingList = true)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val selectedRanges = if (state.cidrGroups.isNotEmpty()) {
+                    state.cidrGroups
+                        .filter { it.firstOctet in state.selectedOctets }
+                        .flatMap { it.ranges }
+                } else {
+                    scannerRepository.loadCountryCidrRanges(appContext, "ir_dns_lite")
+                }
+
+                if (selectedRanges.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "No IP ranges selected"
+                    )
+                    return@launch
+                }
+
+                val ips = scannerRepository.generateFromRanges(selectedRanges, effectiveCount)
+                if (ips.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingList = false,
+                        error = "No CIDR ranges found in IR DNS Lite list"
+                    )
+                } else {
+                    clearSavedSession()
+                    e2eJob?.cancel()
+                    simpleModeE2eJob?.cancel()
+                    _uiState.value = _uiState.value.copy(
+                        resolverList = ips,
+                        listSource = ListSource.IR_DNS_LITE_RANGE,
+                        scannerState = ScannerState(),
+                        selectedResolvers = emptySet(),
+                        e2eScannerState = E2eScannerState(),
+                        simpleModeE2eState = SimpleModeE2eState(),
+                        isLoadingList = false,
+                        timeoutMs = _uiState.value.timeoutMs
+                    )
+                    saveListSelection()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingList = false,
+                    error = "Failed to load IR DNS Lite IPs: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun updateCustomRangeInput(text: String) {
+        // Update text immediately for responsive typing
+        _uiState.value = _uiState.value.copy(customRangeInput = text)
+
+        // Debounce the parsing + save so large pastes don't block the main thread
+        customRangeParseJob?.cancel()
+        customRangeParseJob = viewModelScope.launch(Dispatchers.Default) {
+            delay(300)
+            var count = 0L
+            for (token in splitCustomRangeTokens(text)) {
+                val range = parseIpRange(token)
+                if (range != null) count += (range.second - range.first + 1)
+            }
+            _uiState.update { it.copy(customRangePreviewCount = count) }
+            saveListSelection()
+        }
+    }
+
+    fun updateShuffleList(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(shuffleList = enabled)
+    }
+
+    fun updateExpandNeighbors(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(expandNeighbors = enabled)
+    }
+
+    fun setScanMode(mode: ScanMode) {
+        val state = _uiState.value
+        if (state.scannerState.isScanning || state.e2eScannerState.isRunning || state.simpleModeE2eState.isRunning) return
+        _uiState.value = state.copy(scanMode = mode)
+    }
+
+    fun loadCustomRangeList() {
+        val input = _uiState.value.customRangeInput
+        val ranges = mutableListOf<Pair<Long, Long>>()
+
+        for (token in splitCustomRangeTokens(input)) {
+            val range = parseIpRange(token)
+            if (range != null) {
+                ranges.add(range)
+            }
+        }
+
+        if (ranges.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                error = "No valid IP ranges found. Use CIDR (8.8.8.0/24), range (8.8.8.1-8.8.8.254), single IP, or comma-separated IPs."
+            )
+            return
+        }
+
+        // Safety cap check
+        var totalCount = 0L
+        for ((start, end) in ranges) {
+            totalCount += (end - start + 1)
+            if (totalCount > 100_000) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Too many IPs (over 100,000). Use smaller ranges."
+                )
+                return
+            }
+        }
+
+        _uiState.value = _uiState.value.copy(isLoadingList = true)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val ips = scannerRepository.expandIpRanges(ranges)
+                clearSavedSession()
+                e2eJob?.cancel()
+                simpleModeE2eJob?.cancel()
+                _uiState.value = _uiState.value.copy(
+                    resolverList = ips,
+                    listSource = ListSource.CUSTOM_RANGE,
+                    scannerState = ScannerState(),
+                    selectedResolvers = emptySet(),
+                    e2eScannerState = E2eScannerState(),
+                    simpleModeE2eState = SimpleModeE2eState(),
+                    isLoadingList = false,
+                    timeoutMs = _uiState.value.timeoutMs
+                )
+                saveListSelection()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingList = false,
+                    error = "Failed to expand IP ranges: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private val cidrRegex = Regex("""\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2})\b""")
+    private val rangeRegex = Regex("""\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*-\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b""")
+    private val singleIpRegex = Regex("""\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b""")
+
+    /** Split input by newlines and commas, strip :port suffixes, skip blanks/comments. */
+    private fun splitCustomRangeTokens(text: String): List<String> {
+        return text.split('\n', ',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.startsWith("#") }
+            .map { it.replace(Regex(":(\\d+)$"), "") } // strip :port suffix
+    }
+
+    private fun parseIpRange(line: String): Pair<Long, Long>? {
+        // Try CIDR first (e.g. 8.8.8.0/24)
+        cidrRegex.find(line)?.let { match ->
+            DomainRouter.parseCidr(match.groupValues[1])?.let { return it }
+        }
+
+        // Try range format (e.g. 8.8.8.1-8.8.8.254)
+        rangeRegex.find(line)?.let { match ->
+            val start = DomainRouter.ipToLong(match.groupValues[1])
+            val end = DomainRouter.ipToLong(match.groupValues[2])
+            if (start != null && end != null && start <= end) {
+                return Pair(start, end)
+            }
+        }
+
+        // Try single IP (e.g. 8.8.8.8)
+        singleIpRegex.find(line)?.let { match ->
+            DomainRouter.ipToLong(match.groupValues[1])?.let { ip ->
+                return Pair(ip, ip)
+            }
+        }
+
+        return null
+    }
+
+    fun toggleResolverSelection(host: String) {
+        val current = _uiState.value.selectedResolvers
+        if (current.contains(host)) {
+            _uiState.value = _uiState.value.copy(selectedResolvers = current - host)
+        } else if (current.size < DnsScannerUiState.MAX_SELECTED_RESOLVERS) {
+            _uiState.value = _uiState.value.copy(selectedResolvers = current + host)
+        }
+    }
+
+    fun clearSelection() {
+        _uiState.value = _uiState.value.copy(selectedResolvers = emptySet())
+    }
+
+    // --- Scan control ---
+
+    fun startScan() {
+        val state = _uiState.value
+        if (state.resolverList.isEmpty()) {
+            _uiState.value = _uiState.value.copy(error = "No resolvers to scan")
+            return
+        }
+
+        if (state.effectiveTestDomain.isBlank()) {
+            _uiState.value = _uiState.value.copy(error = "Test domain is required")
+            return
+        }
+
+        // Prism mode requires a profile with a valid Noise public key
+        if (state.scanMode == ScanMode.PRISM && !state.profilePubkeyValid) {
+            _uiState.value = _uiState.value.copy(error = "Prism requires a VPN profile with a valid server public key")
+            return
+        }
+        if (state.scanMode == ScanMode.PRISM && state.prismSettingsInvalid) {
+            _uiState.value = _uiState.value.copy(error = "Per-probe timeout too low (${state.prismPerProbeMs}ms). Increase timeout or lower pass threshold.")
+            return
+        }
+
+        // Check for resumable partial scan
+        val ss = state.scannerState
+        val hasPartialDns = ss.scannedCount > 0 && ss.scannedCount < ss.totalCount + ss.focusRangeCount
+        val hasPartialE2e = state.scanMode == ScanMode.SIMPLE &&
+            ss.scannedCount > 0 &&
+            ss.results.any { it.status == ResolverStatus.WORKING && it.e2eTestResult == null }
+        val hasPartialE2eOnly = state.scanMode == ScanMode.E2E &&
+            state.simpleModeE2eState.testedCount > 0 &&
+            state.simpleModeE2eState.testedCount < state.simpleModeE2eState.queuedCount
+        if (!ss.isScanning && !state.simpleModeE2eState.isRunning && (hasPartialDns || hasPartialE2e || hasPartialE2eOnly)) {
+            _uiState.value = _uiState.value.copy(showResumeDialog = true)
+            return
+        }
+
+        startFreshScan()
+    }
+
+    fun dismissResumeDialog() {
+        _uiState.value = _uiState.value.copy(showResumeDialog = false)
+    }
+
+    fun startFreshScan() {
+        // Cancel any previous scan/E2E jobs before starting fresh
+        scanJob?.cancel()
+        e2eJob?.cancel()
+        simpleModeE2eJob?.cancel()
+        e2ePendingQueue?.close()
+        ScanStateHolder.cancelScope()
+
+        acquireWakeLock()
+        _uiState.value = _uiState.value.copy(showResumeDialog = false)
+        clearSavedSession()
+
+        val state = _uiState.value
+        val timeout = state.timeoutMs.toLongOrNull() ?: 3000L
+        val concurrency = state.concurrency.toIntOrNull() ?: 50
+        val scanPort = state.scanPort.toIntOrNull()?.coerceIn(1, 65535) ?: 53
+
+        // Shuffle the list if enabled, then persist the order so resume works correctly.
+        // For the default list, always fetch original order so famous resolvers stay at the top.
+        val resolvers = if (state.shuffleList && state.listSource == ListSource.DEFAULT) {
+            scannerRepository.getDefaultResolversShuffled()
+        } else if (state.shuffleList) {
+            state.resolverList.shuffled()
+        } else {
+            state.resolverList
+        }
+        Log.d("DnsScanner", "Scan order first10=${resolvers.take(10)}")
+
+        // Initialize scanner state — don't pre-allocate PENDING results to avoid OOM on large lists
+        val isE2eOnlyMode = state.scanMode == ScanMode.E2E
+        _uiState.value = _uiState.value.copy(
+            resolverList = resolvers,
+            scannerState = ScannerState(
+                isScanning = !isE2eOnlyMode,
+                totalCount = resolvers.size,
+                scannedCount = if (isE2eOnlyMode) resolvers.size else 0,
+                workingCount = 0,
+                results = emptyList()
+            ),
+            selectedResolvers = emptySet(),
+            error = null,
+            transparentProxyDetected = false,
+            simpleModeE2eState = SimpleModeE2eState(),
+            e2eScannerState = E2eScannerState()
+        )
+
+        val isE2eOnly = state.scanMode == ScanMode.E2E
+        ScanStateHolder.update {
+            ScanServiceState(
+                isScanning = !isE2eOnly,
+                isE2eRunning = state.scanMode == ScanMode.SIMPLE || isE2eOnly,
+                scannedCount = if (isE2eOnly) resolvers.size else 0,
+                totalCount = resolvers.size,
+                workingCount = 0,
+                stopRequested = false,
+                profileId = state.profileId,
+                simpleE2eQueuedCount = if (isE2eOnly) resolvers.size else 0
+            )
+        }
+        ContextCompat.startForegroundService(appContext, Intent(appContext, ScanService::class.java))
+
+        when (state.scanMode) {
+            ScanMode.SIMPLE -> launchSimpleScan(
+                hosts = resolvers,
+                allHosts = resolvers,
+                testDomain = state.effectiveTestDomain,
+                timeout = timeout,
+                concurrency = concurrency,
+                minScore = _uiState.value.e2eMinScore,
+                port = scanPort
+            )
+            ScanMode.E2E -> launchE2eScan(
+                resolvers = resolvers,
+                port = scanPort
+            )
+            ScanMode.PRISM -> {
+                val pubkeyBytes = state.profilePubkey.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                val prismDomain = state.profile?.domain ?: state.effectiveTestDomain
+                val prismTimeout = state.prismTimeoutMs.toLongOrNull() ?: 2000L
+                val probeCount = state.prismProbeCount.toIntOrNull()?.coerceIn(1, 30) ?: 5
+                val passThreshold = state.prismPassThreshold.toIntOrNull()?.coerceIn(1, probeCount) ?: 2
+                val responseSize = state.prismResponseSize.toIntOrNull()?.let { if (it == 0) 0 else it.coerceIn(200, 4096) } ?: 0
+                launchPrismScan(
+                    hosts = resolvers,
+                    allHosts = resolvers,
+                    testDomain = prismDomain,
+                    timeout = prismTimeout,
+                    concurrency = concurrency,
+                    pubkey = pubkeyBytes,
+                    port = scanPort,
+                    probeCount = probeCount,
+                    passThreshold = passThreshold,
+                    responseSize = responseSize,
+                    prefilter = state.prismPrefilter
+                )
+            }
+            ScanMode.ADVANCED -> launchScan(
+                hosts = resolvers,
+                allHosts = resolvers,
+                testDomain = state.effectiveTestDomain,
+                timeout = timeout,
+                concurrency = concurrency,
+                existingResults = emptyMap(),
+                startScannedCount = 0,
+                startWorkingCount = 0,
+                port = scanPort,
+                querySize = state.profile?.dnsPayloadSize ?: 0
+            )
+        }
+    }
+
+    fun resumeScan() {
+        // Cancel any previous scan/E2E jobs before resuming
+        scanJob?.cancel()
+        e2eJob?.cancel()
+        simpleModeE2eJob?.cancel()
+        e2ePendingQueue?.close()
+
+        acquireWakeLock()
+        _uiState.value = _uiState.value.copy(showResumeDialog = false)
+        clearSavedSession()
+
+        val state = _uiState.value
+
+        if (state.scanMode == ScanMode.E2E) {
+            resumeE2eScan()
+            return
+        }
+
+        if (state.scanMode == ScanMode.SIMPLE) {
+            resumeSimpleScan()
+            return
+        }
+
+        if (state.scanMode == ScanMode.PRISM) {
+            if (!state.profilePubkeyValid) {
+                _uiState.value = _uiState.value.copy(error = "Prism requires a VPN profile with a valid server public key")
+                releaseWakeLock()
+                return
+            }
+            val prismTimeout = state.prismTimeoutMs.toLongOrNull() ?: 2000L
+            val concurrency = state.concurrency.toIntOrNull() ?: 50
+            val scanPort = state.scanPort.toIntOrNull()?.coerceIn(1, 65535) ?: 53
+            val probeCount = state.prismProbeCount.toIntOrNull()?.coerceIn(1, 30) ?: 5
+            val passThreshold = state.prismPassThreshold.toIntOrNull()?.coerceIn(1, probeCount) ?: 2
+            val pubkeyBytes = state.profilePubkey.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val responseSize = state.prismResponseSize.toIntOrNull()?.let { if (it == 0) 0 else it.coerceIn(200, 4096) } ?: 0
+            val existingResults = state.scannerState.results
+                .filter { it.status != ResolverStatus.PENDING && it.status != ResolverStatus.SCANNING }
+                .associateBy { it.host }
+            val alreadyScanned = state.scannerState.scannedCount
+            val remainingHosts = state.resolverList.drop(alreadyScanned)
+            val startWorking = existingResults.values.count { it.prismVerified == true }
+
+            if (remainingHosts.isEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    scannerState = state.scannerState.copy(isScanning = false)
+                )
+                releaseWakeLock()
+                return
+            }
+
+            // Immediately mark scanning so the UI switches to Stop button
+            _uiState.value = _uiState.value.copy(
+                scannerState = ScannerState(
+                    isScanning = true,
+                    totalCount = state.resolverList.size,
+                    scannedCount = alreadyScanned,
+                    workingCount = startWorking,
+                    results = existingResults.values.toList()
+                ),
+                selectedResolvers = emptySet(),
+                error = null
+            )
+            ScanStateHolder.update { it.copy(
+                isScanning = true,
+                scannedCount = alreadyScanned,
+                totalCount = state.resolverList.size,
+                workingCount = startWorking,
+                stopRequested = false
+            ) }
+            ContextCompat.startForegroundService(appContext, Intent(appContext, ScanService::class.java))
+            val prismDomain = state.profile?.domain ?: state.effectiveTestDomain
+            launchPrismScan(
+                hosts = remainingHosts,
+                allHosts = state.resolverList,
+                testDomain = prismDomain,
+                timeout = prismTimeout,
+                concurrency = concurrency,
+                pubkey = pubkeyBytes,
+                port = scanPort,
+                probeCount = probeCount,
+                passThreshold = passThreshold,
+                responseSize = responseSize,
+                prefilter = state.prismPrefilter,
+                existingResults = existingResults,
+                startScannedCount = alreadyScanned,
+                startWorkingCount = startWorking
+            )
+            return
+        }
+
+        val timeout = state.timeoutMs.toLongOrNull() ?: 3000L
+        val concurrency = state.concurrency.toIntOrNull() ?: 50
+        val scanPort = state.scanPort.toIntOrNull()?.coerceIn(1, 65535) ?: 53
+
+        // Determine which hosts were already scanned.
+        // Note: scannerState.results only contains WORKING results (to avoid OOM).
+        // Use scannedCount (which tracks all outcomes) to skip already-processed hosts.
+        val existingResults = mutableMapOf<String, ResolverScanResult>()
+        var startWorkingCount = 0
+        for (result in state.scannerState.results) {
+            if (result.status != ResolverStatus.PENDING && result.status != ResolverStatus.SCANNING) {
+                existingResults[result.host] = result
+                if (result.status == ResolverStatus.WORKING) startWorkingCount++
+            }
+        }
+        val alreadyScanned = state.scannerState.scannedCount
+        val remainingHosts = state.resolverList.drop(alreadyScanned)
+
+        if (remainingHosts.isEmpty()) {
+            // Nothing left to scan — just mark complete.
+            _uiState.value = _uiState.value.copy(
+                scannerState = state.scannerState.copy(isScanning = false)
+            )
+            releaseWakeLock()
+            return
+        }
+
+        // Update state: mark remaining as SCANNING, keep scanned results.
+        val resumeResults = state.resolverList.map { host ->
+            existingResults[host] ?: ResolverScanResult(host = host, status = ResolverStatus.PENDING)
+        }
+        _uiState.value = _uiState.value.copy(
+            scannerState = ScannerState(
+                isScanning = true,
+                totalCount = state.resolverList.size,
+                scannedCount = alreadyScanned,
+                workingCount = startWorkingCount,
+                results = resumeResults
+            ),
+            selectedResolvers = emptySet(),
+            error = null
+        )
+
+        ScanStateHolder.update { it.copy(
+            isScanning = true,
+            isE2eRunning = false,
+            scannedCount = alreadyScanned,
+            totalCount = state.resolverList.size,
+            workingCount = startWorkingCount,
+            stopRequested = false
+        ) }
+        ContextCompat.startForegroundService(appContext, Intent(appContext, ScanService::class.java))
+
+        launchScan(
+            hosts = remainingHosts,
+            allHosts = state.resolverList,
+            testDomain = state.effectiveTestDomain,
+            timeout = timeout,
+            concurrency = concurrency,
+            existingResults = existingResults,
+            startScannedCount = alreadyScanned,
+            startWorkingCount = startWorkingCount,
+            port = scanPort,
+            querySize = state.profile?.dnsPayloadSize ?: 0
+        )
+    }
+
+    private fun resumeSimpleScan() {
+        val state = _uiState.value
+        val profile = state.profile ?: run {
+            _uiState.value = state.copy(error = "No profile loaded")
+            releaseWakeLock()
+            return
+        }
+
+        val timeout = state.timeoutMs.toLongOrNull() ?: 3000L
+        val concurrency = state.concurrency.toIntOrNull() ?: 50
+        val resumeScanPort = state.scanPort.toIntOrNull()?.coerceIn(1, 65535) ?: 53
+
+        // Gather already-scanned WORKING results (preserving E2E data).
+        // Note: scannerState.results only contains WORKING results (to avoid OOM).
+        // Use scannedCount (which tracks all outcomes) to skip already-processed hosts.
+        val existingResults = mutableMapOf<String, ResolverScanResult>()
+        var startWorkingCount = 0
+        for (result in state.scannerState.results) {
+            if (result.status != ResolverStatus.PENDING && result.status != ResolverStatus.SCANNING) {
+                existingResults[result.host] = result
+                if (result.status == ResolverStatus.WORKING) startWorkingCount++
+            }
+        }
+
+        val alreadyScanned = state.scannerState.scannedCount
+        val remainingDnsHosts = state.resolverList.drop(alreadyScanned)
+
+        // Working resolvers that still need E2E testing (filtered by score)
+        val minScore = state.e2eMinScore
+        val skipScoreFilter = profile.tunnelType in DnsScannerUiState.SCORE_IRRELEVANT_TUNNEL_TYPES
+        val untestedE2e = existingResults.values
+            .filter { it.status == ResolverStatus.WORKING && it.e2eTestResult == null && (skipScoreFilter || it.tunnelTestResult == null || it.tunnelTestResult.score >= minScore) }
+            .map { it.host to it.port }
+
+        val hasDnsWork = remainingDnsHosts.isNotEmpty()
+        val hasE2eWork = untestedE2e.isNotEmpty()
+
+        if (!hasDnsWork && !hasE2eWork) {
+            _uiState.value = state.copy(
+                scannerState = state.scannerState.copy(isScanning = false),
+                simpleModeE2eState = state.simpleModeE2eState.copy(isRunning = false)
+            )
+            releaseWakeLock()
+            return
+        }
+
+        val startTestedCount = existingResults.values.count {
+            it.status == ResolverStatus.WORKING && it.e2eTestResult != null
+        }
+        val startPassedCount = existingResults.values.count {
+            it.e2eTestResult?.success == true
+        }
+
+        val queue = SortableQueue(untestedE2e, buildE2eComparator(_uiState.value.e2eSortOption))
+        e2ePendingQueue = queue
+
+        // Thread-safe map — DNS scan (Main) and E2E workers (IO→Main) both access this.
+        val resultsMap = java.util.concurrent.ConcurrentHashMap<String, ResolverScanResult>()
+        resultsMap.putAll(existingResults)
+        var scannedCount = alreadyScanned
+        var workingCount = startWorkingCount
+
+        fun rebuildResultsList() = resultsMap.values.filter { it.status == ResolverStatus.WORKING }.toList()
+
+        ScanStateHolder.update { it.copy(
+            isScanning = hasDnsWork,
+            isE2eRunning = true,
+            scannedCount = scannedCount,
+            totalCount = state.resolverList.size,
+            workingCount = workingCount,
+            stopRequested = false,
+            simpleE2eQueuedCount = startWorkingCount,
+            simpleE2eTestedCount = startTestedCount,
+            simpleE2ePassedCount = startPassedCount
+        ) }
+        ContextCompat.startForegroundService(appContext, Intent(appContext, ScanService::class.java))
+
+        // Update state for resume
+        _uiState.value = state.copy(
+            scannerState = ScannerState(
+                isScanning = hasDnsWork,
+                totalCount = state.resolverList.size,
+                scannedCount = scannedCount,
+                workingCount = workingCount,
+                results = rebuildResultsList()
+            ),
+            simpleModeE2eState = SimpleModeE2eState(
+                isRunning = true,
+                queuedCount = startWorkingCount,
+                testedCount = startTestedCount,
+                passedCount = startPassedCount
+            ),
+            selectedResolvers = emptySet(),
+            error = null
+        )
+
+        // Coroutine 1: DNS scan for remaining hosts
+        if (hasDnsWork) {
+            scanJob = ScanStateHolder.scanScope.launch {
+                val scannedSet = state.resolverList.toMutableSet()
+                val useFocusRange = state.expandNeighbors && state.listSource in listOf(ListSource.COUNTRY_RANGE, ListSource.CUSTOM_RANGE, ListSource.IR_DNS_RANGE, ListSource.IR_DNS_LITE_RANGE)
+                val focusRangeQueue = mutableListOf<String>()
+                val expandedSubnets = mutableSetOf<String>()
+                val maxFocusRange = 5000
+                var uiUpdateCounter = 0
+                var lastEmitTimeMs = 0L
+
+                fun emitState(scanning: Boolean, force: Boolean = false) {
+                    if (!force) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastEmitTimeMs < 500L) return
+                        lastEmitTimeMs = now
+                    }
+                    _uiState.update { s ->
+                        val dnsResults = rebuildResultsList()
+                        // Preserve E2E data that onResult may have written
+                        val existingE2e = s.scannerState.results.associateBy({ it.host }, { it.e2eTestResult })
+                        val mergedResults = if (existingE2e.any { it.value != null }) {
+                            dnsResults.map { r -> existingE2e[r.host]?.let { r.copy(e2eTestResult = it) } ?: r }
+                        } else dnsResults
+                        s.copy(
+                            scannerState = ScannerState(
+                                isScanning = scanning,
+                                totalCount = state.resolverList.size,
+                                focusRangeCount = focusRangeQueue.size,
+                                scannedCount = scannedCount,
+                                workingCount = workingCount,
+                                results = mergedResults
+                            )
+                        )
+                    }
+                    ScanStateHolder.update { it.copy(
+                        isScanning = scanning,
+                        scannedCount = scannedCount,
+                        totalCount = state.resolverList.size,
+                        workingCount = workingCount,
+                        results = _uiState.value.scannerState.results
+                    ) }
+                    periodicSaveIfNeeded()
+                }
+
+                fun handleResult(result: ResolverScanResult) {
+                    scannedCount++
+                    if (result.status == ResolverStatus.WORKING) {
+                        // Preserve existing e2eTestResult when DNS scan re-discovers a host
+                        val existing = resultsMap[result.host]
+                        resultsMap[result.host] = if (existing?.e2eTestResult != null) {
+                            result.copy(e2eTestResult = existing.e2eTestResult)
+                        } else result
+                        workingCount++
+                        if (skipScoreFilter || result.tunnelTestResult == null || result.tunnelTestResult.score >= minScore) {
+                            queue.add(result.host to result.port)
+                            _uiState.update { s ->
+                                s.copy(simpleModeE2eState = s.simpleModeE2eState.copy(
+                                    queuedCount = s.simpleModeE2eState.queuedCount + 1
+                                ))
+                            }
+                            ScanStateHolder.update { it.copy(simpleE2eQueuedCount = it.simpleE2eQueuedCount + 1) }
+                        }
+                        if (useFocusRange) {
+                            tryExpandSubnet(result.host, focusRangeQueue, expandedSubnets, scannedSet, maxFocusRange)
+                        }
+                    }
+                    uiUpdateCounter++
+                    if (result.status == ResolverStatus.WORKING || uiUpdateCounter >= 20) {
+                        uiUpdateCounter = 0
+                        emitState(true)
+                    }
+                }
+
+                runScanResolvers(
+                    hosts = remainingDnsHosts,
+                    port = resumeScanPort,
+                    testDomain = state.effectiveTestDomain,
+                    timeoutMs = timeout,
+                    concurrency = concurrency,
+                    querySize = profile.dnsPayloadSize,
+                    mode = state.scanTransport
+                ) { handleResult(it) }
+                emitState(true, force = true)
+
+                if (focusRangeQueue.isNotEmpty()) {
+                    val neighborIps = focusRangeQueue.toList()
+                    _uiState.update { s -> s.copy(resolverList = s.resolverList + neighborIps) }
+                    runScanResolvers(
+                        hosts = neighborIps,
+                        port = resumeScanPort,
+                        testDomain = state.effectiveTestDomain,
+                        timeoutMs = timeout,
+                        concurrency = concurrency,
+                        querySize = profile.dnsPayloadSize,
+                        mode = state.scanTransport
+                    ) { handleResult(it) }
+                }
+
+                queue.close()
+                emitState(false, force = true)
+            }
+        } else {
+            // DNS is already complete — close queue after seeding
+            queue.close()
+        }
+
+        // Coroutine 2: E2E validation — N parallel consumers
+        simpleModeE2eJob = ScanStateHolder.scanScope.launch {
+            launchE2eWorkers(
+                queue = queue, profile = profile,
+                testUrl = _uiState.value.testUrl,
+                e2eTimeout = _uiState.value.e2eTimeoutMs.toLongOrNull() ?: 15000L,
+                fullVerification = _uiState.value.e2eFullVerification,
+                startTestedCount = startTestedCount, startPassedCount = startPassedCount,
+                onActiveChanged = { transform -> updateSimpleModeActive(transform) },
+                onResult = { host, result, tested, passed ->
+                    resultsMap.compute(host) { _, existing -> existing?.copy(e2eTestResult = result) }
+                    updateSimpleModeResult(rebuildResultsList(), tested, passed)
+                },
+                onComplete = {
+                    _uiState.update { s ->
+                        s.copy(simpleModeE2eState = s.simpleModeE2eState.copy(
+                            isRunning = false, currentResolver = null, currentPhase = "",
+                            activeResolvers = emptyMap()
+                        ))
+                    }
+                    ScanStateHolder.update { it.copy(isE2eRunning = false) }
+                    cleanupBridge()
+                    saveScanSessionToStore()
+                    releaseWakeLock()
+                }
+            )
+        }
+    }
+
+    private fun resumeE2eScan() {
+        val state = _uiState.value
+        val profile = state.profile ?: run {
+            _uiState.value = state.copy(error = "No profile loaded")
+            releaseWakeLock()
+            return
+        }
+
+        val scanPort = state.scanPort.toIntOrNull()?.coerceIn(1, 65535) ?: 53
+
+        // Gather already-tested E2E results
+        val existingResults = state.scannerState.results
+            .filter { it.e2eTestResult != null }
+            .associateBy { it.host }
+        val startTestedCount = state.simpleModeE2eState.testedCount
+        val startPassedCount = state.simpleModeE2eState.passedCount
+
+        if (startTestedCount >= state.resolverList.size) {
+            _uiState.value = state.copy(
+                simpleModeE2eState = state.simpleModeE2eState.copy(isRunning = false)
+            )
+            releaseWakeLock()
+            return
+        }
+
+        ScanStateHolder.update { it.copy(
+            isScanning = false,
+            isE2eRunning = true,
+            scannedCount = state.resolverList.size,
+            totalCount = state.resolverList.size,
+            stopRequested = false,
+            simpleE2eQueuedCount = state.resolverList.size,
+            simpleE2eTestedCount = startTestedCount,
+            simpleE2ePassedCount = startPassedCount
+        ) }
+        ContextCompat.startForegroundService(appContext, Intent(appContext, ScanService::class.java))
+
+        launchE2eScan(
+            resolvers = state.resolverList,
+            port = scanPort,
+            startTestedCount = startTestedCount,
+            startPassedCount = startPassedCount,
+            existingResults = existingResults
+        )
+    }
+
+    /**
+     * Run scanResolvers honouring [mode]. For BOTH, runs UDP first; hosts that
+     * don't return WORKING are retried over TCP. Each host's result is passed
+     * to [collector] exactly once (UDP result if WORKING, otherwise the TCP
+     * retry result) so downstream counters are not double-incremented.
+     */
+    private suspend fun runScanResolvers(
+        hosts: List<String>,
+        port: Int,
+        testDomain: String,
+        timeoutMs: Long,
+        concurrency: Int,
+        querySize: Int,
+        mode: ScanTransportMode,
+        collector: suspend (ResolverScanResult) -> Unit
+    ) {
+        when (mode) {
+            ScanTransportMode.UDP, ScanTransportMode.TCP -> {
+                val isTcp = mode == ScanTransportMode.TCP
+                val t = if (isTcp) DnsTransport.TCP else DnsTransport.UDP
+                scannerRepository.scanResolvers(
+                    hosts, port, testDomain, timeoutMs, concurrency, querySize, t
+                ).collect { result ->
+                    // Tag WORKING hits with the single tested transport so the UI can render a badge.
+                    if (result.status == ResolverStatus.WORKING) {
+                        val pair = if (isTcp) false to true else true to false
+                        _uiState.update { s ->
+                            s.copy(hostTransportSupport = s.hostTransportSupport + (result.host to pair))
+                        }
+                    }
+                    collector(result)
+                }
+            }
+            ScanTransportMode.BOTH -> coroutineScope {
+                val udpMap = java.util.concurrent.ConcurrentHashMap<String, ResolverScanResult>()
+                val tcpMap = java.util.concurrent.ConcurrentHashMap<String, ResolverScanResult>()
+                val emitted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+                val collectorLock = Mutex()
+
+                suspend fun maybeEmit(host: String) {
+                    val udp = udpMap[host] ?: return
+                    val tcp = tcpMap[host] ?: return
+                    if (!emitted.add(host)) return
+                    val udpOk = udp.status == ResolverStatus.WORKING
+                    val tcpOk = tcp.status == ResolverStatus.WORKING
+                    // Record per-host transport support so the UI can render badges and
+                    // the profile-apply flow can recommend a transport.
+                    _uiState.update { s ->
+                        s.copy(hostTransportSupport = s.hostTransportSupport + (host to (udpOk to tcpOk)))
+                    }
+                    // Prefer the WORKING result as the carrier (for responseTimeMs, tunnelTestResult, etc.);
+                    // UDP wins the tiebreak so timing is consistent with single-transport UDP scans.
+                    val base = when {
+                        udpOk -> udp
+                        tcpOk -> tcp
+                        else -> udp
+                    }
+                    collectorLock.withLock { collector(base) }
+                }
+
+                val udpJob = launch {
+                    scannerRepository.scanResolvers(
+                        hosts, port, testDomain, timeoutMs, concurrency, querySize, DnsTransport.UDP
+                    ).collect { r ->
+                        udpMap[r.host] = r
+                        maybeEmit(r.host)
+                    }
+                }
+                val tcpJob = launch {
+                    scannerRepository.scanResolvers(
+                        hosts, port, testDomain, timeoutMs, concurrency, querySize, DnsTransport.TCP
+                    ).collect { r ->
+                        tcpMap[r.host] = r
+                        maybeEmit(r.host)
+                    }
+                }
+                udpJob.join()
+                tcpJob.join()
+            }
+        }
+    }
+
+    /**
+     * Wrapper for [ResolverScannerRepository.isResolverAlive] that honours [mode].
+     * BOTH probes UDP and TCP concurrently and returns true if either succeeds.
+     */
+    private suspend fun isResolverAliveWithMode(
+        host: String, port: Int, testDomain: String, timeoutMs: Long, mode: ScanTransportMode
+    ): Boolean = when (mode) {
+        ScanTransportMode.UDP -> scannerRepository.isResolverAlive(host, port, testDomain, timeoutMs, DnsTransport.UDP)
+        ScanTransportMode.TCP -> scannerRepository.isResolverAlive(host, port, testDomain, timeoutMs, DnsTransport.TCP)
+        ScanTransportMode.BOTH -> coroutineScope {
+            val udpD = async { scannerRepository.isResolverAlive(host, port, testDomain, timeoutMs, DnsTransport.UDP) }
+            val tcpD = async { scannerRepository.isResolverAlive(host, port, testDomain, timeoutMs, DnsTransport.TCP) }
+            udpD.await() || tcpD.await()
+        }
+    }
+
+    /**
+     * Prism verification outcome. [passedProbes] is the best count across probed transports.
+     * [udpOk] / [tcpOk] record which transports passed the threshold — non-null only in BOTH mode.
+     */
+    private data class PrismVerifyOutcome(
+        val passedProbes: Int,
+        val udpOk: Boolean? = null,
+        val tcpOk: Boolean? = null
+    )
+
+    /**
+     * Wrapper for [ResolverScannerRepository.verifyResolver] that honours [mode].
+     * BOTH probes UDP and TCP concurrently and reports each transport's result separately.
+     */
+    private suspend fun verifyResolverWithMode(
+        host: String, port: Int, testDomain: String, pubkey: ByteArray, timeoutMs: Long,
+        probeCount: Int, passThreshold: Int, responseSize: Int, mode: ScanTransportMode
+    ): PrismVerifyOutcome = when (mode) {
+        ScanTransportMode.UDP -> PrismVerifyOutcome(
+            scannerRepository.verifyResolver(
+                host, port, testDomain, pubkey, timeoutMs, probeCount, passThreshold, responseSize, DnsTransport.UDP
+            )
+        )
+        ScanTransportMode.TCP -> PrismVerifyOutcome(
+            scannerRepository.verifyResolver(
+                host, port, testDomain, pubkey, timeoutMs, probeCount, passThreshold, responseSize, DnsTransport.TCP
+            )
+        )
+        ScanTransportMode.BOTH -> coroutineScope {
+            val udpD = async {
+                scannerRepository.verifyResolver(
+                    host, port, testDomain, pubkey, timeoutMs, probeCount, passThreshold, responseSize, DnsTransport.UDP
+                )
+            }
+            val tcpD = async {
+                scannerRepository.verifyResolver(
+                    host, port, testDomain, pubkey, timeoutMs, probeCount, passThreshold, responseSize, DnsTransport.TCP
+                )
+            }
+            val udp = udpD.await()
+            val tcp = tcpD.await()
+            PrismVerifyOutcome(
+                passedProbes = maxOf(udp, tcp),
+                udpOk = udp >= passThreshold,
+                tcpOk = tcp >= passThreshold
+            )
+        }
+    }
+
+    private fun launchScan(
+        hosts: List<String>,
+        allHosts: List<String>,
+        testDomain: String,
+        timeout: Long,
+        concurrency: Int,
+        existingResults: Map<String, ResolverScanResult>,
+        startScannedCount: Int,
+        startWorkingCount: Int,
+        port: Int = 53,
+        querySize: Int = 0
+    ) {
+        // Run transparent proxy detection concurrently
+        viewModelScope.launch {
+            try {
+                val detected = scannerRepository.detectTransparentProxy(testDomain)
+                if (detected) {
+                    _uiState.update { s -> s.copy(transparentProxyDetected = true) }
+                }
+            } catch (_: Exception) { }
+        }
+
+        scanJob = ScanStateHolder.scanScope.launch {
+            // Only WORKING results kept in memory; failed results tracked as counters only
+            val workingResults = mutableListOf<ResolverScanResult>()
+            existingResults.values.filter { it.status == ResolverStatus.WORKING }.let { workingResults.addAll(it) }
+            var scannedCount = startScannedCount
+            var workingCount = startWorkingCount
+            var timeoutCount = 0
+            var errorCount = 0
+            val scannedSet = allHosts.toMutableSet()
+            var uiUpdateCounter = 0
+            var lastEmitTimeMs = 0L
+
+            // Focus range: collect /24 neighbors of working resolvers (capped at 5000)
+            val useFocusRange = _uiState.value.expandNeighbors && _uiState.value.listSource in listOf(ListSource.COUNTRY_RANGE, ListSource.CUSTOM_RANGE, ListSource.IR_DNS_RANGE, ListSource.IR_DNS_LITE_RANGE)
+            val focusRangeQueue = mutableListOf<String>()
+            val expandedSubnets = mutableSetOf<String>()
+            val maxFocusRange = 5000
+
+            fun emitState(scanning: Boolean, force: Boolean = false) {
+                if (!force) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastEmitTimeMs < 500L) return
+                    lastEmitTimeMs = now
+                }
+                val currentResults = workingResults.toList()
+                _uiState.update { s ->
+                    // Preserve E2E data that onResult may have written between
+                    // the snapshot of workingResults and this CAS attempt.
+                    val existingE2e = s.scannerState.results.associateBy({ it.host }, { it.e2eTestResult })
+                    val mergedResults = if (existingE2e.any { it.value != null }) {
+                        currentResults.map { r -> existingE2e[r.host]?.let { r.copy(e2eTestResult = it) } ?: r }
+                    } else currentResults
+                    s.copy(
+                        scannerState = ScannerState(
+                            isScanning = scanning,
+                            totalCount = allHosts.size,
+                            focusRangeCount = focusRangeQueue.size,
+                            scannedCount = scannedCount,
+                            workingCount = workingCount,
+                            timeoutCount = timeoutCount,
+                            errorCount = errorCount,
+                            results = mergedResults
+                        )
+                    )
+                }
+                ScanStateHolder.update { it.copy(
+                    isScanning = scanning,
+                    scannedCount = scannedCount,
+                    totalCount = allHosts.size,
+                    workingCount = workingCount,
+                    results = _uiState.value.scannerState.results
+                ) }
+                periodicSaveIfNeeded()
+            }
+
+            fun handleResult(result: ResolverScanResult) {
+                scannedCount++
+                when (result.status) {
+                    ResolverStatus.WORKING -> {
+                        workingCount++
+                        workingResults.add(result)
+                        if (useFocusRange) {
+                            tryExpandSubnet(result.host, focusRangeQueue, expandedSubnets, scannedSet, maxFocusRange)
+                        }
+                    }
+                    ResolverStatus.TIMEOUT -> timeoutCount++
+                    ResolverStatus.ERROR, ResolverStatus.CENSORED -> errorCount++
+                    else -> {}
+                }
+                // Batch UI updates: every 20 results or on working result (throttled to max ~7 fps)
+                uiUpdateCounter++
+                if (result.status == ResolverStatus.WORKING || uiUpdateCounter >= 20) {
+                    uiUpdateCounter = 0
+                    emitState(true)
+                }
+            }
+
+            val transport = _uiState.value.scanTransport
+            runScanResolvers(
+                hosts = hosts,
+                port = port,
+                testDomain = testDomain,
+                timeoutMs = timeout,
+                concurrency = concurrency,
+                querySize = querySize,
+                mode = transport
+            ) { handleResult(it) }
+            emitState(true, force = true)
+
+            // Phase 2: scan focus range neighbors
+            if (focusRangeQueue.isNotEmpty()) {
+                val neighborIps = focusRangeQueue.toList()
+                Log.d("DnsScanner", "Focus range: scanning ${neighborIps.size} neighbor IPs from ${expandedSubnets.size} subnets")
+                // Persist neighbors in resolverList so resume works
+                _uiState.update { s -> s.copy(resolverList = s.resolverList + neighborIps) }
+                runScanResolvers(
+                    hosts = neighborIps,
+                    port = port,
+                    testDomain = testDomain,
+                    timeoutMs = timeout,
+                    concurrency = concurrency,
+                    querySize = querySize,
+                    mode = transport
+                ) { handleResult(it) }
+            }
+
+            emitState(false, force = true)
+            saveScanSessionToStore()
+            clearSavedSession()
+            releaseWakeLock()
+        }
+    }
+
+    private fun launchSimpleScan(
+        hosts: List<String>,
+        allHosts: List<String>,
+        testDomain: String,
+        timeout: Long,
+        concurrency: Int,
+        minScore: Int = 1,
+        port: Int = 53
+    ) {
+        val profile = _uiState.value.profile ?: run {
+            _uiState.value = _uiState.value.copy(error = "No profile loaded")
+            return
+        }
+        val skipScoreFilter = profile.tunnelType in DnsScannerUiState.SCORE_IRRELEVANT_TUNNEL_TYPES
+
+        val queue2 = SortableQueue<Pair<String, Int>>(comparator = buildE2eComparator(_uiState.value.e2eSortOption))
+        e2ePendingQueue = queue2
+
+        _uiState.value = _uiState.value.copy(
+            simpleModeE2eState = SimpleModeE2eState(isRunning = true)
+        )
+
+        // Thread-safe map — DNS scan (Main) and E2E workers (IO→Main) both access this.
+        val resultsMap = java.util.concurrent.ConcurrentHashMap<String, ResolverScanResult>()
+        var scannedCount = 0
+        var workingCount = 0
+        val allHostsMutable = allHosts.toMutableList()
+
+        // Only return WORKING results (non-working are tracked as counters)
+        fun rebuildResultsList() = resultsMap.values.filter { it.status == ResolverStatus.WORKING }.toList()
+
+        // Run transparent proxy detection concurrently
+        viewModelScope.launch {
+            try {
+                val detected = scannerRepository.detectTransparentProxy(testDomain)
+                if (detected) {
+                    _uiState.update { s -> s.copy(transparentProxyDetected = true) }
+                }
+            } catch (_: Exception) { }
+        }
+
+        // Coroutine 1: DNS scan — produces working resolver candidates
+        scanJob = ScanStateHolder.scanScope.launch {
+            val scannedSet = allHostsMutable.toMutableSet()
+            val useFocusRange = _uiState.value.expandNeighbors && _uiState.value.listSource in listOf(ListSource.COUNTRY_RANGE, ListSource.CUSTOM_RANGE, ListSource.IR_DNS_RANGE, ListSource.IR_DNS_LITE_RANGE)
+            val focusRangeQueue = mutableListOf<String>()
+            val expandedSubnets = mutableSetOf<String>()
+            val maxFocusRange = 5000
+            var timeoutCount = 0
+            var errorCount = 0
+            var uiUpdateCounter = 0
+            var lastEmitTimeMs = 0L
+
+            fun emitState(scanning: Boolean, force: Boolean = false) {
+                if (!force) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastEmitTimeMs < 500L) return
+                    lastEmitTimeMs = now
+                }
+                _uiState.update { s ->
+                    val dnsResults = rebuildResultsList()
+                    // Preserve E2E data that onResult may have written
+                    val existingE2e = s.scannerState.results.associateBy({ it.host }, { it.e2eTestResult })
+                    val mergedResults = if (existingE2e.any { it.value != null }) {
+                        dnsResults.map { r -> existingE2e[r.host]?.let { r.copy(e2eTestResult = it) } ?: r }
+                    } else dnsResults
+                    s.copy(
+                        scannerState = ScannerState(
+                            isScanning = scanning,
+                            totalCount = allHosts.size,
+                            focusRangeCount = focusRangeQueue.size,
+                            scannedCount = scannedCount,
+                            workingCount = workingCount,
+                            timeoutCount = timeoutCount,
+                            errorCount = errorCount,
+                            results = mergedResults
+                        )
+                    )
+                }
+                ScanStateHolder.update { it.copy(
+                    isScanning = scanning,
+                    scannedCount = scannedCount,
+                    totalCount = allHosts.size,
+                    workingCount = workingCount,
+                    results = _uiState.value.scannerState.results
+                ) }
+                periodicSaveIfNeeded()
+            }
+
+            fun handleResult(result: ResolverScanResult) {
+                scannedCount++
+                when (result.status) {
+                    ResolverStatus.WORKING -> {
+                        // Preserve existing e2eTestResult when DNS scan re-discovers a host
+                        val existing = resultsMap[result.host]
+                        resultsMap[result.host] = if (existing?.e2eTestResult != null) {
+                            result.copy(e2eTestResult = existing.e2eTestResult)
+                        } else result
+                        workingCount++
+                        if (skipScoreFilter || result.tunnelTestResult == null || result.tunnelTestResult.score >= minScore) {
+                            queue2.add(result.host to result.port)
+                            _uiState.update { s ->
+                                s.copy(simpleModeE2eState = s.simpleModeE2eState.copy(
+                                    queuedCount = s.simpleModeE2eState.queuedCount + 1
+                                ))
+                            }
+                            ScanStateHolder.update { it.copy(simpleE2eQueuedCount = it.simpleE2eQueuedCount + 1) }
+                        }
+                        if (useFocusRange) {
+                            tryExpandSubnet(result.host, focusRangeQueue, expandedSubnets, scannedSet, maxFocusRange)
+                        }
+                    }
+                    ResolverStatus.TIMEOUT -> timeoutCount++
+                    ResolverStatus.ERROR, ResolverStatus.CENSORED -> errorCount++
+                    else -> {}
+                }
+                uiUpdateCounter++
+                if (result.status == ResolverStatus.WORKING || uiUpdateCounter >= 20) {
+                    uiUpdateCounter = 0
+                    emitState(true)
+                }
+            }
+
+            val transport = _uiState.value.scanTransport
+            runScanResolvers(
+                hosts = hosts,
+                port = port,
+                testDomain = testDomain,
+                timeoutMs = timeout,
+                concurrency = concurrency,
+                querySize = profile.dnsPayloadSize,
+                mode = transport
+            ) { handleResult(it) }
+            emitState(true, force = true)
+
+            // Phase 2: scan focus range neighbors
+            if (focusRangeQueue.isNotEmpty()) {
+                val neighborIps = focusRangeQueue.toList()
+                Log.d("DnsScanner", "Focus range: scanning ${neighborIps.size} neighbor IPs")
+                // Persist neighbors in resolverList so resume works
+                _uiState.update { s -> s.copy(resolverList = s.resolverList + neighborIps) }
+                runScanResolvers(
+                    hosts = neighborIps,
+                    port = port,
+                    testDomain = testDomain,
+                    timeoutMs = timeout,
+                    concurrency = concurrency,
+                    querySize = profile.dnsPayloadSize,
+                    mode = transport
+                ) { handleResult(it) }
+            }
+
+            // DNS scan done — close queue so E2E coroutine finishes
+            queue2.close()
+            emitState(false, force = true)
+        }
+
+        // Coroutine 2: E2E validation — N parallel consumers from sorted queue
+        simpleModeE2eJob = ScanStateHolder.scanScope.launch {
+            launchE2eWorkers(
+                queue = queue2, profile = profile,
+                testUrl = _uiState.value.testUrl,
+                e2eTimeout = _uiState.value.e2eTimeoutMs.toLongOrNull() ?: 15000L,
+                fullVerification = _uiState.value.e2eFullVerification,
+                startTestedCount = 0, startPassedCount = 0,
+                onActiveChanged = { transform -> updateSimpleModeActive(transform) },
+                onResult = { host, result, tested, passed ->
+                    resultsMap.compute(host) { _, existing -> existing?.copy(e2eTestResult = result) }
+                    updateSimpleModeResult(rebuildResultsList(), tested, passed)
+                },
+                onComplete = {
+                    _uiState.update { s ->
+                        s.copy(simpleModeE2eState = s.simpleModeE2eState.copy(
+                            isRunning = false, currentResolver = null, currentPhase = "",
+                            activeResolvers = emptyMap()
+                        ))
+                    }
+                    ScanStateHolder.update { it.copy(isE2eRunning = false) }
+                    cleanupBridge()
+                    saveScanSessionToStore()
+                    releaseWakeLock()
+                }
+            )
+        }
+    }
+
+    /**
+     * E2E-only scan: skip DNS compatibility testing entirely and run E2E tunnel
+     * tests directly on all resolvers. Results only include E2E-passed resolvers.
+     */
+    private fun launchE2eScan(
+        resolvers: List<String>,
+        port: Int,
+        startTestedCount: Int = 0,
+        startPassedCount: Int = 0,
+        existingResults: Map<String, ResolverScanResult> = emptyMap()
+    ) {
+        val profile = _uiState.value.profile ?: run {
+            _uiState.value = _uiState.value.copy(error = "No profile loaded")
+            return
+        }
+
+        // Build queue with resolvers that still need E2E testing
+        val alreadyTested = existingResults.keys
+        val untested = resolvers.filter { it !in alreadyTested }.map { it to port }
+        val queue = SortableQueue(untested, buildE2eComparator(_uiState.value.e2eSortOption))
+        e2ePendingQueue = queue
+        // Queue is pre-seeded with all items — close so workers finish when empty
+        queue.close()
+
+        val resultsMap = java.util.concurrent.ConcurrentHashMap<String, ResolverScanResult>()
+        resultsMap.putAll(existingResults)
+
+        _uiState.value = _uiState.value.copy(
+            simpleModeE2eState = SimpleModeE2eState(
+                isRunning = true,
+                queuedCount = resolvers.size,
+                testedCount = startTestedCount,
+                passedCount = startPassedCount
+            )
+        )
+
+        simpleModeE2eJob = ScanStateHolder.scanScope.launch {
+            launchE2eWorkers(
+                queue = queue, profile = profile,
+                testUrl = _uiState.value.testUrl,
+                e2eTimeout = _uiState.value.e2eTimeoutMs.toLongOrNull() ?: 15000L,
+                fullVerification = _uiState.value.e2eFullVerification,
+                startTestedCount = startTestedCount, startPassedCount = startPassedCount,
+                onActiveChanged = { transform -> updateSimpleModeActive(transform) },
+                onResult = { host, result, tested, passed ->
+                    if (result.success) {
+                        resultsMap[host] = ResolverScanResult(
+                            host = host, port = port,
+                            status = ResolverStatus.WORKING,
+                            e2eTestResult = result
+                        )
+                    }
+                    val results = resultsMap.values.filter { it.status == ResolverStatus.WORKING }.toList()
+                    updateSimpleModeResult(results, tested, passed)
+                },
+                onComplete = {
+                    _uiState.update { s ->
+                        s.copy(simpleModeE2eState = s.simpleModeE2eState.copy(
+                            isRunning = false, currentResolver = null, currentPhase = "",
+                            activeResolvers = emptyMap()
+                        ))
+                    }
+                    ScanStateHolder.update { it.copy(isE2eRunning = false) }
+                    cleanupBridge()
+                    saveScanSessionToStore()
+                    clearSavedSession()
+                    releaseWakeLock()
+                }
+            )
+        }
+    }
+
+    private fun launchPrismScan(
+        hosts: List<String>,
+        allHosts: List<String>,
+        testDomain: String,
+        timeout: Long,
+        concurrency: Int,
+        pubkey: ByteArray,
+        port: Int = 53,
+        probeCount: Int = 5,
+        passThreshold: Int = 2,
+        responseSize: Int = 0,
+        prefilter: Boolean = false,
+        existingResults: Map<String, ResolverScanResult> = emptyMap(),
+        startScannedCount: Int = 0,
+        startWorkingCount: Int = 0
+    ) {
+        scanJob = ScanStateHolder.scanScope.launch {
+            val workingResults = java.util.concurrent.CopyOnWriteArrayList<ResolverScanResult>()
+            existingResults.values.filter { it.prismVerified == true }.let { workingResults.addAll(it) }
+            val scannedCount = AtomicInteger(startScannedCount)
+            val workingCount = AtomicInteger(startWorkingCount)
+            val timeoutCount = AtomicInteger(0)
+            val errorCount = AtomicInteger(0)
+            val uiUpdateCounter = AtomicInteger(0)
+            var lastEmitTimeMs = 0L
+
+            fun emitState(scanning: Boolean, force: Boolean = false) {
+                // If the job was cancelled (stop pressed), never set isScanning back to true
+                val actuallyScanning = scanning && scanJob?.isActive == true
+                if (!force) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastEmitTimeMs < 500L) return
+                    lastEmitTimeMs = now
+                }
+                val currentResults = workingResults.toList()
+                _uiState.update { s ->
+                    // Preserve E2E data that onResult may have written
+                    val existingE2e = s.scannerState.results.associateBy({ it.host }, { it.e2eTestResult })
+                    val mergedResults = if (existingE2e.any { it.value != null }) {
+                        currentResults.map { r -> existingE2e[r.host]?.let { r.copy(e2eTestResult = it) } ?: r }
+                    } else currentResults
+                    s.copy(scannerState = ScannerState(
+                        isScanning = actuallyScanning,
+                        totalCount = allHosts.size,
+                        scannedCount = scannedCount.get(),
+                        workingCount = workingCount.get(),
+                        timeoutCount = timeoutCount.get(),
+                        errorCount = errorCount.get(),
+                        results = mergedResults
+                    ))
+                }
+                ScanStateHolder.update { it.copy(
+                    isScanning = actuallyScanning,
+                    scannedCount = scannedCount.get(),
+                    totalCount = allHosts.size,
+                    workingCount = workingCount.get(),
+                    results = _uiState.value.scannerState.results
+                ) }
+                periodicSaveIfNeeded()
+            }
+
+            // Per-resolver: optional alive check then prism probes, all in one pass.
+            val prefilterDomain = testDomain
+            val transport = _uiState.value.scanTransport
+            val semaphore = kotlinx.coroutines.sync.Semaphore(concurrency)
+            val jobs = hosts.map { host ->
+                launch {
+                    semaphore.acquire()
+                    try {
+                        // Optional pre-filter: skip dead IPs with a quick DNS check
+                        if (prefilter) {
+                            val pfTimeout = _uiState.value.prismPrefilterTimeoutMs.toLongOrNull()?.coerceAtLeast(200) ?: 1500L
+                            val alive = isResolverAliveWithMode(host, port, prefilterDomain, pfTimeout, transport)
+                            if (!alive) {
+                                scannedCount.incrementAndGet()
+                                timeoutCount.incrementAndGet()
+                                if (uiUpdateCounter.incrementAndGet() >= 10) { uiUpdateCounter.set(0); emitState(true) }
+                                return@launch
+                            }
+                        }
+
+                        val start = System.currentTimeMillis()
+                        val probeOutcome = withTimeoutOrNull(timeout) {
+                            verifyResolverWithMode(host, port, testDomain, pubkey, timeout, probeCount, passThreshold, responseSize, transport)
+                        }
+                        val ms = System.currentTimeMillis() - start
+                        val passedProbes = probeOutcome?.passedProbes
+                        val verified = passedProbes != null && passedProbes >= passThreshold
+                        scannedCount.incrementAndGet()
+                        if (verified) {
+                            workingCount.incrementAndGet()
+                            workingResults.add(ResolverScanResult(
+                                host = host, port = port,
+                                status = ResolverStatus.WORKING,
+                                responseTimeMs = ms,
+                                prismVerified = true,
+                                prismPassedProbes = passedProbes!!,
+                                prismTotalProbes = probeCount
+                            ))
+                            // Tag transport support for the badge. BOTH mode reports both flags;
+                            // single-transport modes tag only the transport that was actually probed.
+                            val pair: Pair<Boolean, Boolean> = when (transport) {
+                                ScanTransportMode.BOTH -> {
+                                    val udpOk = probeOutcome!!.udpOk ?: false
+                                    val tcpOk = probeOutcome.tcpOk ?: false
+                                    udpOk to tcpOk
+                                }
+                                ScanTransportMode.TCP -> false to true
+                                ScanTransportMode.UDP -> true to false
+                            }
+                            _uiState.update { s ->
+                                s.copy(hostTransportSupport = s.hostTransportSupport + (host to pair))
+                            }
+                        } else {
+                            timeoutCount.incrementAndGet()
+                        }
+                        if (verified || uiUpdateCounter.incrementAndGet() >= 10) {
+                            uiUpdateCounter.set(0); emitState(true)
+                        }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        scannedCount.incrementAndGet(); errorCount.incrementAndGet()
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }
+            jobs.forEach { it.join() }
+            emitState(false, force = true)
+            saveScanSessionToStore()
+            clearSavedSession()
+            releaseWakeLock()
+        }
+    }
+
+    fun stopScan() {
+        val isSimpleMode = _uiState.value.scanMode == ScanMode.SIMPLE
+        val isE2eOnlyMode = _uiState.value.scanMode == ScanMode.E2E
+        val isE2eRunning = if (isSimpleMode || isE2eOnlyMode) {
+            _uiState.value.simpleModeE2eState.isRunning
+        } else {
+            _uiState.value.e2eScannerState.isRunning
+        }
+
+        // Cancel jobs first so they stop emitting state updates
+        scanJob?.cancel()
+        if (isSimpleMode || isE2eOnlyMode) {
+            simpleModeE2eJob?.cancel()
+            e2eJob?.cancel()
+            e2ePendingQueue?.close()
+        }
+
+        // Then update UI
+        if (isSimpleMode || isE2eOnlyMode) {
+            _uiState.value = _uiState.value.copy(
+                scannerState = _uiState.value.scannerState.copy(isScanning = false),
+                simpleModeE2eState = _uiState.value.simpleModeE2eState.copy(
+                    isRunning = false,
+                    currentResolver = null,
+                    currentPhase = "",
+                    activeResolvers = emptyMap()
+                )
+            )
+            ScanStateHolder.update { it.copy(isScanning = false, isE2eRunning = false) }
+            viewModelScope.launch(Dispatchers.Default) {
+                ScanStateHolder.cancelScope()
+                releaseWakeLock()
+                cleanupBridge()
+            }
+        } else {
+            ScanStateHolder.update { it.copy(isScanning = false) }
+            _uiState.value = _uiState.value.copy(
+                scannerState = _uiState.value.scannerState.copy(isScanning = false)
+            )
+            if (!isE2eRunning) {
+                viewModelScope.launch(Dispatchers.Default) { releaseWakeLock() }
+            }
+        }
+        saveScanSessionToStore()
+    }
+
+    // --- E2E tunnel testing ---
+
+    fun updateTestUrl(url: String) {
+        _uiState.value = _uiState.value.copy(testUrl = url)
+        saveScannerSettings()
+    }
+
+    fun updateE2eTimeout(value: String) {
+        _uiState.value = _uiState.value.copy(e2eTimeoutMs = value)
+        saveScannerSettings()
+    }
+
+    fun updateE2eMinScore(minScore: Int) {
+        _uiState.value = _uiState.value.copy(e2eMinScore = minScore)
+    }
+
+    fun updateE2eConcurrency(value: String) {
+        _uiState.value = _uiState.value.copy(e2eConcurrency = value)
+        saveScannerSettings()
+    }
+
+    fun updateE2eFullVerification(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(e2eFullVerification = enabled)
+    }
+
+    /** Effective E2E concurrency, clamped by tunnel type limits. */
+    private fun effectiveE2eConcurrency(): Int {
+        val profile = _uiState.value.profile ?: return 1
+        val requested = _uiState.value.e2eConcurrency.toIntOrNull()?.coerceIn(1, 10) ?: 6
+        val max = scannerRepository.maxE2eConcurrency(profile)
+        return requested.coerceAtMost(max)
+    }
+
+    /**
+     * Shared E2E parallel worker launcher. Spawns N coroutines that consume
+     * from [queue], run E2E tests, and report results via callbacks.
+     * Fixes the race condition by using [_uiState.update] for thread-safe CAS.
+     *
+     * @param onActiveChanged   Called (on any thread) when a resolver starts/updates phase or finishes.
+     *                          The lambda receives a transform function to apply to activeResolvers.
+     * @param onResult          Called on Main to merge a single E2E result into UI state.
+     * @param onComplete        Called on Main when all workers are done.
+     */
+    private fun kotlinx.coroutines.CoroutineScope.launchE2eWorkers(
+        queue: SortableQueue<Pair<String, Int>>,
+        profile: ServerProfile,
+        testUrl: String,
+        e2eTimeout: Long,
+        fullVerification: Boolean,
+        startTestedCount: Int,
+        startPassedCount: Int,
+        onActiveChanged: (transform: (Map<String, String>) -> Map<String, String>) -> Unit,
+        onResult: suspend (host: String, result: E2eTestResult, testedCount: Int, passedCount: Int) -> Unit,
+        onComplete: suspend () -> Unit
+    ): List<Job> {
+        val e2eConcurrency = effectiveE2eConcurrency()
+        val testedCount = java.util.concurrent.atomic.AtomicInteger(startTestedCount)
+        val passedCount = java.util.concurrent.atomic.AtomicInteger(startPassedCount)
+        val useIsolated = e2eConcurrency > 1
+
+        return (1..e2eConcurrency).map {
+            launch {
+                while (true) {
+                    val (host, port) = queue.take() ?: break
+                    onActiveChanged { it + (host to "Starting...") }
+
+                    val e2eResult = try {
+                        if (useIsolated) {
+                            scannerRepository.testResolverE2eIsolated(
+                                resolverHost = host, resolverPort = port,
+                                profile = profile, testUrl = testUrl, timeoutMs = e2eTimeout,
+                                fullVerification = fullVerification,
+                                onPhaseUpdate = { phase -> onActiveChanged { it + (host to phase) } }
+                            )
+                        } else {
+                            scannerRepository.testResolverE2e(
+                                resolverHost = host, resolverPort = port,
+                                profile = profile, testUrl = testUrl, timeoutMs = e2eTimeout,
+                                fullVerification = fullVerification,
+                                onPhaseUpdate = { phase -> onActiveChanged { it + (host to phase) } }
+                            )
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        E2eTestResult(errorMessage = e.message ?: "Worker error")
+                    }
+
+                    val newTested = testedCount.incrementAndGet()
+                    val newPassed = if (e2eResult.success) passedCount.incrementAndGet() else passedCount.get()
+                    onActiveChanged { it - host }
+                    withContext(Dispatchers.Main) {
+                        onResult(host, e2eResult, newTested, newPassed)
+                    }
+                }
+            }
+        }.also { workers ->
+            launch {
+                workers.forEach { it.join() }
+                withContext(Dispatchers.Main) { onComplete() }
+            }
+        }
+    }
+
+    // --- Thread-safe state update helpers for parallel E2E workers ---
+
+    /** Thread-safe CAS update of simpleModeE2eState.activeResolvers. */
+    private fun updateSimpleModeActive(transform: (Map<String, String>) -> Map<String, String>) {
+        _uiState.update { s ->
+            val active = transform(s.simpleModeE2eState.activeResolvers)
+            s.copy(simpleModeE2eState = s.simpleModeE2eState.copy(
+                activeResolvers = active,
+                currentResolver = active.keys.firstOrNull(),
+                currentPhase = active.values.firstOrNull() ?: ""
+            ))
+        }
+        ScanStateHolder.update { it.copy(e2eActiveResolvers = _uiState.value.simpleModeE2eState.activeResolvers) }
+    }
+
+    /** Update simpleModeE2eState counters and results. Thread-safe via CAS. */
+    private fun updateSimpleModeResult(results: List<ResolverScanResult>, tested: Int, passed: Int) {
+        _uiState.update { s ->
+            s.copy(
+                scannerState = s.scannerState.copy(results = results),
+                simpleModeE2eState = s.simpleModeE2eState.copy(
+                    testedCount = tested, passedCount = passed,
+                    currentResolver = s.simpleModeE2eState.activeResolvers.keys.firstOrNull(),
+                    currentPhase = s.simpleModeE2eState.activeResolvers.values.firstOrNull() ?: ""
+                )
+            )
+        }
+        ScanStateHolder.update { it.copy(
+            simpleE2eTestedCount = tested,
+            simpleE2ePassedCount = passed,
+            results = results
+        ) }
+    }
+
+    /** Thread-safe CAS update of e2eScannerState.activeResolvers. */
+    private fun updateE2eActive(transform: (Map<String, String>) -> Map<String, String>) {
+        _uiState.update { s ->
+            val active = transform(s.e2eScannerState.activeResolvers)
+            s.copy(e2eScannerState = s.e2eScannerState.copy(
+                activeResolvers = active,
+                currentResolver = active.keys.firstOrNull(),
+                currentPhase = active.values.firstOrNull() ?: ""
+            ))
+        }
+        ScanStateHolder.update { it.copy(e2eActiveResolvers = _uiState.value.e2eScannerState.activeResolvers) }
+    }
+
+    /** Update e2eScannerState counters and results. Thread-safe via CAS. */
+    private fun updateE2eResult(results: List<ResolverScanResult>, tested: Int, passed: Int) {
+        _uiState.update { s ->
+            s.copy(
+                scannerState = s.scannerState.copy(results = results),
+                e2eScannerState = s.e2eScannerState.copy(
+                    testedCount = tested, passedCount = passed,
+                    currentResolver = s.e2eScannerState.activeResolvers.keys.firstOrNull(),
+                    currentPhase = s.e2eScannerState.activeResolvers.values.firstOrNull() ?: ""
+                )
+            )
+        }
+        ScanStateHolder.update { it.copy(
+            e2eTestedCount = tested,
+            e2ePassedCount = passed,
+            results = results
+        ) }
+    }
+
+    fun updateE2eSortOption(option: E2eSortOption) {
+        _uiState.value = _uiState.value.copy(e2eSortOption = option)
+        // Re-sort pending E2E queue mid-test
+        e2ePendingQueue?.resort(buildE2eComparator(option))
+    }
+
+    private fun buildE2eComparator(option: E2eSortOption): Comparator<Pair<String, Int>>? {
+        val results = _uiState.value.scannerState.results
+        val lookup = results.associateBy { it.host }
+        return when (option) {
+            E2eSortOption.NONE -> null
+            E2eSortOption.SPEED -> compareBy { lookup[it.first]?.responseTimeMs ?: Long.MAX_VALUE }
+            E2eSortOption.IP -> compareBy {
+                it.first.split(".").map { p -> p.toIntOrNull() ?: 0 }
+                    .fold(0L) { acc, i -> acc * 256 + i }
+            }
+            E2eSortOption.SCORE -> compareByDescending { lookup[it.first]?.tunnelTestResult?.score ?: 0 }
+            E2eSortOption.E2E_SPEED -> Comparator { a, b ->
+                val aResult = lookup[a.first]?.e2eTestResult
+                val bResult = lookup[b.first]?.e2eTestResult
+                val aSuccess = aResult?.success == true
+                val bSuccess = bResult?.success == true
+                if (aSuccess != bSuccess) return@Comparator if (bSuccess) 1 else -1
+                val aMs = aResult?.totalMs ?: Long.MAX_VALUE
+                val bMs = bResult?.totalMs ?: Long.MAX_VALUE
+                aMs.compareTo(bMs)
+            }
+            E2eSortOption.PRISM_SCORE -> compareByDescending { lookup[it.first]?.prismPassedProbes ?: 0 }
+        }
+    }
+
+    fun startE2eTest(fresh: Boolean = false, minScore: Int = 0) {
+        // Cancel any previous E2E test to prevent its onComplete/cleanupBridge
+        // from interfering with the new test's first batch of workers.
+        e2eJob?.cancel()
+        e2ePendingQueue?.close()
+
+        val state = _uiState.value
+        val profile = state.profile ?: run {
+            _uiState.value = state.copy(error = "No profile loaded")
+            return
+        }
+
+        if (vpnRepository.isConnected()) {
+            _uiState.value = state.copy(error = "Disconnect VPN before running E2E test")
+            return
+        }
+
+        val skipScoreFilter = profile.tunnelType in DnsScannerUiState.SCORE_IRRELEVANT_TUNNEL_TYPES
+        val allWorking = state.scannerState.results
+            .filter {
+                it.status == ResolverStatus.WORKING &&
+                    (skipScoreFilter || it.prismVerified == true || it.tunnelTestResult == null || it.tunnelTestResult.score >= minScore)
+            }
+
+        if (allWorking.isEmpty()) {
+            _uiState.value = state.copy(error = "No working resolvers to test")
+            return
+        }
+
+        // Determine which resolvers still need testing (resume support)
+        val alreadyTested = if (fresh) emptySet()
+        else allWorking.filter { it.e2eTestResult != null }.map { it.host }.toSet()
+
+        val remainingUnsorted = allWorking
+            .filter { it.host !in alreadyTested }
+            .map { it.host to it.port }
+
+        val comparator = buildE2eComparator(state.e2eSortOption)
+        val remaining = if (comparator != null) remainingUnsorted.sortedWith(comparator) else remainingUnsorted
+
+        if (remaining.isEmpty()) {
+            _uiState.value = state.copy(error = "All working resolvers already tested")
+            return
+        }
+
+        // If fresh, clear existing E2E results
+        if (fresh) {
+            val clearedResults = state.scannerState.results.map { r ->
+                if (r.status == ResolverStatus.WORKING) r.copy(e2eTestResult = null) else r
+            }
+            _uiState.value = _uiState.value.copy(
+                scannerState = state.scannerState.copy(results = clearedResults)
+            )
+        }
+
+        val startTestedCount = alreadyTested.size
+        val startPassedCount = if (fresh) 0
+        else allWorking.count { it.e2eTestResult?.success == true }
+
+        acquireWakeLock()
+        _uiState.value = _uiState.value.copy(
+            e2eScannerState = E2eScannerState(
+                isRunning = true,
+                totalCount = allWorking.size,
+                testedCount = startTestedCount,
+                passedCount = startPassedCount
+            )
+        )
+        ScanStateHolder.update { it.copy(
+            isE2eRunning = true,
+            stopRequested = false,
+            e2eTotalCount = allWorking.size,
+            e2eTestedCount = startTestedCount,
+            e2ePassedCount = startPassedCount
+        ) }
+        ContextCompat.startForegroundService(appContext, Intent(appContext, ScanService::class.java))
+
+        e2eJob = ScanStateHolder.scanScope.launch {
+            // Use SortableQueue for parallel consumption
+            val queue = SortableQueue(remaining, buildE2eComparator(state.e2eSortOption))
+            e2ePendingQueue = queue
+            queue.close() // Pre-close since all items are already seeded
+
+            launchE2eWorkers(
+                queue = queue, profile = profile,
+                testUrl = _uiState.value.testUrl,
+                e2eTimeout = _uiState.value.e2eTimeoutMs.toLongOrNull() ?: 15000L,
+                fullVerification = _uiState.value.e2eFullVerification,
+                startTestedCount = startTestedCount, startPassedCount = startPassedCount,
+                onActiveChanged = { transform -> updateE2eActive(transform) },
+                onResult = { host, result, tested, passed ->
+                    // Build updated results inside CAS to avoid stale reads
+                    _uiState.update { s ->
+                        val updatedResults = s.scannerState.results.map { r ->
+                            if (r.host == host) r.copy(e2eTestResult = result) else r
+                        }
+                        s.copy(
+                            scannerState = s.scannerState.copy(results = updatedResults),
+                            e2eScannerState = s.e2eScannerState.copy(
+                                testedCount = tested, passedCount = passed,
+                                currentResolver = s.e2eScannerState.activeResolvers.keys.firstOrNull(),
+                                currentPhase = s.e2eScannerState.activeResolvers.values.firstOrNull() ?: ""
+                            )
+                        )
+                    }
+                    // Sync results to ScanStateHolder so the observer doesn't
+                    // overwrite E2E data with stale results during the next collect.
+                    ScanStateHolder.update { it.copy(
+                        e2eTestedCount = tested,
+                        e2ePassedCount = passed,
+                        results = _uiState.value.scannerState.results
+                    ) }
+                },
+                onComplete = {
+                    _uiState.update { s ->
+                        s.copy(e2eScannerState = s.e2eScannerState.copy(
+                            isRunning = false, activeResolvers = emptyMap()
+                        ))
+                    }
+                    ScanStateHolder.update { it.copy(isE2eRunning = false) }
+                    cleanupBridge()
+                    saveScanSessionToStore()
+                    releaseWakeLock()
+                }
+            )
+        }
+    }
+
+    fun stopE2eTest() {
+        releaseWakeLock()
+        _uiState.value = _uiState.value.copy(
+            e2eScannerState = _uiState.value.e2eScannerState.copy(
+                isRunning = false,
+                currentResolver = null,
+                currentPhase = "",
+                activeResolvers = emptyMap()
+            )
+        )
+        ScanStateHolder.update { it.copy(isE2eRunning = false) }
+        viewModelScope.launch(Dispatchers.Default) {
+            e2eJob?.cancel()
+            e2ePendingQueue?.close()
+            ScanStateHolder.cancelScope()
+        }
+        cleanupBridge()
+    }
+
+    private fun cleanupBridge() {
+        val profile = _uiState.value.profile ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                when (profile.tunnelType) {
+                    TunnelType.SLIPSTREAM, TunnelType.SLIPSTREAM_SSH -> {
+                        SlipstreamBridge.stopClient()
+                        SlipstreamBridge.proxyOnlyMode = false
+                    }
+                    TunnelType.DNSTT, TunnelType.DNSTT_SSH,
+                    TunnelType.NOIZDNS, TunnelType.NOIZDNS_SSH -> {
+                        DnsttBridge.stopClient()
+                    }
+                    TunnelType.VAYDNS, TunnelType.VAYDNS_SSH -> {
+                        VaydnsBridge.stopClient()
+                    }
+                    else -> {}
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun getSelectedResolversString(): String {
+        val port = _uiState.value.scanPort.toIntOrNull()?.coerceIn(1, 65535) ?: 53
+        return _uiState.value.selectedResolvers.joinToString(",") { "$it:$port" }
+    }
+
+    /**
+     * Transport recommendation for the selected resolvers. Returns:
+     *  - "UDP" / "TCP" when a BOTH-mode scan proved every selected resolver works on that transport,
+     *  - "MIXED" when the selection contains resolvers with disjoint transports,
+     *  - null when the scan wasn't in BOTH mode or the data is unavailable.
+     */
+    fun getRecommendedTransportHint(): String? {
+        val state = _uiState.value
+        if (state.scanTransport != ScanTransportMode.BOTH) return null
+        val selected = state.selectedResolvers
+        if (selected.isEmpty()) return null
+        val support = state.hostTransportSupport
+        val entries = selected.mapNotNull { support[it] }
+        if (entries.isEmpty()) return null
+        val allUdp = entries.all { it.first }
+        if (allUdp) return "UDP"
+        val allTcp = entries.all { it.second }
+        if (allTcp) return "TCP"
+        return "MIXED"
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    /** Signal that the user pressed back — onCleared will handle the actual cleanup. */
+    fun signalBack() {
+        userNavigatedBack = true
+    }
+
+    /** Stop all scanning and clean up. Called when user navigates away from the screen. */
+    fun stopAll() {
+        // 1. Cancel scan jobs first so they stop emitting state updates
+        scanJob?.cancel()
+        e2eJob?.cancel()
+        simpleModeE2eJob?.cancel()
+        e2ePendingQueue?.close()
+        // 2. Mark scanning as stopped so the UI stops its polling timer
+        //    and the screen becomes lightweight (empty list = fast recomposition)
+        _uiState.update { s ->
+            s.copy(
+                scannerState = s.scannerState.copy(isScanning = false, results = emptyList()),
+                e2eScannerState = E2eScannerState(),
+                simpleModeE2eState = SimpleModeE2eState()
+            )
+        }
+        // 3. Heavy cleanup in background
+        viewModelScope.launch(Dispatchers.Default) {
+            releaseWakeLock()
+            ScanStateHolder.reset()
+            cleanupBridge()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        val scanActive = ScanStateHolder.state.value.let { it.isScanning || it.isE2eRunning }
+        val shouldStop = !scanActive || userNavigatedBack
+        if (shouldStop) {
+            ScanStateHolder.update { ScanServiceState() }
+            releaseWakeLock()
+            scanJob?.cancel()
+            e2eJob?.cancel()
+            e2ePendingQueue?.close()
+            simpleModeE2eJob?.cancel()
+            ScanStateHolder.reset()
+        }
+
+        // Capture lightweight state values on the main thread, then do all
+        // heavy work (mapping, JSON serialization, file/DataStore writes) on IO
+        // so onCleared returns instantly and back navigation is never blocked.
+        val state = _uiState.value
+        val ss = state.scannerState
+        val isSimple = state.scanMode == ScanMode.SIMPLE
+
+        val hasE2eData = ss.results.any { it.e2eTestResult != null }
+        val shouldSave = if (isSimple || state.scanMode == ScanMode.PRISM || state.scanMode == ScanMode.E2E) {
+            if (state.scanMode == ScanMode.E2E) state.simpleModeE2eState.testedCount > 0
+            else ss.scannedCount > 0
+        } else {
+            ss.scannedCount > 0 && (hasE2eData || ss.scannedCount < ss.totalCount + ss.focusRangeCount)
+        }
+
+        val profile = state.profile
+        if (shouldSave || !scanActive && profile != null) {
+            // Snapshot everything needed — these are immutable data-class values.
+            val results = ss.results
+            val resolverList = state.resolverList
+            val testDomain = state.effectiveTestDomain
+            val timeoutMs = state.timeoutMs
+            val concurrency = state.concurrency
+            val listSource = state.listSource.name
+            val scannedCount = if (state.scanMode == ScanMode.E2E) state.simpleModeE2eState.testedCount else ss.scannedCount
+            val workingCount = if (state.scanMode == ScanMode.E2E) state.simpleModeE2eState.passedCount else ss.workingCount
+            val customRange = state.customRangeInput.ifEmpty { null }
+            val scanMode = state.scanMode.name
+            val tunnelType = profile?.tunnelType
+
+            viewModelScope.launch(NonCancellable + Dispatchers.IO) {
+                // Clean up tunnel bridge if scan was not active
+                if (!scanActive && tunnelType != null) {
+                    try {
+                        when (tunnelType) {
+                            TunnelType.SLIPSTREAM, TunnelType.SLIPSTREAM_SSH -> {
+                                SlipstreamBridge.stopClient()
+                                SlipstreamBridge.proxyOnlyMode = false
+                            }
+                            TunnelType.DNSTT, TunnelType.DNSTT_SSH,
+                            TunnelType.NOIZDNS, TunnelType.NOIZDNS_SSH -> {
+                                DnsttBridge.stopClient()
+                            }
+                            TunnelType.VAYDNS, TunnelType.VAYDNS_SSH -> {
+                                VaydnsBridge.stopClient()
+                            }
+                            else -> {}
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                if (shouldSave) {
+                    try {
+                        val savedResults = results
+                            .filter { it.status != ResolverStatus.PENDING && it.status != ResolverStatus.SCANNING }
+                            .map { it.toSavedResult() }
+                        val session = SavedScanSession(
+                            resolverList = resolverList,
+                            testDomain = testDomain,
+                            timeoutMs = timeoutMs,
+                            concurrency = concurrency,
+                            listSource = listSource,
+                            scannedCount = scannedCount,
+                            workingCount = workingCount,
+                            results = savedResults,
+                            customRangeInput = customRange,
+                            scanMode = scanMode
+                        )
+                        val json = gson.toJson(session)
+                        try {
+                            java.io.File(appContext.cacheDir, "scan_session.json").writeText(json)
+                        } catch (_: Exception) {}
+                        try {
+                            preferencesDataStore.saveScanSession(json)
+                        } catch (_: Exception) {}
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+}
+
+// --- Conversion helpers ---
+
+private fun ResolverScanResult.toSavedResult() = SavedResult(
+    host = host,
+    status = status.name,
+    responseTimeMs = responseTimeMs,
+    errorMessage = errorMessage,
+    nsSupport = tunnelTestResult?.nsSupport,
+    txtSupport = tunnelTestResult?.txtSupport,
+    randomSub = tunnelTestResult?.randomSubdomain,
+    tunnelRealism = tunnelTestResult?.tunnelRealism,
+    edns0Support = tunnelTestResult?.edns0Support,
+    e2eSuccess = e2eTestResult?.success,
+    e2eTotalMs = e2eTestResult?.totalMs,
+    e2eTunnelSetupMs = e2eTestResult?.tunnelSetupMs,
+    e2eHttpLatencyMs = e2eTestResult?.httpLatencyMs,
+    e2eHttpStatusCode = e2eTestResult?.httpStatusCode,
+    e2eErrorMessage = e2eTestResult?.errorMessage,
+    prismVerified = prismVerified
+)
+
+private fun SavedResult.toScanResult() = ResolverScanResult(
+    host = host,
+    status = try { ResolverStatus.valueOf(status) } catch (_: Exception) { ResolverStatus.PENDING },
+    responseTimeMs = responseTimeMs,
+    errorMessage = errorMessage,
+    tunnelTestResult = if (nsSupport != null) {
+        DnsTunnelTestResult(
+            nsSupport = nsSupport,
+            txtSupport = txtSupport ?: false,
+            randomSubdomain = randomSub ?: false,
+            tunnelRealism = tunnelRealism ?: false,
+            edns0Support = edns0Support ?: false
+        )
+    } else null,
+    e2eTestResult = if (e2eSuccess != null) {
+        E2eTestResult(
+            success = e2eSuccess,
+            totalMs = e2eTotalMs ?: 0,
+            tunnelSetupMs = e2eTunnelSetupMs ?: 0,
+            httpLatencyMs = e2eHttpLatencyMs ?: 0,
+            httpStatusCode = e2eHttpStatusCode ?: 0,
+            errorMessage = e2eErrorMessage
+        )
+    } else null,
+    prismVerified = prismVerified
+)
