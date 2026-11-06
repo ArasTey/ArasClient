@@ -52,7 +52,8 @@ class DnsScannerActivity : BaseComponentActivity() {
             scanState = scanState,
             onBack = { finish() },
             onScan = { resolvers -> DnsScanCoordinator.start(resolvers) },
-            onCancel = { DnsScanCoordinator.cancel() }
+            onCancel = { DnsScanCoordinator.cancel() },
+            onRestoreHistory = { entry -> DnsScanCoordinator.restoreHistory(entry) }
         )
     }
 }
@@ -63,6 +64,7 @@ private fun DnsScannerScreen(
     onBack: () -> Unit,
     onScan: (List<DnsProfile>) -> Unit,
     onCancel: () -> Unit,
+    onRestoreHistory: (DnsScanHistoryEntry) -> Unit,
 ) {
     val builtIn = remember {
         (DnsChangerStore.presets + DnsChangerStore.customProfiles()).distinctBy { it.primary }
@@ -71,6 +73,7 @@ private fun DnsScannerScreen(
     var rangeText by remember { mutableStateOf("") }
     var healthyOnly by remember { mutableStateOf(false) }
     var sortByScore by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
     val parsed = remember(rangeText) { DnsScanInput.parse(rangeText) }
     val resolvers = if (useRanges) DnsScanInput.toProfiles(parsed.ips) else builtIn
     val clipboard = LocalClipboardManager.current
@@ -159,6 +162,23 @@ private fun DnsScannerScreen(
                             )
                         }
                         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(selected = showHistory, onClick = { showHistory = !showHistory }, label = { Text("History (" + scanState.history.size + ")") })
+                }
+            }
+            if (showHistory) {
+                items(scanState.history, key = { "history-" + it.timestamp }) { entry ->
+                    Card {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(entry.timestamp)), fontWeight = FontWeight.Bold)
+                            val healthyCount = entry.results.count { it.isHealthy }
+                            Text(entry.results.size.toString() + " resolvers • " + healthyCount + " healthy")
+                            OutlinedButton(onClick = { onRestoreHistory(entry); showHistory = false }, modifier = Modifier.fillMaxWidth()) { Text("CONTINUE / RESTORE THIS SCAN") }
+                        }
                     }
                 }
             }
