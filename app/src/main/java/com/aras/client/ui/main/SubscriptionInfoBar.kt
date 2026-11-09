@@ -63,6 +63,7 @@ fun SubscriptionInfoBar(
     onEditSubscription: (() -> Unit)? = null,
     onUpdateSubscription: (() -> Unit)? = null,
     onPingSubscription: (() -> Unit)? = null,
+    onSortSubscription: (() -> Unit)? = null,
     onRemoveSubscription: (() -> Unit)? = null,
     onCopySubscriptionUrl: (() -> Unit)? = null,
     isProtectedSubscription: Boolean = false,
@@ -156,6 +157,7 @@ fun SubscriptionInfoBar(
                 onEdit = onEditSubscription.takeUnless { isProtectedSubscription },
                 onUpdate = onUpdateSubscription,
                 onPing = onPingSubscription,
+                onSort = onSortSubscription,
                 onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
                 onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription },
                 hasAnnouncement = hasAnnouncement,
@@ -187,6 +189,7 @@ private fun SubscriptionActions(
     onEdit: (() -> Unit)?,
     onUpdate: (() -> Unit)?,
     onPing: (() -> Unit)?,
+    onSort: (() -> Unit)?,
     onRemove: (() -> Unit)?,
     onCopy: (() -> Unit)?,
     hasAnnouncement: Boolean = false,
@@ -228,6 +231,9 @@ private fun SubscriptionActions(
         }
         onPing?.let {
             SubBarAction(R.drawable.ic_speedtest_24dp, R.string.title_ping_selected_subscription, tint = pingAmber, onClick = it)
+        }
+        onSort?.let {
+            SubBarAction(R.drawable.ic_outline_filter_alt_24, R.string.title_sort_by_test_results, tint = palette.accent, onClick = it)
         }
         onCopy?.let {
             SubBarAction(R.drawable.ic_copy, R.string.share_method_clipboard, tint = palette.accent, onClick = it)

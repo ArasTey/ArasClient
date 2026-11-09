@@ -87,8 +87,9 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-private fun cardRemarks(profile: ProfileItem, countryIso: String?): String {
-    if (countryIso == null) return profile.remarks
+private fun cardRemarks(profile: ProfileItem): String {
+    // Provider flag emojis are guesses too; the card only shows a country the
+    // connection test actually measured, so the title never carries one either.
     return com.aras.client.util.CountryResolver.withoutFlags(profile.remarks)
         .ifBlank {
             profile.server?.takeIf { it.isNotBlank() }
@@ -118,6 +119,7 @@ fun GroupPagerPage(
     onEditSubscription: (() -> Unit)? = null,
     onUpdateSubscription: (() -> Unit)? = null,
     onPingSubscription: (() -> Unit)? = null,
+    onSortSubscription: (() -> Unit)? = null,
     onRemoveSubscription: (() -> Unit)? = null,
     onCopySubscriptionUrl: (() -> Unit)? = null,
     isProtectedSubscription: Boolean = false,
@@ -137,6 +139,7 @@ fun GroupPagerPage(
             onEditSubscription = onEditSubscription,
             onUpdateSubscription = onUpdateSubscription,
             onPingSubscription = onPingSubscription,
+            onSortSubscription = onSortSubscription,
             onRemoveSubscription = onRemoveSubscription,
             onCopySubscriptionUrl = onCopySubscriptionUrl,
             isProtectedSubscription = isProtectedSubscription
@@ -392,27 +395,13 @@ private fun ServerItemRow(
         ArasExportImportManager.isProtected(serverCache.guid)
     }
     val protectedDescription = stringResource(R.string.protected_config_hidden)
-    // Keyed on the GeoIP cache version as well: a lookup that lands after this card
-    // has composed used to be ignored, leaving the name-derived flag in place until a
-    // ping changed one of the other keys.
-    val geoVersion by com.aras.client.util.GeoIPResolver.version.collectAsStateWithLifecycle()
-    val country = remember(
-        geoVersion,
-        serverCache.guid,
-        serverCache.testDelayMillis,
-        serverCache.testCountryCode,
-        profile.server,
-        profile.remarks,
-        profile.description,
-    ) {
-        com.aras.client.util.CountryResolver.resolveCardIso(
-            profile = profile,
-            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-            testedCountry = serverCache.testCountryCode,
-        )
+    // The flag only appears once a real ping carried data and reported the
+    // egress country; name- and GeoIP-derived guesses never reach the card.
+    val country = remember(serverCache.testCountryCode) {
+        com.aras.client.util.CountryResolver.isoForCountry(serverCache.testCountryCode)
     }
-    val displayRemarks = remember(serverCache.guid, profile.remarks, country) {
-        cardRemarks(profile, country)
+    val displayRemarks = remember(serverCache.guid, profile.remarks) {
+        cardRemarks(profile)
     }
     CompactServerCard {
         ServerListItem(
@@ -465,27 +454,13 @@ private fun ServerItemColumn(
     val isProtected = remember(serverCache.guid) {
         ArasExportImportManager.isProtected(serverCache.guid)
     }
-    // Keyed on the GeoIP cache version as well: a lookup that lands after this card
-    // has composed used to be ignored, leaving the name-derived flag in place until a
-    // ping changed one of the other keys.
-    val geoVersion by com.aras.client.util.GeoIPResolver.version.collectAsStateWithLifecycle()
-    val country = remember(
-        geoVersion,
-        serverCache.guid,
-        serverCache.testDelayMillis,
-        serverCache.testCountryCode,
-        profile.server,
-        profile.remarks,
-        profile.description,
-    ) {
-        com.aras.client.util.CountryResolver.resolveCardIso(
-            profile = profile,
-            geoIso = com.aras.client.util.GeoIPResolver.cached(profile.server.orEmpty()),
-            testedCountry = serverCache.testCountryCode,
-        )
+    // The flag only appears once a real ping carried data and reported the
+    // egress country; name- and GeoIP-derived guesses never reach the card.
+    val country = remember(serverCache.testCountryCode) {
+        com.aras.client.util.CountryResolver.isoForCountry(serverCache.testCountryCode)
     }
-    val displayRemarks = remember(serverCache.guid, profile.remarks, country) {
-        cardRemarks(profile, country)
+    val displayRemarks = remember(serverCache.guid, profile.remarks) {
+        cardRemarks(profile)
     }
     CompactServerCard {
         ServerListItem(

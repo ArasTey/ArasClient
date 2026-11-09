@@ -75,7 +75,8 @@ fun MainBottomBar(
     onAction: (MainAction) -> Unit,
     subtitleOverride: String? = null,
     subtitleIp: String? = null,
-    isConnecting: Boolean = false
+    isConnecting: Boolean = false,
+    showSmartConnect: Boolean = true
 ) {
     val palette = LocalGlassPalette.current
     val dotColor = when {
@@ -216,23 +217,25 @@ fun MainBottomBar(
                 }
                 Spacer(Modifier.width(8.dp))
 
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(palette.chipFill)
-                        .border(0.8.dp, palette.accent.copy(alpha = 0.20f), CircleShape)
-                        .clickable(onClick = { onAction(MainAction.SmartConnect) }),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_smart_connect_24dp),
-                        contentDescription = stringResource(R.string.title_smart_connect),
-                        tint = palette.accent,
-                        modifier = Modifier.size(21.dp)
-                    )
+                if (showSmartConnect) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(palette.chipFill)
+                            .border(0.8.dp, palette.accent.copy(alpha = 0.20f), CircleShape)
+                            .clickable(onClick = { onAction(MainAction.SmartConnect) }),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_smart_connect_24dp),
+                            contentDescription = stringResource(R.string.title_smart_connect),
+                            tint = palette.accent,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                 }
-                Spacer(Modifier.width(8.dp))
 
                 NeonConnectButton(
                     isRunning = isRunning,

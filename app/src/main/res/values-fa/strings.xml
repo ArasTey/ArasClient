@@ -610,8 +610,6 @@
     <string name="toast_connect_first_to_test">اول وصل شو، بعد برای تست سرور اینجا لمس کن</string>
     <string name="bar_test">تست</string>
     <string name="title_test_single">تست این سرور</string>
-    <string name="setup_title">به ArasClient خوش آمدید</string>
-    <string name="setup_subtitle">چند تنظیم سریع را انتخاب کنید. بعداً در تنظیمات قابل تغییر است.</string>
     <string name="setup_auto_sort">مرتب‌سازی خودکار سرورها بر اساس پینگ</string>
     <string name="setup_auto_connect">اتصال خودکار به سریع‌ترین سرور هنگام اجرا</string>
     <string name="setup_show_delay">نمایش پینگ روی کارت سرورها</string>
@@ -638,14 +636,6 @@
     <string name="summary_pref_show_delay_chips">نمایش برچسب پینگ روی هر کارت سرور</string>
     <string name="title_connection_preferences">ترجیحات اتصال</string>
     <string name="setup_auto_scroll">پیمایش خودکار به بهترین سرور پس از آزمایش</string>
-    <string name="setup_show_sub_messages">نمایش ترافیک و اطلاعیه‌های اشتراک</string>
-    <string name="setup_show_sub_info">نمایش ترافیک و انقضای اشتراک</string>
-    <string name="setup_show_sub_announcement">نمایش اطلاعیه‌های اشتراک</string>
-    <string name="setup_show_free_sub">نمایش گروه اشتراک رایگان</string>
-    <string name="free_sub_ask_title">اشتراک رایگان</string>
-    <string name="free_sub_ask_message">گروه «رایگان» با کانفیگ‌های رایگانش نشان داده شود؟ بعداً هم می‌توانید در تنظیمات اشتراک تغییرش بدهید — خاموش کردنش فقط تب‌ها را پنهان می‌کند و کانفیگ‌ها به‌روز می‌مانند.</string>
-    <string name="free_sub_ask_show">بله نشان بده</string>
-    <string name="free_sub_ask_hide">نه پنهان کن</string>
     <string name="title_pref_show_free_sub">نمایش گروه اشتراک رایگان</string>
     <string name="summary_pref_show_free_sub">تب گروه «رایگان» روی صفحه اصلی دیده شود. خاموش کردنش فقط تب‌ها را پنهان می‌کند و کانفیگ‌ها همیشه به‌روز می‌مانند.</string>
 
@@ -804,6 +794,8 @@
     <string name="summary_pref_show_sub_info">خواندن ترافیک و زمان انقضا از لینک اشتراک و نمایش آن بالای کانفیگ‌ها (مثل v2Box)</string>
     <string name="title_pref_show_sub_announcement">نمایش اطلاعیه‌های اشتراک</string>
     <string name="summary_pref_show_sub_announcement">نمایش اطلاعیه و پیام سازنده که اشتراک ارائه می‌دهد، زیر اطلاعات اشتراک. اگر اشتراک نداشته باشد پنهان می‌شود</string>
+    <string name="title_pref_show_smart_connect">نمایش دکمه اتصال هوشمند</string>
+    <string name="summary_pref_show_smart_connect">نمایش میانبر اتصال هوشمند کنار دکمه اصلی اتصال</string>
     <string name="update_no_notes">برای این نسخه یادداشت انتشاری وجود ندارد</string>
 
     <!-- Aether editor -->

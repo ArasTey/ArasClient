@@ -25,6 +25,7 @@ object SettingsChangeManager {
         AppConfig.PREF_SHOW_SUB_INFO,
         AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT,
         AppConfig.PREF_SHOW_FREE_SUB,
+        AppConfig.PREF_SHOW_SMART_CONNECT,
     )
 
     /**

@@ -8,50 +8,13 @@ import org.junit.Test
 class CountryResolverTest {
 
     @Test
-    fun `server ip country overrides provider country on cards`() {
-        val profile = ProfileItem.create(EConfigType.VMESS).apply {
-            remarks = "Germany"
-            server = "node.example"
-        }
-
-        assertEquals("NL", CountryResolver.resolveCardIso(profile, geoIso = "NL", testedCountry = null))
-    }
-
-    @Test
-    fun `actual connection ping country overrides host geoip on card`() {
-        val profile = ProfileItem.create(EConfigType.VMESS).apply {
-            remarks = "Germany"
-            server = "node.example"
-        }
-
-        assertEquals(
-            "DE",
-            CountryResolver.resolveCardIso(
-                profile = profile,
-                geoIso = "NL",
-                testedCountry = "DE",
-            )
-        )
-    }
-
-    @Test
-    fun `provider country remains fallback when geoip is unavailable`() {
-        val profile = ProfileItem.create(EConfigType.VMESS).apply {
-            remarks = "Germany"
-            server = "node.example"
-        }
-
-        assertEquals("DE", CountryResolver.resolveCardIso(profile, geoIso = "", testedCountry = null))
-    }
-
-    @Test
-    fun `invalid geoip does not create malformed flag`() {
-        val profile = ProfileItem.create(EConfigType.VMESS).apply {
-            remarks = "United States"
-            server = "node.example"
-        }
-
-        assertEquals("US", CountryResolver.resolveCardIso(profile, geoIso = "12", testedCountry = null))
+    fun `card country comes only from a real connection test`() {
+        // The card calls isoForCountry(testCountryCode) directly: no measured
+        // country means no flag, whatever the name or the host GeoIP claims.
+        assertEquals(null, CountryResolver.isoForCountry(null))
+        assertEquals(null, CountryResolver.isoForCountry(""))
+        assertEquals("DE", CountryResolver.isoForCountry("DE"))
+        assertEquals("DE", CountryResolver.isoForCountry("Germany"))
     }
 
     @Test

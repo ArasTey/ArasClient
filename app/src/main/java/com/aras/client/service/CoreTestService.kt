@@ -184,15 +184,19 @@ class CoreTestService : Service() {
                             AngConfigManager.removeInvalidServer(message.subscriptionId)
                         }
 
-                        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, false)) {
+                        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, true)) {
                             AngConfigManager.sortByTestResultsForSub(message.subscriptionId)
                         }
                     }
                 }
 
-                MessageHelper.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_FINISH, event.status)
                 onWorkerDone()
+                // Workers run concurrently (a batch plus any single-card probes).
+                // The UI finalizes on the finish broadcast, so it only goes out
+                // once the last worker is done — an early one would end the round
+                // while other probes are still measuring.
                 if (activeWorkers.isEmpty()) {
+                    MessageHelper.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_FINISH, event.status)
                     NotificationHelper.stopForeground(this)
                     stopSelf()
                 }

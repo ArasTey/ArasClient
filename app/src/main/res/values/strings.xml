@@ -319,6 +319,8 @@
     <string name="summary_pref_show_sub_info">Read traffic and expiry time from the subscription link and show them above the configs (like v2Box)</string>
     <string name="title_pref_show_sub_announcement">Show subscription announcements</string>
     <string name="summary_pref_show_sub_announcement">Show the announcement and creator message provided by the subscription below the subscription info. Hidden when the subscription has none</string>
+    <string name="title_pref_show_smart_connect">Show smart connect button</string>
+    <string name="summary_pref_show_smart_connect">Show the smart connect shortcut next to the main connect button</string>
 
     <string name="share_method_arasc">Share as .arasc file</string>
     <string name="export_summary_normal">Export configs</string>
@@ -920,8 +922,6 @@
     <string name="toast_connect_first_to_test">Connect first, then tap here to test the server</string>
     <string name="bar_test">Test</string>
     <string name="title_test_single">Test this server</string>
-    <string name="setup_title">Welcome to ArasClient</string>
-    <string name="setup_subtitle">Pick a few quick preferences. You can change these later in settings.</string>
     <string name="setup_auto_sort">Auto-sort servers by ping after testing</string>
     <string name="setup_auto_connect">Auto-connect to the fastest server on launch</string>
     <string name="setup_show_delay">Show ping (delay) on server cards</string>
@@ -929,14 +929,6 @@
     <string name="summary_pref_show_delay_chips">Show the ping result chip on each server card</string>
     <string name="title_connection_preferences">Connection preferences</string>
     <string name="setup_auto_scroll">Auto-scroll to the best server after tests</string>
-    <string name="setup_show_sub_messages">Show subscription traffic &amp; announcements</string>
-    <string name="setup_show_sub_info">Show subscription traffic and expiry</string>
-    <string name="setup_show_sub_announcement">Show subscription announcements</string>
-    <string name="setup_show_free_sub">Show the free subscription group</string>
-    <string name="free_sub_ask_title">Free subscription</string>
-    <string name="free_sub_ask_message">Show the Free group with its free profiles? You can change this later in Subscription settings — turning it off only hides the tabs, the profiles keep updating.</string>
-    <string name="free_sub_ask_show">Show</string>
-    <string name="free_sub_ask_hide">Hide</string>
     <string name="title_pref_show_free_sub">Show free subscription group</string>
     <string name="summary_pref_show_free_sub">Show the built-in Free group tabs on the main screen. Turning it off only hides the tabs; the profiles keep syncing.</string>
     <string name="share_method_txtfile">Export TXT file</string>

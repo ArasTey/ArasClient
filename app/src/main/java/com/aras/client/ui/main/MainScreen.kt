@@ -215,8 +215,6 @@ fun MainScreen(
                             MainMoreMenuAction.LocateSelected -> onAction(MainAction.LocateSelectedServer)
                             MainMoreMenuAction.SortByTestResults -> onAction(MainAction.SortByTestResults)
                             MainMoreMenuAction.TestAll -> onAction(MainAction.TestAllServers)
-                            MainMoreMenuAction.TestAllRealPing -> onAction(MainAction.TestRealAllServers)
-                            MainMoreMenuAction.UpdateSubscriptions -> onAction(MainAction.UpdateSubscriptions)
                             MainMoreMenuAction.RestoreFreeConfigs -> {
                                 scope.launch { mainViewModel.restoreAllFreeConfigs() }
                             }
@@ -241,6 +239,7 @@ fun MainScreen(
                         subtitleIp = if (isConnecting) null else barText.subtitleIp,
                         isRunning = isRunning,
                         isConnecting = isConnecting,
+                        showSmartConnect = uiState.showSmartConnect,
                         onAction = onAction
                     )
                 }
@@ -313,6 +312,8 @@ fun MainScreen(
                             else { -> mainViewModel.importConfigViaSub(group.id) },
                             onPingSubscription = if (group.id.isEmpty()) null
                             else { { onAction(MainAction.PingSelectedSubscription) } },
+                            onSortSubscription = if (group.id.isEmpty()) null
+                            else { { onAction(MainAction.SortSubscriptionByTestResults(group.id)) } },
                             onRemoveSubscription = if (group.id.isEmpty() ||
                                 group.id == com.aras.client.handler.FreeSubManager.FREE_SUB_ID
                             ) null else { -> mainViewModel.removeSubscription(group.id) },

@@ -72,7 +72,8 @@ class MainViewModel(
             selectedGroupId = dataSource.getSelectedSubscriptionId(),
             selectedGuid = dataSource.getSelectServer(),
             confirmRemove = dataSource.getConfirmRemove(),
-            doubleColumnDisplay = dataSource.getDoubleColumnDisplay()
+            doubleColumnDisplay = dataSource.getDoubleColumnDisplay(),
+            showSmartConnect = dataSource.getShowSmartConnect()
         )
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -179,6 +180,11 @@ class MainViewModel(
     private var testPreparationJob: Job? = null
     private var testFinishJob: Job? = null
 
+    // Single-card pings run beside any round: each is its own worker in the test
+    // service, so tapping ten cards starts ten probes instead of queueing them.
+    private val soloTestGuids = mutableSetOf<String>()
+    private val soloTestGroupIds = mutableSetOf<String>()
+
     private val initialPageReady = CompletableDeferred<Unit>()
     private var initializeStarted = false
 
@@ -259,23 +265,35 @@ class MainViewModel(
             }
 
             is MainServiceEvent.MeasureConfigSuccess -> {
-                val round = testRounds.current ?: return
-                if (!round.dispatched || round.finishing) return
-                if (event.guid.isBlank() || event.guid !in round.candidates) return
+                if (event.guid.isBlank()) return
+                val round = testRounds.current
+                val inRound = round != null && round.dispatched && !round.finishing &&
+                    event.guid in round.candidates
+                val inSolo = event.guid in soloTestGuids
+                if (!inRound && !inSolo) return
                 // Incremental update: patch the single tested server into the live
                 // list instead of rebuilding the whole group cache. A full
                 // loadGroup(forceRefresh) per result re-decoded every profile once
                 // per ping — with a hundred configs that recomposed the list a
                 // hundred times mid-batch and showed up as dropped frames.
                 val aff = dataSource.decodeAffiliationInfo(event.guid)
-                mutableServersForGroup(round.groupId).update { current ->
-                    current.map { cache ->
-                        if (cache.guid == event.guid) cache.copy(
-                            testDelayMillis = aff?.testDelayMillis ?: cache.testDelayMillis,
-                            testCountryCode = aff?.countryCode ?: cache.testCountryCode,
-                        ) else cache
+                // A result belongs to the profile's own tab and the All tab alike;
+                // patch every live list holding it so a finished probe shows up
+                // the moment it ends, not when the whole round is over.
+                groupPageFlows.values.forEach { flow ->
+                    flow.update { current ->
+                        current.map { cache ->
+                            if (cache.guid == event.guid) cache.copy(
+                                testDelayMillis = aff?.testDelayMillis ?: cache.testDelayMillis,
+                                testCountryCode = aff?.countryCode ?: cache.testCountryCode,
+                            ) else cache
+                        }
                     }
                 }
+                if (inSolo) soloTestGuids.remove(event.guid)
+                // This card's probe is done: stop its own spinner even when the
+                // measured delay is 0 ms or the round still has other probes.
+                _uiState.update { it.copy(testingGuids = it.testingGuids - event.guid) }
             }
 
             is MainServiceEvent.MeasureConfigNotify -> {
@@ -364,25 +382,18 @@ class MainViewModel(
             MainAction.Initialize -> initialize()
             MainAction.RefreshGroups -> setupGroupTab(forceRefresh = true)
             MainAction.TestAllServers -> testAllRealPing(true)
-            MainAction.TestRealAllServers -> testAllRealPing()
             MainAction.PingSelectedSubscription -> pingSelectedSubscription()
             MainAction.CancelTesting -> cancelAllPing()
             MainAction.RemoveAllServers -> removeAllServerAsync()
             MainAction.RemoveDuplicateServers -> removeDuplicateServerAsync()
             MainAction.RemoveInvalidServers -> removeInvalidServerAsync()
             MainAction.SortByTestResults -> sortByTestResultsAsync()
+            is MainAction.SortSubscriptionByTestResults -> sortByTestResultsAsync(action.groupId)
             MainAction.SmartConnect -> startSmartConnect()
             is MainAction.SingleTestServer -> testSingleServer(action.guid)
             is MainAction.ShareTxtFile -> Unit // handled by the Activity
             is MainAction.ShareArascFile -> Unit // handled by the Activity
             is MainAction.ExportGroupTxt -> Unit // handled by the Activity
-            MainAction.UpdateSubscriptions -> {
-                importConfigViaSub()
-                viewModelScope.launch(ioDispatcher) {
-                    delay(15_000) // let the subs finish fetching, then refresh flags
-                    refreshGeoIPIfDue(force = true)
-                }
-            }
             MainAction.ExportAll -> exportAllAsync()
             is MainAction.SelectGroup -> subscriptionIdChanged(action.groupId)
             is MainAction.SelectServer -> updateSelectedGuid(action.guid)
@@ -473,7 +484,8 @@ class MainViewModel(
         _uiState.update {
             it.copy(
                 confirmRemove = dataSource.getConfirmRemove(),
-                doubleColumnDisplay = dataSource.getDoubleColumnDisplay()
+                doubleColumnDisplay = dataSource.getDoubleColumnDisplay(),
+                showSmartConnect = dataSource.getShowSmartConnect()
             )
         }
     }
@@ -929,11 +941,11 @@ class MainViewModel(
         }
     }
 
-    private fun sortByTestResultsAsync() {
+    private fun sortByTestResultsAsync(groupId: String? = null) {
         launchLoading {
             withContext(ioDispatcher) {
                 try {
-                    sortByTestResultsInternal()
+                    sortByTestResultsInternal(groupId)
                     cacheMutex.withLock { groupDataCache.clear() }
                     setupGroupTab(forceRefresh = true)
                     reloadAllGroups(_uiState.value.groups.map { it.id })
@@ -951,11 +963,12 @@ class MainViewModel(
         }
     }
 
-    private fun sortByTestResultsInternal() {
-        val subs = if (uiState.value.selectedGroupId.isEmpty()) {
+    private fun sortByTestResultsInternal(groupId: String? = null) {
+        val target = groupId ?: uiState.value.selectedGroupId
+        val subs = if (target.isEmpty()) {
             dataSource.getSubsList()
         } else {
-            listOf(uiState.value.selectedGroupId)
+            listOf(target)
         }
         subs.forEach { dataSource.sortByTestResultsForSub(it) }
     }
@@ -1094,6 +1107,8 @@ class MainViewModel(
     // ---------- Testing ----------
     fun cancelAllPing() {
         testRounds.invalidate()
+        soloTestGuids.clear()
+        soloTestGroupIds.clear()
         testPreparationJob?.cancel()
         testFinishJob?.cancel()
         testPreparationJob = null
@@ -1116,7 +1131,6 @@ class MainViewModel(
 
     fun pingSelectedSubscription() {
         viewModelScope.launch {
-            if (_uiState.value.isTesting) return@launch
             val groupId = _uiState.value.selectedGroupId
             if (groupId.isBlank()) {
                 toast(R.string.toast_select_subscription_for_ping)
@@ -1125,7 +1139,6 @@ class MainViewModel(
             val servers = withContext(ioDispatcher) {
                 buildServersCache(dataSource.getGroupServerGuids(groupId))
             }
-            if (_uiState.value.isTesting) return@launch
             if (servers.isEmpty()) {
                 toast(R.string.toast_none_data)
                 return@launch
@@ -1142,9 +1155,17 @@ class MainViewModel(
     ) {
         cancelAllPing()
         val round = testRounds.begin(groupId, servers.map { it.guid }, smartConnect) ?: return
-        mutableServersForGroup(groupId).update { current ->
-            current.map { server ->
-                if (server.guid in round.candidates) server.copy(testDelayMillis = 0L) else server
+        // The stored country is cleared below; the cards must lose it too, or every
+        // tab keeps the previous round's flag until this one's final reload.
+        val candidates = round.candidates.toSet()
+        groupPageFlows.values.forEach { flow ->
+            flow.update { current ->
+                current.map { server ->
+                    if (server.guid in candidates) server.copy(
+                        testDelayMillis = 0L,
+                        testCountryCode = null,
+                    ) else server
+                }
             }
         }
         _uiState.update {
@@ -1205,16 +1226,44 @@ class MainViewModel(
         dataSource.testCurrentServerRealPing()
     }
 
-    /** Tests a single server without inheriting a previous Smart Connect intent. */
+    /**
+     * Tests a single server as its own worker, beside any round already running.
+     * Tapping another card starts another probe; nothing queues behind the first.
+     */
     fun testSingleServer(guid: String) {
-        if (_uiState.value.isTesting || guid.isEmpty()) return
+        if (guid.isEmpty() || guid in _uiState.value.testingGuids) return
         val profile = dataSource.decodeServerConfig(guid) ?: return
-        startTestRound(
-            uiState.value.selectedGroupId,
-            listOf(ServersCache(guid = guid, profile = profile.copy(), testDelayMillis = 0L)),
-            onlyTcp = false,
-            smartConnect = false
-        )
+        soloTestGuids.add(guid)
+        soloTestGroupIds.add(profile.subscriptionId)
+        MmkvManager.clearServerTestCountry(guid)
+        groupPageFlows.values.forEach { flow ->
+            flow.update { current ->
+                current.map {
+                    if (it.guid == guid) it.copy(testDelayMillis = 0L, testCountryCode = null) else it
+                }
+            }
+        }
+        _uiState.update {
+            it.copy(
+                isTesting = true,
+                testingGuids = it.testingGuids + guid,
+                status = if (it.isTesting) it.status else MainStatus.Testing,
+            )
+        }
+        viewModelScope.launch {
+            withContext(ioDispatcher) { dataSource.clearAllTestDelayResults(listOf(guid)) }
+            if (guid !in soloTestGuids) return@launch
+            // An empty subscriptionId keeps the service's per-subscription finish
+            // work out of this: the round finalization owns sorting and reloads.
+            dataSource.sendMsg2TestService(
+                TestServiceMessage(
+                    key = AppConfig.MSG_MEASURE_CONFIG_START,
+                    subscriptionId = "",
+                    serverGuids = listOf(guid),
+                    onlyTcp = false
+                )
+            )
+        }
     }
 
     /** Tests the captured visible candidates in the selected subscription only. */
@@ -1250,14 +1299,23 @@ class MainViewModel(
     private fun onTestsFinished() {
         // This only deduplicates local completion work. Broadcasts have no request ID,
         // so a late old finish AFTER a new dispatch is inherently indistinguishable.
-        val round = testRounds.claimFinish() ?: return
+        // The service only broadcasts a finish once every worker is done, so solo
+        // pings finalize here too — with or without a round.
+        val round = testRounds.claimFinish()
+        if (round == null && soloTestGroupIds.isEmpty()) return
+        val soloGroups = soloTestGroupIds.toSet()
+        soloTestGuids.clear()
+        soloTestGroupIds.clear()
         testFinishJob = viewModelScope.launch {
             try {
                 withContext(ioDispatcher) {
                     if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, true)) {
                         try {
-                            val subs = if (round.groupId.isEmpty()) dataSource.getSubsList()
-                                else listOf(round.groupId)
+                            val subs = when {
+                                round == null -> soloGroups.toList()
+                                round.groupId.isEmpty() -> dataSource.getSubsList()
+                                else -> (listOf(round.groupId) + soloGroups).distinct()
+                            }
                             subs.forEach {
                                 ensureActive()
                                 dataSource.sortByTestResultsForSub(it)
@@ -1270,24 +1328,31 @@ class MainViewModel(
                     }
                     cacheMutex.withLock { groupDataCache.clear() }
                 }
-                if (!testRounds.isCurrent(round)) return@launch
+                if (round != null && !testRounds.isCurrent(round)) return@launch
                 // Keep testing true until finalization: a new round may still explicitly
                 // replace this one, but a duplicate finish must not start another job.
                 reloadAllGroups(_uiState.value.groups.map { it.id })
                 reloadJob?.join()
                 ensureActive()
-                if (!testRounds.isCurrent(round)) return@launch
-                val smartTarget = if (round.smartConnect) bestTestedServerInRound(round) else null
-                testRounds.invalidate()
+                if (round != null && !testRounds.isCurrent(round)) return@launch
+                val smartTarget = if (round?.smartConnect == true) bestTestedServerInRound(round) else null
+                if (round != null) testRounds.invalidate()
                 if (smartTarget != null) updateSelectedGuid(smartTarget)
-                else if (round.smartConnect && uiState.value.selectedGroupId == round.groupId) {
+                else if (round?.smartConnect == true && uiState.value.selectedGroupId == round.groupId) {
                     toast(R.string.smart_connect_none)
                 }
+                // A round started while this finish was reloading keeps its state.
+                val ongoing = testRounds.current
+                val stillTesting = ongoing != null || soloTestGuids.isNotEmpty()
                 _uiState.update {
                     it.copy(
-                        isTesting = false,
-                        testingGuids = emptySet(),
-                        status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected,
+                        isTesting = stillTesting,
+                        testingGuids = (ongoing?.candidates?.toSet() ?: emptySet()) + soloTestGuids,
+                        status = when {
+                            stillTesting -> MainStatus.Testing
+                            it.isRunning -> MainStatus.Connected
+                            else -> MainStatus.Disconnected
+                        },
                         requestServiceStart = smartTarget != null,
                         scrollToTopTick = it.scrollToTopTick +
                             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SCROLL_TO_TOP, true)) 1 else 0
@@ -1296,7 +1361,7 @@ class MainViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                if (testRounds.isCurrent(round)) cancelAllPing()
+                if (round == null || testRounds.isCurrent(round)) cancelAllPing()
                 LogUtil.e(AppConfig.TAG, "Failed to finish tests", e)
             }
         }

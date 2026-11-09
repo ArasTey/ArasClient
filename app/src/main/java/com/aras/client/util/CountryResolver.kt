@@ -1,6 +1,5 @@
 package com.aras.client.util
 
-import com.aras.client.dto.entities.ProfileItem
 import java.util.Locale
 
 /**
@@ -171,16 +170,6 @@ object CountryResolver {
         return name.ifBlank { raw }
     }
 
-    /**
-     * Card policy: the flag represents where the endpoint sits. A country
-     * measured by the connection test wins, then GeoIP, then provider naming.
-     */
-    fun resolveCardIso(
-        profile: ProfileItem,
-        geoIso: String,
-        testedCountry: String?,
-    ): String? = isoForCountry(testedCountry) ?: resolveIso(profile, geoIso, preferGeoIp = true)
-
     private fun normalizeIso(value: String): String? = value
         .trim()
         .uppercase(Locale.ROOT)
@@ -198,24 +187,5 @@ object CountryResolver {
             .firstOrNull { (city, _) -> city in text }
             ?.let { return it.value }
         return null
-    }
-
-    private fun resolveIso(
-        profile: ProfileItem,
-        geoIso: String = "",
-        preferGeoIp: Boolean = false
-    ): String? {
-        val raw = "${profile.remarks} ${profile.description.orEmpty()}"
-
-        // 0) Cards and the connected profile prefer the resolved server-IP country.
-        val validGeoIso = normalizeIso(geoIso)
-        if (preferGeoIp && validGeoIso != null) return validGeoIso
-
-        // 1) Provider flag/country text remains the fallback when GeoIP is unavailable.
-        findFlag(raw).takeIf { it.isNotBlank() }?.let { return isoFromFlag(it) }
-        resolveCountryIso(raw)?.let { return it }
-
-        // 2) Server-IP lookup when the name carried no usable country hint.
-        return validGeoIso
     }
 }

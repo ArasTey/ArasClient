@@ -14,10 +14,9 @@ import com.aras.client.R
 import com.aras.client.handler.MmkvManager.rememberMmkvBool
 
 /**
- * The toggles that were previously only offered in the first-run setup,
- * exposed permanently in Settings (issue #1): auto-connect, testing and
- * display preferences. All bind to the same MMKV keys, so they stay in
- * sync with any other screen that edits them.
+ * Connection, testing and display preferences, all exposed in Settings.
+ * All bind to the same MMKV keys, so they stay in sync with any other
+ * screen that edits them.
  */
 @Composable
 fun ConnectionPreferencesSection(modifier: Modifier = Modifier) {
@@ -27,6 +26,7 @@ fun ConnectionPreferencesSection(modifier: Modifier = Modifier) {
     var showDelayChips by rememberMmkvBool(AppConfig.PREF_SHOW_DELAY_CHIPS, true)
     var showSubInfo by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_INFO, true)
     var showSubAnnouncement by rememberMmkvBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
+    var showSmartConnect by rememberMmkvBool(AppConfig.PREF_SHOW_SMART_CONNECT, true)
 
     Column(modifier = modifier.fillMaxWidth()) {
         SettingsSwitchItem(
@@ -64,6 +64,12 @@ fun ConnectionPreferencesSection(modifier: Modifier = Modifier) {
             summary = stringResource(R.string.summary_pref_show_sub_announcement),
             checked = showSubAnnouncement,
             onCheckedChange = { showSubAnnouncement = it }
+        )
+        SettingsSwitchItem(
+            title = stringResource(R.string.title_pref_show_smart_connect),
+            summary = stringResource(R.string.summary_pref_show_smart_connect),
+            checked = showSmartConnect,
+            onCheckedChange = { showSmartConnect = it }
         )
     }
 }

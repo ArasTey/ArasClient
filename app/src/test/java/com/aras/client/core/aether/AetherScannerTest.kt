@@ -7,7 +7,9 @@ import com.aras.client.enums.EConfigType
 import android.util.Log
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.MockedStatic
@@ -97,6 +99,99 @@ class AetherScannerTest {
             ruled = true,
         )
         assertEquals("162.159.196.1:2408", accepted?.endpoint?.toString())
+    }
+
+    @Test
+    fun `a ruled scan waits for the accepted line that follows the naming line`() {
+        // aether 2.4's real order: it names the hops, carries traffic, and only then
+        // says what country the exit turned out to be — on lines of their own.
+        val watcher = AetherScanner.Watcher(AetherProtocol.GOOL, ruled = true)
+
+        assertFalse(
+            watcher.evaluate(
+                "[2026-11-05T15:05:35.582Z INFO  aether] [+] using cloudflare edge " +
+                    "188.114.96.1:1701 (outer) and 162.159.192.1:2408 (inner)"
+            )
+        )
+        assertFalse(
+            watcher.evaluate(
+                "[2026-11-05T15:05:52.264Z WARN  aether] [-] gool tunnel ended: other: " +
+                    "the exit location could not be read, so the policy cannot be honoured; reconnecting"
+            )
+        )
+        assertFalse(
+            watcher.evaluate(
+                "[2026-11-05T15:06:45.350Z INFO  aether] [+] using cloudflare edge " +
+                    "188.114.96.1:1701 (outer) and 162.159.195.1:500 (inner)"
+            )
+        )
+        assertTrue(
+            watcher.evaluate(
+                "[2026-11-05T15:06:48.303Z INFO  aether::exitloc] [+] exit location IR accepted (exit must be in IR)"
+            )
+        )
+
+        val answer = watcher.answer
+        assertEquals("188.114.96.1:1701", answer?.endpoint?.toString())
+        // The candidate named before the unreadable check was thrown away with it.
+        assertEquals("162.159.195.1:500", answer?.innerHop?.toString())
+    }
+
+    @Test
+    fun `a ruled scan throws a candidate away when the exit is rejected`() {
+        val watcher = AetherScanner.Watcher(AetherProtocol.WIREGUARD, ruled = true)
+
+        assertFalse(watcher.evaluate("[+] using cloudflare edge ignored here"))
+        assertFalse(
+            watcher.evaluate(
+                "[+] selected WireGuard endpoint 162.159.195.1:500 (rtt 1.1s)"
+            )
+        )
+        assertFalse(
+            watcher.evaluate("[!] exit location IR rejected (exit must be in DE)")
+        )
+        // The rejected candidate is gone; an accepted vouch with no endpoint behind it ends nothing.
+        assertFalse(
+            watcher.evaluate("[+] exit location DE accepted (exit must be in DE)"),
+        )
+        assertNull(watcher.answer)
+
+        // But an endpoint named after a vouch is the answer with the vouch still standing —
+        // this is aether 2.4's mim order, where the exit is checked before the ready line.
+        assertTrue(watcher.evaluate("[+] selected WireGuard endpoint 162.159.192.1:2408 (rtt 2s)"))
+        assertEquals("162.159.192.1:2408", watcher.answer?.endpoint?.toString())
+    }
+
+    @Test
+    fun `a ruled mim scan answers when the ready line follows the accepted one`() {
+        // aether 2.4's mim order, from a live emulator run: the exit is checked
+        // through the inner tunnel and vouched for before the ready line arrives.
+        val watcher = AetherScanner.Watcher(AetherProtocol.MIM, ruled = true)
+
+        assertFalse(
+            watcher.evaluate(
+                "[2026-11-05T15:37:36.353Z INFO  aether::exitloc] [+] exit location IR accepted (exit must be in IR)"
+            )
+        )
+        assertTrue(
+            watcher.evaluate(
+                "[2026-11-05T15:37:36.353Z INFO  aether] [+] masque-in-masque ready: " +
+                    "162.159.198.69:443 (outer) and 162.159.198.155:443 (inner)"
+            )
+        )
+        assertEquals("162.159.198.69:443", watcher.answer?.endpoint?.toString())
+        assertEquals("162.159.198.155:443", watcher.answer?.innerHop?.toString())
+    }
+
+    @Test
+    fun `an unruled scan ends on the naming line`() {
+        val watcher = AetherScanner.Watcher(AetherProtocol.MIM, ruled = false)
+
+        assertTrue(
+            watcher.evaluate("[+] masque-in-masque ready: 198.51.100.3:443 (outer) and 198.51.100.4:443 (inner)")
+        )
+        assertEquals("198.51.100.3:443", watcher.answer?.endpoint?.toString())
+        assertEquals("198.51.100.4:443", watcher.answer?.innerHop?.toString())
     }
 
     @Test

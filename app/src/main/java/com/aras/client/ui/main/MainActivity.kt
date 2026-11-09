@@ -181,9 +181,9 @@ class MainActivity : HelperBaseComponentActivity() {
     @Composable
     override fun ScreenContent() {
         BackHandler { moveTaskToBack(false) }
-        var showOnboarding by remember {
-            mutableStateOf(!MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_DONE, false))
-        }
+        // No first-run questions: the defaults (auto sort on, auto connect off,
+        // ping chips on, traffic/expiry/announcement on, Free subs on) already
+        // match them, and every toggle lives in Settings for changing later.
         var showQuickSettingsInfo by remember {
             mutableStateOf(
                 !MmkvManager.decodeSettingsBool(
@@ -194,33 +194,7 @@ class MainActivity : HelperBaseComponentActivity() {
         }
         val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
 
-        if (showOnboarding) {
-            FirstRunSetupDialog(
-                onDismiss = {
-                    MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_DONE, true)
-                    showOnboarding = false
-                }
-            )
-        }
-        // The Free-group question for users whose onboarding already ran before it
-        // existed; fresh installs answer it inside the onboarding checkboxes above.
-        var showFreeSubAsk by remember {
-            mutableStateOf(
-                MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_DONE, false) &&
-                    !MmkvManager.decodeSettingsBool(AppConfig.PREF_FREE_SUB_ASKED, false)
-            )
-        }
-        if (showFreeSubAsk) {
-            FreeSubAskDialog { showFreeSub ->
-                MmkvManager.encodeSettings(AppConfig.PREF_SHOW_FREE_SUB, showFreeSub)
-                MmkvManager.encodeSettings(AppConfig.PREF_FREE_SUB_ASKED, true)
-                showFreeSubAsk = false
-                // The tabs read the setting through setupGroupTab, so the answer
-                // takes effect the moment the dialog closes.
-                mainViewModel.setupGroupTab(forceRefresh = true)
-            }
-        }
-        if (!showOnboarding && showQuickSettingsInfo) {
+        if (showQuickSettingsInfo) {
             val dismissQuickSettingsInfo = {
                 MmkvManager.encodeSettings(
                     AppConfig.PREF_QUICK_SETTINGS_TILES_INFO_SHOWN,

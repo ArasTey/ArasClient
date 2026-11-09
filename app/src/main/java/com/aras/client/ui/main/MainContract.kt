@@ -39,6 +39,7 @@ data class MainUiState(
     val locateTarget: LocateTarget? = null,
     val confirmRemove: Boolean = false,
     val doubleColumnDisplay: Boolean = false,
+    val showSmartConnect: Boolean = true,
     val shareQRCodeBitmap: android.graphics.Bitmap? = null,
     val requestServiceStart: Boolean = false,
     val scrollToTopTick: Int = 0
@@ -122,7 +123,6 @@ sealed interface MainAction {
     data object ToggleService : MainAction
     data object TestCurrentServer : MainAction
     data object TestAllServers : MainAction
-    data object TestRealAllServers : MainAction
     data object PingSelectedSubscription : MainAction
     data object CancelTesting : MainAction
     data object RemoveAllServers : MainAction
@@ -131,7 +131,7 @@ sealed interface MainAction {
     data object SortByTestResults : MainAction
     data object SmartConnect : MainAction
     data class SingleTestServer(val guid: String) : MainAction
-    data object UpdateSubscriptions : MainAction
+    data class SortSubscriptionByTestResults(val groupId: String) : MainAction
     data object ExportAll : MainAction
 
     data object ImportQRcode : MainAction

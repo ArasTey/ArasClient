@@ -74,9 +74,7 @@ enum class MainMoreMenuAction(@StringRes val labelRes: Int) {
     ExportSubTxt(R.string.title_export_sub_txt),
     LocateSelected(R.string.title_locate_selected_config),
     SortByTestResults(R.string.title_sort_by_test_results),
-    TestAll(R.string.title_ping_all_server),
-    TestAllRealPing(R.string.title_real_ping_all_server),
-    UpdateSubscriptions(R.string.title_sub_update)
+    TestAll(R.string.title_ping_all_server)
 }
 
 internal enum class ServerMenuAction(
@@ -174,8 +172,6 @@ private fun MainMoreMenuAction.iconRes(): Int = when (this) {
     MainMoreMenuAction.LocateSelected -> R.drawable.ic_search_24dp
     MainMoreMenuAction.SortByTestResults -> R.drawable.ic_outline_filter_alt_24
     MainMoreMenuAction.TestAll -> R.drawable.ic_speedtest_24dp
-    MainMoreMenuAction.TestAllRealPing -> R.drawable.ic_speedtest_24dp
-    MainMoreMenuAction.UpdateSubscriptions -> R.drawable.ic_check_update_24dp
 }
 
 @DrawableRes

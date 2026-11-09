@@ -34,6 +34,10 @@ object AetherScanner {
     private val exitAccepted = Regex("""exit location \S+ accepted""")
     private val exitRejected = Regex("""exit location \S+ rejected""")
 
+    // What the core says when it cannot tell what country the exit is in; aether 2.4
+    // words it on a "tunnel ended" line rather than an "exit location" one.
+    private val exitUnreadable = Regex("""exit location could not be read""")
+
     /**
      * Runs a scan core and returns what it settled on, or null when it never named one.
      *
@@ -47,7 +51,7 @@ object AetherScanner {
         val protocol = AetherProtocol.fromString(profile.aetherProtocol)
         val port = AetherCoreManager.scanPort(profile)
         val ruled = !profile.aetherExitLoc.isNullOrBlank()
-        var found: AetherScanResult? = null
+        val watcher = Watcher(protocol, ruled)
 
         AetherCoreManager.runUntil(
             context = context,
@@ -55,9 +59,66 @@ object AetherScanner {
             timeoutMs = SCAN_TIMEOUT_MS,
             source = "aether-scan",
             onOutput = onOutput,
-        ) { line -> matches(protocol, line, ruled)?.let { found = it; true } == true }
+            ready = watcher::evaluate,
+        )
 
-        return found
+        return watcher.answer
+    }
+
+    /**
+     * Reads a scan's output for one profile, line by line, and says when the answer is in.
+     *
+     * Without an exit rule the line naming the endpoint is the answer. With one the
+     * endpoint and its acceptance are two facts, and aether 2.4 spells them in either
+     * order on separate lines — gool names its hops and checks the exit a minute later,
+     * mim checks the exit and then says it is ready — so the endpoint is the answer
+     * once both are known, and is thrown away when a line rejects the exit or cannot
+     * read it, because the core will reconnect and choose fresh endpoints.
+     */
+    internal class Watcher(private val protocol: AetherProtocol, private val ruled: Boolean) {
+
+        /** What the scan settled on, once [evaluate] says true. */
+        var answer: AetherScanResult? = null
+            private set
+
+        /** The endpoint the core named but the exit behind it is not vouched for yet. */
+        private var pending: AetherScanResult? = null
+
+        /** Whether the exit behind the current endpoints has been accepted. */
+        private var exitOk = false
+
+        fun evaluate(line: String): Boolean {
+            if (exitRejected.containsMatchIn(line) || exitUnreadable.containsMatchIn(line)) {
+                LogUtil.d(AppConfig.TAG, "AetherScanner: the exit was refused, the core will look again")
+                pending = null
+                exitOk = false
+                return false
+            }
+            // An old core spells endpoint and acceptance on one line; matches() reads
+            // such a line only when ruled.
+            val named = matches(protocol, line, ruled) ?: parse(protocol, line)
+            if (named != null) {
+                if (!ruled) {
+                    answer = named
+                    return true
+                }
+                pending = named
+                if (exitOk) {
+                    answer = named
+                    return true
+                }
+                return false
+            }
+            if (ruled && exitAccepted.containsMatchIn(line)) {
+                exitOk = true
+                val candidate = pending
+                if (candidate != null) {
+                    answer = candidate
+                    return true
+                }
+            }
+            return false
+        }
     }
 
     /**
@@ -66,14 +127,17 @@ object AetherScanner {
      * Without an exit rule the line naming the endpoint ends it. With one, the core
      * names its endpoint before it has checked the exit behind it, and looks again
      * when that exit is refused — so a named endpoint on its own is not the answer
-     * until the exit has been accepted.
+     * until the exit has been accepted. (An old core spells both on one line; a
+     * current one says the exit on a line of its own, which is what
+     * [Watcher] pairs up.)
      */
     internal fun matches(protocol: AetherProtocol, line: String, ruled: Boolean): AetherScanResult? {
-        exitRejected.find(line)?.let { rejected ->
-            LogUtil.d(AppConfig.TAG, "AetherScanner: $rejected, the core will look again")
-        }
         if (ruled && !exitAccepted.containsMatchIn(line)) return null
+        return parse(protocol, line)
+    }
 
+    /** The endpoint a line names, accepted or not; null when the line names none. */
+    private fun parse(protocol: AetherProtocol, line: String): AetherScanResult? {
         if (protocol.twoHops) {
             val hop = if (protocol == AetherProtocol.MIM) mimHops else goolHops
             val match = hop.find(line) ?: return null

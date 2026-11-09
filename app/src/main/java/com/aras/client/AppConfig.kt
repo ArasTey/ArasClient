@@ -98,8 +98,8 @@ object AppConfig {
     const val PREF_AUTO_SORT_AFTER_TEST = "pref_auto_sort_after_test"
     const val PREF_AUTO_SCROLL_TO_TOP = "pref_auto_scroll_to_top"
     const val PREF_SHOW_DELAY_CHIPS = "pref_show_delay_chips"
+    const val PREF_SHOW_SMART_CONNECT = "pref_show_smart_connect"
     const val PREF_AUTO_CONNECT_FASTEST = "pref_auto_connect_fastest"
-    const val PREF_ONBOARDING_DONE = "pref_onboarding_done"
     const val PREF_QUICK_SETTINGS_TILES_INFO_SHOWN = "pref_quick_settings_tiles_info_shown"
     const val PREF_QUICK_CONNECT_RUNNING = "pref_quick_connect_running"
 
@@ -117,7 +117,6 @@ object AppConfig {
     const val PREF_FREE_SYNC_LAST_URL = "pref_free_sync_last_url"
     const val PREF_GEOIP_LAST_REFRESH = "pref_geoip_last_refresh"
     const val PREF_SHOW_FREE_SUB = "pref_show_free_sub"
-    const val PREF_FREE_SUB_ASKED = "pref_free_sub_asked"
     const val PREF_FREE_TRASH_ITEMS = "pref_free_trash_items"
     const val PREF_FREE_TRASH_IDS = "pref_free_trash_ids"
 
