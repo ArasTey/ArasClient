@@ -134,6 +134,35 @@ object HttpUtil {
     }
 
     /**
+     * Returns the Location header of a redirect response, or null when the request
+     * fails or the response is not a redirect.
+     */
+    fun getRedirectLocation(request: UrlContentRequest): String? {
+        val url = request.url ?: return null
+        val client = buildOkHttpClient(
+            request.timeout,
+            request.httpPort,
+            request.proxyUsername,
+            request.proxyPassword,
+            followRedirects = false
+        )
+        val httpRequest = Request.Builder()
+            .url(url)
+            .get()
+            .header("Connection", "close")
+            .header("User-agent", "ArasClient/${BuildConfig.VERSION_NAME}")
+            .build()
+        return try {
+            client.newCall(httpRequest).execute().use { response ->
+                if (response.isRedirect) response.header("Location") else null
+            }
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to get redirect location", e)
+            null
+        }
+    }
+
+    /**
      * Retrieves the content of a URL as a string with a custom User-Agent header.
      *
      * @param url The URL to fetch content from.

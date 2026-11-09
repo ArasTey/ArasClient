@@ -168,6 +168,8 @@ object AppConfig {
     const val ANDROID_PACKAGE_NAME_LIST_URL = "$GITHUB_RAW_URL/ArasTey/ArasClient/main/list/proxy.txt"
     const val APP_URL = "$GITHUB_URL/ArasTey"
     const val APP_API_URL = "https://api.github.com/repos/ArasTey/ArasClient/releases"
+    const val APP_RELEASES_URL = "$GITHUB_URL/ArasTey/ArasClient/releases"
+    const val APP_RELEASES_ATOM_URL = "$APP_RELEASES_URL.atom"
     const val APP_ISSUES_URL = "$APP_URL/ArasClient/issues"
     const val APP_WIKI_MODE = "$APP_URL/wiki/Mode"
     const val APP_PRIVACY_POLICY = "$GITHUB_RAW_URL/ArasTey/ArasClient/main/CR.md"
