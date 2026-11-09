@@ -154,19 +154,19 @@ object AetherScanner {
     /**
      * Puts what a scan found on the profile.
      *
-     * A two hop tunnel keeps its two gateways in its own fields and clears the single
-     * address, since a single one would be read as the endpoint the core dials.
+     * The address and port carry the outer gateway for every protocol, a two hop
+     * tunnel included: the editor shows and saves those fields, and the tunnel's own
+     * two hops stay beside them in the wiw fields. A two hop profile whose address is
+     * left empty cannot be saved at all, because the editor asks every non-carrier
+     * profile for an address.
      */
     fun apply(profile: ProfileItem, result: AetherScanResult) {
         val inner = result.innerHop
+        profile.server = result.endpoint.host
+        profile.serverPort = result.endpoint.port.toString()
         if (inner != null) {
             profile.aetherWiwOuter = result.endpoint.toString()
             profile.aetherWiwInner = inner.toString()
-            profile.server = null
-            profile.serverPort = null
-        } else {
-            profile.server = result.endpoint.host
-            profile.serverPort = result.endpoint.port.toString()
         }
         LogUtil.i(
             AppConfig.TAG,

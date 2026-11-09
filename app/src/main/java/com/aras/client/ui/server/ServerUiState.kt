@@ -8,6 +8,7 @@ import com.aras.client.AppConfig.DEFAULT_PORT
 import com.aras.client.AppConfig.REALITY
 import com.aras.client.AppConfig.WIREGUARD_LOCAL_ADDRESS_V4
 import com.aras.client.AppConfig.WIREGUARD_LOCAL_MTU
+import com.aras.client.dto.AetherEndpoint
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.AetherProtocol
 import com.aras.client.enums.AetherIpVersion
@@ -230,16 +231,16 @@ class ServerUiState(
         // A Psiphon or Tor profile is the carrier alone: it names no server of its
         // own, and its carrier runs in only mode whatever the other fields say.
         val isCarrierOnly = configType.isCarrierOnly
-        // A gool or mim tunnel dials two hops of its own, so the single-endpoint
-        // fields stay empty; a wg or masque tunnel goes the other way round.
+        // A gool or mim tunnel also keeps its two hops in their own fields; the
+        // address and port carry the outer gateway the editor shows and saves.
         val isTwoHopAether = configType == EConfigType.AETHER &&
             AetherProtocol.fromString(aetherProtocol).twoHops
 
         return initialConfig.copy(
             configType = configType,
             remarks = remarks,
-            server = if (isCarrierOnly || isTwoHopAether) null else address,
-            serverPort = if (isCarrierOnly || isTwoHopAether) null else port,
+            server = if (isCarrierOnly) null else address,
+            serverPort = if (isCarrierOnly) null else port,
             password = password,
             method = when {
                 isVmess || isShadowsocks -> method
@@ -372,12 +373,15 @@ class ServerUiState(
     companion object {
         fun fromProfileItem(
             initialConfig: ProfileItem
-        ): ServerUiState =
-            ServerUiState(
+        ): ServerUiState {
+            // A two hop profile keeps its outer gateway in the wiw field; when it has
+            // no single address, the editor shows that one and a save can pass.
+            val outerHop = AetherEndpoint.parse(initialConfig.aetherWiwOuter)
+            return ServerUiState(
                 configType = initialConfig.configType,
                 remarks = initialConfig.remarks,
-                address = initialConfig.server ?: "",
-                port = initialConfig.serverPort ?: DEFAULT_PORT.toString(),
+                address = initialConfig.server ?: outerHop?.host ?: "",
+                port = initialConfig.serverPort ?: outerHop?.port?.toString() ?: DEFAULT_PORT.toString(),
                 password = initialConfig.password ?: "",
                 method = initialConfig.method ?: "",
                 flow = initialConfig.flow ?: "",
@@ -473,6 +477,7 @@ class ServerUiState(
                 verifyPeerCertByName = initialConfig.verifyPeerCertByName ?: "",
                 pinnedCA256 = initialConfig.pinnedCA256 ?: ""
             )
+        }
 
         fun from(
             initialConfig: ProfileItem

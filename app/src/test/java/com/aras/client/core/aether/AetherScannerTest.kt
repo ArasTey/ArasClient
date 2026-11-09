@@ -213,11 +213,8 @@ class AetherScannerTest {
     }
 
     @Test
-    fun `a two hop scan writes the hops and clears the single address`() {
+    fun `a two hop scan writes the hops and the outer address`() {
         val config = profile("gool")
-        // A leftover address would be read as the endpoint the core dials.
-        config.server = "198.51.100.1"
-        config.serverPort = "2408"
 
         AetherScanner.apply(
             config,
@@ -226,7 +223,9 @@ class AetherScannerTest {
 
         assertEquals("198.51.100.1:2408", config.aetherWiwOuter)
         assertEquals("198.51.100.2:2408", config.aetherWiwInner)
-        assertNull(config.server)
-        assertNull(config.serverPort)
+        // The editor shows and saves an address and port for every non-carrier
+        // profile, so the outer gateway lands there too.
+        assertEquals("198.51.100.1", config.server)
+        assertEquals("2408", config.serverPort)
     }
 }

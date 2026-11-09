@@ -128,7 +128,7 @@ class AetherFmtTest {
     }
 
     @Test
-    fun `a two hop link keeps both gateways and no address`() {
+    fun `a two hop link keeps both gateways and the outer address`() {
         val link = "aether://?protocol=gool&scan=balanced&ip=v4" +
             "&outer=198.51.100.1:2408&inner=198.51.100.2:2408#nested"
 
@@ -138,7 +138,9 @@ class AetherFmtTest {
         assertEquals("gool", config!!.aetherProtocol)
         assertEquals("198.51.100.1:2408", config.aetherWiwOuter)
         assertEquals("198.51.100.2:2408", config.aetherWiwInner)
-        assertNull(config.server)
+        // The outer gateway also fills the single fields the editor shows and saves.
+        assertEquals("198.51.100.1", config.server)
+        assertEquals("2408", config.serverPort)
     }
 
     @Test

@@ -20,8 +20,8 @@ android {
         applicationId = "com.aras.client"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1891
-        versionName = "1.8.91"
+        versionCode = 1892
+        versionName = "1.8.92"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {

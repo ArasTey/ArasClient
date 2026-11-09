@@ -649,6 +649,12 @@ class ServerAetherActivity : BaseServerActivity() {
                                     state.port = profile.serverPort.orEmpty()
                                     state.aetherWiwOuter = profile.aetherWiwOuter.orEmpty()
                                     state.aetherWiwInner = profile.aetherWiwInner.orEmpty()
+                                    // A scan names a nameless profile the way a save
+                                    // would, so the card and the editor agree even
+                                    // before the profile is saved.
+                                    if (state.remarks.isBlank()) {
+                                        state.remarks = uniqueRemarks(AetherFmt.defaultRemarks(profile))
+                                    }
                                 }
                             }
                         }

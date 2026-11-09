@@ -85,6 +85,10 @@ object AetherFmt : FmtBase() {
             val inner = AetherEndpoint.parse(queryParam["inner"])?.takeUnless { it.host == outer?.host }
             config.aetherWiwOuter = outer?.toString()
             config.aetherWiwInner = inner?.toString()
+            // The outer gateway also fills the single fields the editor shows and
+            // saves; a gool or mim profile without an address cannot be saved there.
+            config.server = outer?.host
+            config.serverPort = outer?.port?.toString()
         } else {
             val endpoint = AetherEndpoint.of(uri.idnHost, uri.port.takeIf { it > 0 }?.toString())
             config.server = endpoint?.host
