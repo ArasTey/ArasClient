@@ -1004,7 +1004,14 @@ object MmkvManager {
      * @return The settings value.
      */
     fun decodeSettingsBool(key: String): Boolean {
-        return settingsStorage.decodeBool(key, false)
+        val defaultValue = when (key) {
+            AppConfig.PREF_IPV6_ENABLED -> AppConfig.DEFAULT_IPV6_ENABLED
+            AppConfig.PREF_PREFER_IPV6 -> AppConfig.DEFAULT_PREFER_IPV6
+            AppConfig.PREF_FAKE_DNS_ENABLED -> AppConfig.DEFAULT_FAKE_DNS_ENABLED
+            AppConfig.PREF_LOCAL_DNS_ENABLED -> AppConfig.DEFAULT_LOCAL_DNS_ENABLED
+            else -> false
+        }
+        return settingsStorage.decodeBool(key, defaultValue)
     }
 
     /**

@@ -18,11 +18,13 @@ object TestSettings {
      * only calls its initializer while it holds the uninitialized sentinel, so
      * assigning the value is enough.
      */
-    fun install() {
+    fun install(): MMKV {
+        val storage = mock(MMKV::class.java)
         val delegateField = MmkvManager::class.java.getDeclaredField("settingsStorage\$delegate")
         delegateField.isAccessible = true
         val lazy = delegateField.get(MmkvManager)
         lazy.javaClass.getDeclaredField("_value").apply { isAccessible = true }
-            .set(lazy, mock(MMKV::class.java))
+            .set(lazy, storage)
+        return storage
     }
 }

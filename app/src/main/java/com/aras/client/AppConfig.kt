@@ -67,6 +67,9 @@ object AppConfig {
      * VPN. Where the kernel refuses the address the interface still starts, on IPv4 alone.
      */
     const val DEFAULT_IPV6_ENABLED = true
+    const val DEFAULT_PREFER_IPV6 = true
+    const val DEFAULT_FAKE_DNS_ENABLED = true
+    const val DEFAULT_LOCAL_DNS_ENABLED = true
 
     const val PREF_PREFER_IPV6 = "pref_prefer_ipv6"
     const val PREF_PROXY_SHARING = "pref_proxy_sharing_enabled"

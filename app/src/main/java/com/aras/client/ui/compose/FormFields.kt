@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -71,9 +72,10 @@ fun FormTextField(
             enabled = enabled,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = palette.glassTop.copy(alpha = if (palette.isDark) 0.16f else 0.55f),
-                unfocusedContainerColor = palette.glassTop.copy(alpha = if (palette.isDark) 0.10f else 0.38f),
-                disabledContainerColor = palette.glassTop.copy(alpha = if (palette.isDark) 0.05f else 0.20f),
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                errorContainerColor = Color.Transparent,
                 focusedBorderColor = palette.accent,
                 cursorColor = MaterialTheme.colorScheme.secondary,
                 selectionColors = TextSelectionColors(
@@ -129,9 +131,10 @@ fun FormDropdownField(
             supportingText = supportingText?.let { { Text(it) } },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = palette.glassTop.copy(alpha = if (palette.isDark) 0.16f else 0.55f),
-                unfocusedContainerColor = palette.glassTop.copy(alpha = if (palette.isDark) 0.10f else 0.38f),
-                disabledContainerColor = palette.glassTop.copy(alpha = if (palette.isDark) 0.05f else 0.20f),
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                errorContainerColor = Color.Transparent,
                 focusedBorderColor = palette.accent,
                 cursorColor = MaterialTheme.colorScheme.secondary,
                 selectionColors = TextSelectionColors(

@@ -85,8 +85,8 @@ fun SettingsScreen(
     var advancedSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     var modeSettingsExpanded by rememberSaveable { mutableStateOf(true) }
 
-    var localDns by rememberMmkvBool(AppConfig.PREF_LOCAL_DNS_ENABLED, false)
-    var fakeDns by rememberMmkvBool(AppConfig.PREF_FAKE_DNS_ENABLED, false)
+    var localDns by rememberMmkvBool(AppConfig.PREF_LOCAL_DNS_ENABLED, AppConfig.DEFAULT_LOCAL_DNS_ENABLED)
+    var fakeDns by rememberMmkvBool(AppConfig.PREF_FAKE_DNS_ENABLED, AppConfig.DEFAULT_FAKE_DNS_ENABLED)
     val context = androidx.compose.ui.platform.LocalContext.current
         var statsExpanded by remember { mutableStateOf(false) }
     var showResetConfirm by androidx.compose.runtime.remember {
@@ -143,8 +143,8 @@ fun SettingsScreen(
     var uiModeNight by rememberMmkvString(AppConfig.PREF_UI_MODE_NIGHT, "0")
     var dynamicColor by rememberMmkvBool(AppConfig.PREF_DYNAMIC_COLOR, true)
 
-    var ipv6Enabled by rememberMmkvBool(AppConfig.PREF_IPV6_ENABLED, false)
-    var preferIpv6 by rememberMmkvBool(AppConfig.PREF_PREFER_IPV6, false)
+    var ipv6Enabled by rememberMmkvBool(AppConfig.PREF_IPV6_ENABLED, AppConfig.DEFAULT_IPV6_ENABLED)
+    var preferIpv6 by rememberMmkvBool(AppConfig.PREF_PREFER_IPV6, AppConfig.DEFAULT_PREFER_IPV6)
     var sniffingEnabled by rememberMmkvBool(AppConfig.PREF_SNIFFING_ENABLED, true)
     var routeOnlyEnabled by rememberMmkvBool(AppConfig.PREF_ROUTE_ONLY_ENABLED, false)
     var remoteDns by rememberMmkvString(AppConfig.PREF_REMOTE_DNS, "")
