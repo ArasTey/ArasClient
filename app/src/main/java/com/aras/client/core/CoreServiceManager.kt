@@ -148,10 +148,11 @@ object CoreServiceManager {
      * the daemon has not ended the session. A stop that never reached the native
      * core still leaves the client off, so the persisted flag has the last word.
      * Until the daemon has written one (an update from a build without it), the
-     * live core state stands alone.
+     * live core state stands alone. A platform IKEv2 session owns the flag too.
      */
     fun isSessionRunning(): Boolean =
-        isRunning() && MmkvManager.decodeSettingsBool(AppConfig.PREF_SESSION_RUNNING, true)
+        (coreController.isRunning || IkeV2Manager.isActive()) &&
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_SESSION_RUNNING, true)
 
     private fun markSession(running: Boolean) {
         MmkvManager.encodeSettings(AppConfig.PREF_SESSION_RUNNING, running)

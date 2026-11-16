@@ -25,7 +25,6 @@ import com.aras.client.ui.compose.GlassMenuDivider
 import com.aras.client.ui.compose.GlassMenuRow
 import com.aras.client.ui.compose.GlassPalette
 import com.aras.client.ui.compose.LocalGlassPalette
-import com.aras.client.ui.compose.SelectListDialog
 import com.aras.client.ui.compose.glassPanel
 
 private enum class ImportMenuAction(
@@ -61,7 +60,8 @@ private enum class ImportManualProtocolMenuAction(val label: String, val action:
     Hysteria2("Hysteria2", MainAction.ImportManually(EConfigType.HYSTERIA2.value)),
     AnyTLS("AnyTLS", MainAction.ImportManually(EConfigType.ANYTLS.value)),
     AmneziaWG("AmneziaWG", MainAction.ImportManually(EConfigType.AMNEZIAWG.value)),
-    Mieru("Mieru", MainAction.ImportManually(EConfigType.MIERU.value))
+    Mieru("Mieru", MainAction.ImportManually(EConfigType.MIERU.value)),
+    Ikev2("IKEv2", MainAction.ImportManually(EConfigType.IKEV2.value))
 }
 
 enum class MainMoreMenuAction(@StringRes val labelRes: Int) {
@@ -109,6 +109,7 @@ internal fun serverMenuActions(
 @Composable
 fun ImportMenuContent(onAction: (MainAction) -> Unit) {
     var showProtocolMenu by remember { mutableStateOf(false) }
+    val palette = LocalGlassPalette.current
 
     ImportMenuAction.entries.forEachIndexed { index, item ->
         GlassMenuRow(
@@ -124,17 +125,32 @@ fun ImportMenuContent(onAction: (MainAction) -> Unit) {
     }
 
     if (showProtocolMenu) {
-        // Second-stage menu: pick a protocol to create manually.
-        SelectListDialog(
-            options = ImportManualProtocolMenuAction.entries,
-            optionText = { it.label },
-            onSelected = { selected ->
-                showProtocolMenu = false
-                onAction(selected.action)
-            },
-            onDismiss = { showProtocolMenu = false },
-            title = stringResource(R.string.menu_item_import_config_manually)
-        )
+        // Second-stage menu: pick a protocol to create manually. Same glass panel
+        // as every other menu in the app rather than a Material list dialog.
+        Dialog(onDismissRequest = { showProtocolMenu = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassPanel(
+                        palette = palette,
+                        shape = RoundedCornerShape(24.dp),
+                        fill = if (palette.isDark) Color(0xF7161D24) else Color(0xF8FFFFFF),
+                        borderColor = if (palette.isDark) Color(0x52FFFFFF) else Color(0xE6FFFFFF)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 8.dp)
+            ) {
+                ImportManualProtocolMenuAction.entries.forEach { item ->
+                    GlassMenuRow(
+                        iconRes = null,
+                        label = item.label,
+                        onClick = {
+                            showProtocolMenu = false
+                            onAction(item.action)
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 

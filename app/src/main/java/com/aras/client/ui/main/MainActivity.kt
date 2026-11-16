@@ -24,6 +24,7 @@ import com.aras.client.AngApplication
 import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.core.LauncherManager
+import com.aras.client.core.IkeV2Manager
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.EConfigType
 import com.aras.client.enums.PermissionType
@@ -52,6 +53,7 @@ import com.aras.client.ui.server.ServerAnytlsActivity
 import com.aras.client.ui.server.ServerCustomConfigActivity
 import com.aras.client.ui.server.ServerGroupActivity
 import com.aras.client.ui.server.ServerHttpActivity
+import com.aras.client.ui.server.ServerIkev2Activity
 import com.aras.client.ui.server.ServerHysteria2Activity
 import com.aras.client.ui.server.ServerProxyChainActivity
 import com.aras.client.ui.server.ServerPsiphonActivity
@@ -398,12 +400,49 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun requestServiceStart() {
+        // IKEv2 goes through the platform engine: it needs its own consent flow first.
+        if (isIkeV2Selected()) {
+            startIkeV2FromUi()
+            return
+        }
         if (!SettingsManager.isVpnMode()) {
             startXray()
             return
         }
         val intent = VpnService.prepare(this)
         if (intent == null) startXray() else requestVpnPermission.launch(intent)
+    }
+
+    private val requestIkeV2Consent =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK && LauncherManager.startService(this)) {
+                mainViewModel.onConnectRequested()
+            }
+        }
+
+    private fun isIkeV2Selected(): Boolean {
+        val guid = mainViewModel.uiState.value.selectedGuid ?: return false
+        val config = MmkvManager.decodeServerConfig(guid) ?: return false
+        return config.configType == EConfigType.IKEV2
+    }
+
+    private fun startIkeV2FromUi() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            toast(R.string.toast_ikev2_requires_android10)
+            return
+        }
+        if (!SettingsManager.isVpnMode()) {
+            toast(R.string.toast_ikev2_vpn_mode_required)
+            return
+        }
+        val guid = mainViewModel.uiState.value.selectedGuid ?: return
+        val config = MmkvManager.decodeServerConfig(guid) ?: return
+        val consent = IkeV2Manager.provisionIntent(this, config)
+        if (consent != null) {
+            requestIkeV2Consent.launch(consent)
+            return
+        }
+        if (LauncherManager.startService(this)) mainViewModel.onConnectRequested()
     }
 
     private fun handleLayoutTestClick() {
@@ -445,6 +484,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.MIERU.value -> Intent(this, ServerMieruActivity::class.java)
             EConfigType.PSIPHON.value -> Intent(this, ServerPsiphonActivity::class.java)
             EConfigType.TOR.value -> Intent(this, ServerTorActivity::class.java)
+            EConfigType.IKEV2.value -> Intent(this, ServerIkev2Activity::class.java)
             else -> Intent(this, ServerHttpActivity::class.java).apply {
                 putExtra("createConfigType", createConfigType)
             }
@@ -615,6 +655,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.MIERU -> ServerMieruActivity::class.java
             EConfigType.PSIPHON -> ServerPsiphonActivity::class.java
             EConfigType.TOR -> ServerTorActivity::class.java
+            EConfigType.IKEV2 -> ServerIkev2Activity::class.java
             else -> ServerHttpActivity::class.java
         }
         val intent = Intent(this, activityClass).apply {

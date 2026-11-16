@@ -153,6 +153,10 @@
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged|adjustResize" />
         <activity
+            android:name=".ui.server.ServerIkev2Activity"
+            android:exported="false"
+            android:windowSoftInputMode="stateUnchanged|adjustResize" />
+        <activity
             android:name=".ui.server.ServerCustomConfigActivity"
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged|adjustResize" />
@@ -278,6 +282,24 @@
             <meta-data
                 android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
                 android:value="true" />
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn" />
+        </service>
+
+        <service
+            android:name=".service.IkeV2Service"
+            android:exported="true"
+            android:foregroundServiceType="specialUse"
+            android:label="@string/app_name"
+            android:process=":RunSoArasDaemon">
+            <intent-filter>
+                <action android:name="android.net.action.VPN_MANAGER_EVENT" />
+                <category android:name="android.net.category.EVENT_IKE_ERROR" />
+                <category android:name="android.net.category.EVENT_NETWORK_ERROR" />
+                <category android:name="android.net.category.EVENT_DEACTIVATED_BY_USER" />
+                <category android:name="android.net.category.EVENT_ALWAYS_ON_STATE_CHANGED" />
+            </intent-filter>
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="vpn" />

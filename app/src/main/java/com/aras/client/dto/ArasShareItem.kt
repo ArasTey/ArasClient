@@ -107,6 +107,7 @@ data class ArasShareItem(
             15 -> EConfigType.MIERU
             16 -> EConfigType.PSIPHON
             17 -> EConfigType.TOR
+            18 -> EConfigType.IKEV2
             101 -> EConfigType.POLICYGROUP
             102 -> EConfigType.PROXYCHAIN
             else -> error("Unknown ConfigType: $ConfigType")

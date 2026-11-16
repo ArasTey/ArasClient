@@ -88,6 +88,8 @@ class ServerUiState(
     aetherListenPort: String = "",
     aetherCommand: String = "",
     mieruListenPort: String = "",
+    ikev2LocalId: String = "",
+    ikev2RemoteId: String = "",
     aetherPsiphon: String = "off",
     aetherPsiphonMode: String = "auto",
     aetherPsiphonCdnIps: String = "",
@@ -188,6 +190,8 @@ class ServerUiState(
     var aetherListenPort by mutableStateOf(aetherListenPort)
     var aetherCommand by mutableStateOf(aetherCommand)
     var mieruListenPort by mutableStateOf(mieruListenPort)
+    var ikev2LocalId by mutableStateOf(ikev2LocalId)
+    var ikev2RemoteId by mutableStateOf(ikev2RemoteId)
     var aetherPsiphon by mutableStateOf(aetherPsiphon)
     var aetherPsiphonMode by mutableStateOf(aetherPsiphonMode)
     var aetherPsiphonCdnIps by mutableStateOf(aetherPsiphonCdnIps)
@@ -228,6 +232,9 @@ class ServerUiState(
         val isWireguard = configType == EConfigType.WIREGUARD
         val isAmneziawg = configType == EConfigType.AMNEZIAWG
         val isHysteria2 = configType == EConfigType.HYSTERIA2
+        // An IKEv2 profile authenticates with its username/password pair and keeps
+        // its identities in their own fields.
+        val isIkev2 = configType == EConfigType.IKEV2
         // A Psiphon or Tor profile is the carrier alone: it names no server of its
         // own, and its carrier runs in only mode whatever the other fields say.
         val isCarrierOnly = configType.isCarrierOnly
@@ -248,7 +255,7 @@ class ServerUiState(
                 else -> null
             },
             flow = if (isVless) flow else null,
-            username = if (isSocksOrHttp) username else null,
+            username = if (isSocksOrHttp || isIkev2) username else null,
             secretKey = if (isWireguard || isAmneziawg) secretKey else null,
             publicKey = when {
                 isWireguard || isAmneziawg -> publicKey
@@ -312,6 +319,8 @@ class ServerUiState(
             aetherListenPort = aetherListenPort.nullIfBlank(),
             aetherCommand = aetherCommand.nullIfBlank(),
             mieruListenPort = mieruListenPort.nullIfBlank(),
+            ikev2LocalId = if (isIkev2) ikev2LocalId.nullIfBlank() else null,
+            ikev2RemoteId = if (isIkev2) ikev2RemoteId.nullIfBlank() else null,
             aetherPsiphon = when {
                 configType == EConfigType.PSIPHON -> AetherPsiphon.ONLY.type
                 configType == EConfigType.TOR -> null
@@ -446,6 +455,8 @@ class ServerUiState(
                 aetherListenPort = initialConfig.aetherListenPort ?: "",
                 aetherCommand = initialConfig.aetherCommand ?: "",
                 mieruListenPort = initialConfig.mieruListenPort ?: "",
+                ikev2LocalId = initialConfig.ikev2LocalId ?: "",
+                ikev2RemoteId = initialConfig.ikev2RemoteId ?: "",
                 aetherPsiphon = initialConfig.aetherPsiphon ?: "off",
                 aetherPsiphonMode = initialConfig.aetherPsiphonMode ?: "auto",
                 aetherPsiphonCdnIps = initialConfig.aetherPsiphonCdnIps ?: "",

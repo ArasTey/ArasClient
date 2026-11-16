@@ -7,6 +7,7 @@ import com.aras.client.core.CoreConfigManager
 import com.aras.client.core.CoreNativeManager
 import com.aras.client.core.CoreServiceManager
 import com.aras.client.core.HelperProcessSupport
+import com.aras.client.core.IkeV2Manager
 import com.aras.client.dto.RealPingEvent
 import com.aras.client.enums.EConfigType
 import com.aras.client.extension.isComplexType
@@ -133,6 +134,15 @@ class RealPingWorkerService(
         val retFailure = PingResult(-1L)
 
         val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
+        // IKEv2 has no core outbound to probe: without a live platform session the
+        // only thing a probe could measure is the OS direct route, and presenting
+        // that as the gateway's delay would be wrong. While the session is up, the
+        // probe's direct traffic rides the tunnel and reads the real RTT.
+        if (config.configType == EConfigType.IKEV2 &&
+            !(guid == MmkvManager.getSelectServer() && IkeV2Manager.isActive())
+        ) {
+            return retFailure
+        }
         // The profile the tunnel is running right now is measured through that tunnel —
         // the same instance and endpoints the bottom bar uses, so the card and the bar
         // cannot disagree. The fresh instance the probe builds keeps only the outbounds,
@@ -224,6 +234,7 @@ class RealPingWorkerService(
             || config.configType == EConfigType.MASQUE
             || config.configType == EConfigType.AETHER
             || config.configType == EConfigType.MIERU
+            || config.configType == EConfigType.IKEV2
             || config.configType.isCarrierOnly
             || config.alpn?.split(',')?.all { it.trim().startsWith("h3") } == true
         ) {

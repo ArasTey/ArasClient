@@ -96,10 +96,16 @@ fun SubscriptionInfoBar(
     val current = sub ?: return
 
     val hasInfo = showInfo && (current.trafficTotal > 0 || current.expireAt > 0)
-    val hasAnnouncement = current.announcement?.isNotBlank() == true
+    // Panel subs carry the volume/expiry headers together with profile-title but
+    // often no announce header at all. The banner is the only place either text is
+    // shown, so the creator message alone has to be enough to raise it.
+    val hasAnnouncement = current.announcement?.isNotBlank() == true ||
+            current.creatorMessage?.isNotBlank() == true
+    val creatorMessage = current.creatorMessage?.takeIf { it.isNotBlank() }
     val announcement = current.announcement?.takeIf {
         showAnnouncement && it.isNotBlank()
     }
+    val bannerText = announcement ?: creatorMessage?.takeIf { showAnnouncement }
     // The panel's links; the subscription URL answers with the panel's information
     // page, so it is the fallback target of the page button.
     val supportUrl = current.supportUrl?.takeIf { Utils.isSafeLink(it) }
@@ -138,11 +144,19 @@ fun SubscriptionInfoBar(
                 ),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            AnimatedVisibility(visible = announcement != null) {
-                announcement?.let { text -> AnnouncementBanner(text, current.creatorMessage) }
+            AnimatedVisibility(visible = bannerText != null) {
+                bannerText?.let { text ->
+                    // The subtitle only makes sense when the banner headline is the
+                    // announcement; a banner raised by the creator message alone
+                    // would otherwise repeat itself.
+                    AnnouncementBanner(
+                        text = text,
+                        creatorMessage = if (text == announcement) creatorMessage else null
+                    )
+                }
             }
             if (hasInfo) TrafficExpiryBar(current)
-            if (announcement != null || hasInfo) {
+            if (bannerText != null || hasInfo) {
                 Spacer(
                     Modifier
                         .fillMaxWidth()

@@ -283,6 +283,15 @@
     <string name="server_lab_carrier_port_custom">Custom port</string>
     <string name="server_lab_carrier_port_auto_hint">A free port (%1$s) is picked when you save, away from every other listener.</string>
     <string name="server_lab_psiphon_note">Runs Psiphon on its own, without the Aether tunnel. The app dials Psiphon locally, so no server address is needed; the region sets the country it exits from.</string>
+    <string name="server_lab_ikev2_username">Username</string>
+    <string name="server_lab_ikev2_password">Password</string>
+    <string name="server_lab_ikev2_local_id">Local identity (sent to the server; blank = username)</string>
+    <string name="server_lab_ikev2_remote_id">Server identity to expect (blank = gateway address)</string>
+    <string name="server_lab_ikev2_note">Connects with Android\u2019s own IKEv2 engine (Android 10+). The tunnel replaces the app\u2019s other VPN connection while it is up.</string>
+    <string name="server_lab_ikev2_no_host">Enter the VPN gateway address</string>
+    <string name="toast_ikev2_requires_android10">IKEv2 needs Android 10 or newer</string>
+    <string name="toast_ikev2_vpn_mode_required">IKEv2 only works in VPN mode — switch the service mode in settings first</string>
+    <string name="toast_ikev2_consent_needed">Open the app and connect once to grant IKEv2 permission</string>
     <string name="server_lab_tor_note">Runs Tor on its own, without the Aether tunnel. The app dials Tor locally, so no server address is needed. The core has no option to pick Tor\'s exit country; Psiphon is the one for choosing a country. Bridges help where Tor is blocked.</string>
     <string name="no_editor_for_protocol">%1$s configs are import-only and cannot be edited here. Use Share full content to view it.</string>
     <string name="sub_setting_announcement">Announcement</string>

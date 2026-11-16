@@ -684,6 +684,15 @@
     <string name="server_lab_carrier_port_custom">پورت دلخواه</string>
     <string name="server_lab_carrier_port_auto_hint">در زمان ذخیره یک پورت آزاد (‏%1$s) انتخاب می‌شود که با شنونده‌های دیگر تداخل نداشته باشد.</string>
     <string name="server_lab_psiphon_note">سایفون را به‌تنهایی و بدون تونل Aether اجرا می‌کند. برنامه سایفون را به‌صورت محلی صدا می‌زند، پس نشانی سرور لازم نیست؛ منطقه، کشور خروج را تعیین می‌کند.</string>
+    <string name="server_lab_ikev2_username">نام کاربری</string>
+    <string name="server_lab_ikev2_password">گذرواژه</string>
+    <string name="server_lab_ikev2_local_id">شناسهٔ محلی (برای سرور فرستاده می‌شود؛ خالی = نام کاربری)</string>
+    <string name="server_lab_ikev2_remote_id">شناسهٔ مورد انتظار سرور (خالی = نشانی گیت‌وی)</string>
+    <string name="server_lab_ikev2_note">با موتور IKEv2 خود اندروید وصل می‌شود (اندروید ۱۰ به بالا). تا وقتی فعال است، جای اتصال VPN دیگر برنامه را می‌گیرد.</string>
+    <string name="server_lab_ikev2_no_host">نشانی گیت‌وی VPN را وارد کنید</string>
+    <string name="toast_ikev2_requires_android10">IKEv2 به اندروید ۱۰ یا جدیدتر نیاز دارد</string>
+    <string name="toast_ikev2_vpn_mode_required">IKEv2 فقط در حالت VPN کار می‌کند — ابتدا در تنظیمات حالت سرویس را عوض کنید</string>
+    <string name="toast_ikev2_consent_needed">برای اجازهٔ IKEv2 یک‌بار از داخل برنامه وصل شوید</string>
     <string name="server_lab_tor_note">تور را به‌تنهایی و بدون تونل Aether اجرا می‌کند. برنامه تور را به‌صورت محلی صدا می‌زند، پس نشانی سرور لازم نیست. هسته گزینه‌ای برای انتخاب کشور خروج تور ندارد؛ برای انتخاب کشور از سایفون استفاده کنید. پل‌ها جایی که تور مسدود است کمک می‌کنند.</string>
     <string name="server_lab_aether_psiphon">سایفون</string>
     <string name="server_lab_aether_psiphon_mode">حالت سایفون</string>

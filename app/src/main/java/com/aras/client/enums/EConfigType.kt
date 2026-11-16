@@ -31,6 +31,9 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
     // its own and serves it on its loopback listener, which the app dials.
     PSIPHON(16, AppConfig.PSIPHON),
     TOR(17, AppConfig.TOR),
+    // IKEv2/IPsec: connects through the platform's Ikev2VpnProfile, not through the
+    // bundled Xray core. Its connect path and delay test are special-cased.
+    IKEV2(18, AppConfig.IKEV2),
     POLICYGROUP(101, AppConfig.CUSTOM),
     PROXYCHAIN(102, AppConfig.CUSTOM);
 

@@ -112,6 +112,8 @@ object AppConfig {
      * state SystemUI last stored, which survives the daemon that set it.
      */
     const val PREF_SESSION_RUNNING = "pref_session_running"
+    /** Marks that the running session is a platform IKEv2 tunnel, not the Xray core. */
+    const val PREF_IKEV2_SESSION_RUNNING = "pref_ikev2_session_running"
     const val PREF_ARASC_PROTECTED_GUIDS = "pref_arasc_protected_guids"
     const val PREF_SHOW_SUB_INFO = "pref_show_sub_info"
     const val PREF_SHOW_SUB_ANNOUNCEMENT = "pref_show_sub_announcement"
@@ -138,6 +140,13 @@ object AppConfig {
     const val BROADCAST_ACTION_SERVICE = "$ANG_PACKAGE.action.service"
     const val BROADCAST_ACTION_ACTIVITY = "$ANG_PACKAGE.action.activity"
     const val BROADCAST_ACTION_WIDGET_CLICK = "$ANG_PACKAGE.action.widget.click"
+
+    /**
+     * The only non-platform intent the exported IkeV2Service accepts: the service is
+     * reachable by other apps because the platform delivers VPN events to it, so the
+     * app's own start intents carry this action and anything else is ignored.
+     */
+    const val ACTION_IKEV2_SERVICE_START = "$ANG_PACKAGE.action.ikev2.start"
 
     /** Tasker extras. */
     const val TASKER_EXTRA_BUNDLE = "com.twofortyfouram.locale.intent.extra.BUNDLE"
@@ -274,6 +283,9 @@ object AppConfig {
     // loopback listener.
     const val PSIPHON = "psiphon://"
     const val TOR = "tor://"
+    // IKEv2 (IPsec) via the platform's own VPN engine: the app never runs IKE itself,
+    // it provisions an Ikev2VpnProfile and the system builds the tunnel.
+    const val IKEV2 = "ikev2://"
     const val ARASFMTS = "xrayn://"
 
     /** Where the aether core is published; the app fetches its own Android build from here. */

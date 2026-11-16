@@ -135,6 +135,12 @@ data class ProfileItem(
 
     // Mieru: the loopback port its client listens on, when not the default.
     var mieruListenPort: String? = null,
+
+    // IKEv2 identities. The local id is what the profile presents to the server (the
+    // platform "identity"); the remote id, when set, pins the server certificate's
+    // expected identity. Username/password auth reuses the username/password fields.
+    var ikev2LocalId: String? = null,
+    var ikev2RemoteId: String? = null,
     /** A command line used in place of the settings. */
     var aetherCommand: String? = null,
     @Deprecated("Use pinnedCA256")
