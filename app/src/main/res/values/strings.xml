@@ -287,6 +287,11 @@
     <string name="server_lab_ikev2_password">Password</string>
     <string name="server_lab_ikev2_local_id">Local identity (sent to the server; blank = username)</string>
     <string name="server_lab_ikev2_remote_id">Server identity to expect (blank = gateway address)</string>
+    <string name="server_lab_ikev2_ca">CA certificate (PEM or DER)</string>
+    <string name="server_lab_ikev2_ca_none">No file chosen — system certificate authorities are trusted</string>
+    <string name="server_lab_ikev2_ca_choose">Choose file</string>
+    <string name="server_lab_ikev2_ca_clear">Clear</string>
+    <string name="toast_ikev2_ca_invalid">That file is not a valid CA certificate</string>
     <string name="server_lab_ikev2_note">Connects with Android\u2019s own IKEv2 engine (Android 10+). The tunnel replaces the app\u2019s other VPN connection while it is up.</string>
     <string name="server_lab_ikev2_no_host">Enter the VPN gateway address</string>
     <string name="toast_ikev2_requires_android10">IKEv2 needs Android 10 or newer</string>
@@ -324,6 +329,7 @@
     <string name="export_note_hint">Shown to whoever imports this file — e.g. contact, rules, notes</string>
     <string name="arasc_note_title">Message from exporter</string>
 
+    <string name="sub_traffic_unlimited">Unlimited</string>
     <string name="title_pref_show_sub_info">Show subscription traffic &amp; expiry</string>
     <string name="summary_pref_show_sub_info">Read traffic and expiry time from the subscription link and show them above the configs (like v2Box)</string>
     <string name="title_pref_show_sub_announcement">Show subscription announcements</string>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">ArasClient</string>
+    <string name="sub_traffic_unlimited">Không giới hạn</string>
     <string name="app_widget_name">Kết nối ngay</string>
     <string name="app_tile_name">Kết nối ngay</string>
     <string name="app_tile_first_use">Vui lòng thêm một cấu hình vào ArasClient để sử dụng!</string>

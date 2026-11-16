@@ -43,6 +43,7 @@ object MmkvManager {
     private const val ID_PROFILE_FULL_CONFIG = "PROFILE_FULL_CONFIG"
     private const val ID_SERVER_RAW = "SERVER_RAW"
     private const val ID_SERVER_AFF = "SERVER_AFF"
+    private const val ID_SERVER_LAST_DELAY = "SERVER_LAST_DELAY"
     private const val ID_SUB = "SUB"
     private const val ID_ASSET = "ASSET"
     private const val ID_SETTING = "SETTING"
@@ -74,6 +75,7 @@ object MmkvManager {
     private val profileFullStorage by lazy { MMKV.mmkvWithID(ID_PROFILE_FULL_CONFIG, MMKV.MULTI_PROCESS_MODE) }
     private val serverRawStorage by lazy { MMKV.mmkvWithID(ID_SERVER_RAW, MMKV.MULTI_PROCESS_MODE) }
     private val serverAffStorage by lazy { MMKV.mmkvWithID(ID_SERVER_AFF, MMKV.MULTI_PROCESS_MODE) }
+    private val serverLastDelayStorage by lazy { MMKV.mmkvWithID(ID_SERVER_LAST_DELAY, MMKV.MULTI_PROCESS_MODE) }
     private val subStorage by lazy { MMKV.mmkvWithID(ID_SUB, MMKV.MULTI_PROCESS_MODE) }
     private val assetStorage by lazy { MMKV.mmkvWithID(ID_ASSET, MMKV.MULTI_PROCESS_MODE) }
     private val settingsStorage by lazy { MMKV.mmkvWithID(ID_SETTING, MMKV.MULTI_PROCESS_MODE) }
@@ -521,6 +523,20 @@ object MmkvManager {
         aff.countryTestedAt = 0L
         serverAffStorage.encode(guid, JsonUtil.toJson(aff))
     }
+
+    /**
+     * The last delay a profile actually measured. Lives in its own storage on
+     * purpose: clearAllTestDelayResults wipes SERVER_AFF before every probe, and
+     * the test worker's process may be killed between rounds, so an in-memory
+     * memo cannot carry a result across them.
+     */
+    fun encodeServerLastMeasuredDelay(guid: String, delayMillis: Long) {
+        if (guid.isBlank() || delayMillis <= 0) return
+        serverLastDelayStorage.encode(guid, delayMillis)
+    }
+
+    fun decodeServerLastMeasuredDelay(guid: String): Long =
+        if (guid.isBlank()) -1L else serverLastDelayStorage.decodeLong(guid, -1L)
 
     /**
      * Clears all test delay results.

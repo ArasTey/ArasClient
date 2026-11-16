@@ -141,6 +141,11 @@ data class ProfileItem(
     // expected identity. Username/password auth reuses the username/password fields.
     var ikev2LocalId: String? = null,
     var ikev2RemoteId: String? = null,
+    // Auth mode the gateway expects: null/"eap" = platform EAP-MSCHAPv2, "psk" = pre-shared key.
+    var ikev2AuthMode: String? = null,
+    // The gateway's CA, base64 DER. Given to the platform IKE engine so a gateway
+    // with a private certificate chain can prove its identity; blank = system trust.
+    var ikev2CaCert: String? = null,
     /** A command line used in place of the settings. */
     var aetherCommand: String? = null,
     @Deprecated("Use pinnedCA256")

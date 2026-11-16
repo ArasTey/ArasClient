@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.dto.entities.SubscriptionItem
@@ -72,10 +76,23 @@ fun SubscriptionInfoBar(
     val showInfo = MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true)
     // Shown by default and switchable in the bar itself: it is the subscription's
     // own word to the user, not something to keep hidden behind a settings screen.
-    var showAnnouncement by remember(groupId) {
+    // Re-read on every resume: the same MMKV key is also edited in Settings and
+    // the sub settings dialog, and this bar has no other way to hear about it.
+    var showAnnouncement by remember {
         mutableStateOf(
             MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
         )
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                showAnnouncement =
+                    MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     var sub by remember(groupId) { mutableStateOf<SubscriptionItem?>(null) }
@@ -87,6 +104,10 @@ fun SubscriptionInfoBar(
             while (true) {
                 delay(5000)
                 sub = withContext(Dispatchers.IO) { MmkvManager.decodeSubscription(groupId) }
+                // Other pager pages toggle the same MMKV key without this activity
+                // ever pausing, so the safety-net poll re-reads it too.
+                showAnnouncement =
+                    MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_ANNOUNCEMENT, true)
             }
         }
         com.aras.client.util.SubscriptionUpdateNotifier.flow.collect {
@@ -95,7 +116,10 @@ fun SubscriptionInfoBar(
     }
     val current = sub ?: return
 
-    val hasInfo = showInfo && (current.trafficTotal > 0 || current.expireAt > 0)
+    // Panels that do not cap volume send total=0; the used amount alone is still
+    // worth showing, as "used · Unlimited".
+    val hasInfo = showInfo &&
+            (current.trafficTotal > 0 || current.trafficUsed > 0 || current.expireAt > 0)
     // Panel subs carry the volume/expiry headers together with profile-title but
     // often no announce header at all. The banner is the only place either text is
     // shown, so the creator message alone has to be enough to raise it.
@@ -175,7 +199,10 @@ fun SubscriptionInfoBar(
                 onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
                 onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription },
                 hasAnnouncement = hasAnnouncement,
-                announcementVisible = announcement != null,
+                // The banner can be raised by the creator message alone, so the
+                // toggle must follow what is actually on screen, not the announce
+                // header — otherwise the icon reads "off" while the text is shown.
+                announcementVisible = bannerText != null,
                 onToggleAnnouncement = if (hasAnnouncement) {
                     {
                         showAnnouncement = !showAnnouncement
@@ -323,7 +350,7 @@ private fun TrafficExpiryBar(sub: SubscriptionItem) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = trafficSummary(sub),
+                text = trafficSummary(sub, stringResource(R.string.sub_traffic_unlimited)),
                 style = MaterialTheme.typography.labelMedium,
                 fontSize = 10.5.sp,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -436,9 +463,12 @@ private fun AnnouncementBanner(text: String, creatorMessage: String?) {
 
 // ------------------------------------------------------------------ helpers
 
-private fun trafficSummary(sub: SubscriptionItem): String {
-    if (sub.trafficTotal <= 0) return ""
+private fun trafficSummary(sub: SubscriptionItem, unlimitedLabel: String): String {
     val used = sub.trafficUsed.coerceAtLeast(0)
+    if (sub.trafficTotal <= 0) {
+        if (used <= 0) return ""
+        return "${formatBytes(used)} · $unlimitedLabel"
+    }
     return "${formatBytes(used)} / ${formatBytes(sub.trafficTotal)}"
 }
 

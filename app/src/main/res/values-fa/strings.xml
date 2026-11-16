@@ -688,6 +688,11 @@
     <string name="server_lab_ikev2_password">گذرواژه</string>
     <string name="server_lab_ikev2_local_id">شناسهٔ محلی (برای سرور فرستاده می‌شود؛ خالی = نام کاربری)</string>
     <string name="server_lab_ikev2_remote_id">شناسهٔ مورد انتظار سرور (خالی = نشانی گیت‌وی)</string>
+    <string name="server_lab_ikev2_ca">گواهی CA (PEM یا DER)</string>
+    <string name="server_lab_ikev2_ca_none">فایلی انتخاب نشده — به گواهی‌های سیستمی اعتماد می‌شود</string>
+    <string name="server_lab_ikev2_ca_choose">انتخاب فایل</string>
+    <string name="server_lab_ikev2_ca_clear">پاک کردن</string>
+    <string name="toast_ikev2_ca_invalid">این فایل یک گواهی CA معتبر نیست</string>
     <string name="server_lab_ikev2_note">با موتور IKEv2 خود اندروید وصل می‌شود (اندروید ۱۰ به بالا). تا وقتی فعال است، جای اتصال VPN دیگر برنامه را می‌گیرد.</string>
     <string name="server_lab_ikev2_no_host">نشانی گیت‌وی VPN را وارد کنید</string>
     <string name="toast_ikev2_requires_android10">IKEv2 به اندروید ۱۰ یا جدیدتر نیاز دارد</string>
@@ -799,6 +804,7 @@
     <string name="stats_total_all">مجموع ترافیک</string>
     <string name="sub_setting_announcement">اطلاعیه</string>
     <string name="sub_setting_creator_message">پیام سازنده</string>
+    <string name="sub_traffic_unlimited">نامحدود</string>
     <string name="title_pref_show_sub_info">نمایش ترافیک و انقضای اشتراک</string>
     <string name="summary_pref_show_sub_info">خواندن ترافیک و زمان انقضا از لینک اشتراک و نمایش آن بالای کانفیگ‌ها (مثل v2Box)</string>
     <string name="title_pref_show_sub_announcement">نمایش اطلاعیه‌های اشتراک</string>

@@ -100,13 +100,35 @@ class IkeV2Service : Service() {
             AppConfig.TAG,
             "IkeV2: VPN manager event cat=$category errorClass=$errorClass errorCode=$errorCode",
         )
-        val fatal = category == android.net.VpnManager.CATEGORY_EVENT_DEACTIVATED_BY_USER ||
-            (category == android.net.VpnManager.CATEGORY_EVENT_IKE_ERROR &&
-                errorClass == android.net.VpnManager.ERROR_CLASS_NOT_RECOVERABLE)
+        val fatal = when (category) {
+            // Starting a session while the previous runner is still being set up makes
+            // the platform report a deactivation that is not a real user action; the
+            // platform's own session state, not the event, says whether the tunnel died.
+            android.net.VpnManager.CATEGORY_EVENT_DEACTIVATED_BY_USER -> platformSessionDown()
+            android.net.VpnManager.CATEGORY_EVENT_IKE_ERROR ->
+                errorClass == android.net.VpnManager.ERROR_CLASS_NOT_RECOVERABLE
+            else -> false
+        }
         if (fatal) {
             stopSession()
         }
     }
+
+    /** The platform's view of the provisioned session, or null below API 33. */
+    private fun platformSessionState(): Int? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getSystemService(android.net.VpnManager::class.java)?.provisionedVpnProfileState?.state
+        } else {
+            null
+        }
+
+    private fun platformSessionUp(): Boolean {
+        val state = platformSessionState() ?: return false
+        return state == android.net.VpnProfileState.STATE_CONNECTED ||
+            state == android.net.VpnProfileState.STATE_CONNECTING
+    }
+
+    private fun platformSessionDown(): Boolean = !platformSessionUp()
 
     private fun startSession() {
         val guid = MmkvManager.getSelectServer()
@@ -114,6 +136,17 @@ class IkeV2Service : Service() {
         if (config == null || config.configType != EConfigType.IKEV2) {
             LogUtil.e(AppConfig.TAG, "IkeV2: Selected profile is not an IKEv2 config")
             stopSession()
+            return
+        }
+
+        // A second start while the platform session is already up or still coming up
+        // would tear down the live runner and rebuild it — which the platform reports
+        // as a user deactivation. Re-attach to the running session instead. The flag
+        // keeps a start right after our own stop (restart flow) going through.
+        if (IkeV2Manager.isActive() && platformSessionUp()) {
+            LogUtil.i(AppConfig.TAG, "IkeV2: Session already active; re-attaching")
+            showNotification(config.remarks)
+            notifyState(AppConfig.MSG_STATE_RUNNING)
             return
         }
 

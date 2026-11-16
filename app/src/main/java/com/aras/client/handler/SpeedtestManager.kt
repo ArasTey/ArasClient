@@ -7,6 +7,7 @@ import com.aras.client.util.HttpUtil
 import com.aras.client.util.JsonUtil
 import com.aras.client.util.LogUtil
 import java.io.IOException
+import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.UnknownHostException
@@ -40,6 +41,42 @@ object SpeedtestManager {
             LogUtil.e(AppConfig.TAG, "socketConnectTime IOException: ${e.message}")
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to establish socket connection to $url:$port", e)
+        } finally {
+            socket?.let { s ->
+                try {
+                    if (!s.isClosed) {
+                        s.close()
+                    }
+                } catch (closeEx: IOException) {
+                }
+            }
+        }
+        return -1
+    }
+
+    /**
+     * Time to the first answer of a TCP connect — success or refusal alike. The RST
+     * that rejects an unreachable door travels the same network path as any packet,
+     * so the elapsed time of a fast refusal is a genuine round trip to the host; only
+     * a silent (timeout) path has nothing honest to report.
+     */
+    fun socketRoundTripTime(url: String, port: Int, timeoutMs: Int = 1000): Long {
+        var socket: Socket? = null
+        val start = System.currentTimeMillis()
+        try {
+            socket = Socket()
+            socket.connect(InetSocketAddress(url, port), timeoutMs)
+            return System.currentTimeMillis() - start
+        } catch (e: ConnectException) {
+            val elapsed = System.currentTimeMillis() - start
+            if (elapsed < timeoutMs) return elapsed
+            LogUtil.e(AppConfig.TAG, "socketRoundTripTime refused late: ${e.message}")
+        } catch (e: UnknownHostException) {
+            LogUtil.e(AppConfig.TAG, "Unknown host: $url", e)
+        } catch (e: IOException) {
+            LogUtil.e(AppConfig.TAG, "socketRoundTripTime IOException: ${e.message}")
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to measure round trip to $url:$port", e)
         } finally {
             socket?.let { s ->
                 try {

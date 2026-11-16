@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">ArasClient</string>
+    <string name="sub_traffic_unlimited">Безлимит</string>
     <string name="app_widget_name">ArasClient</string>
     <string name="app_tile_name">ArasClient</string>
     <string name="app_tile_first_use">Добавьте профиль в приложении перед использованием этой функции.</string>

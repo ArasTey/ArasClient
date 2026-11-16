@@ -90,6 +90,7 @@ class ServerUiState(
     mieruListenPort: String = "",
     ikev2LocalId: String = "",
     ikev2RemoteId: String = "",
+    ikev2CaCert: String = "",
     aetherPsiphon: String = "off",
     aetherPsiphonMode: String = "auto",
     aetherPsiphonCdnIps: String = "",
@@ -192,6 +193,7 @@ class ServerUiState(
     var mieruListenPort by mutableStateOf(mieruListenPort)
     var ikev2LocalId by mutableStateOf(ikev2LocalId)
     var ikev2RemoteId by mutableStateOf(ikev2RemoteId)
+    var ikev2CaCert by mutableStateOf(ikev2CaCert)
     var aetherPsiphon by mutableStateOf(aetherPsiphon)
     var aetherPsiphonMode by mutableStateOf(aetherPsiphonMode)
     var aetherPsiphonCdnIps by mutableStateOf(aetherPsiphonCdnIps)
@@ -321,6 +323,7 @@ class ServerUiState(
             mieruListenPort = mieruListenPort.nullIfBlank(),
             ikev2LocalId = if (isIkev2) ikev2LocalId.nullIfBlank() else null,
             ikev2RemoteId = if (isIkev2) ikev2RemoteId.nullIfBlank() else null,
+            ikev2CaCert = if (isIkev2) ikev2CaCert.nullIfBlank() else null,
             aetherPsiphon = when {
                 configType == EConfigType.PSIPHON -> AetherPsiphon.ONLY.type
                 configType == EConfigType.TOR -> null
@@ -457,6 +460,7 @@ class ServerUiState(
                 mieruListenPort = initialConfig.mieruListenPort ?: "",
                 ikev2LocalId = initialConfig.ikev2LocalId ?: "",
                 ikev2RemoteId = initialConfig.ikev2RemoteId ?: "",
+                ikev2CaCert = initialConfig.ikev2CaCert ?: "",
                 aetherPsiphon = initialConfig.aetherPsiphon ?: "off",
                 aetherPsiphonMode = initialConfig.aetherPsiphonMode ?: "auto",
                 aetherPsiphonCdnIps = initialConfig.aetherPsiphonCdnIps ?: "",

@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Ikev2VpnProfile
 import android.net.VpnManager
+import android.net.Uri
 import android.os.Build
+import android.util.Base64
 import androidx.annotation.RequiresApi
 import com.aras.client.AppConfig
 import com.aras.client.R
@@ -12,6 +14,9 @@ import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.handler.MmkvManager
 import com.aras.client.util.LogUtil
 import com.aras.client.util.Utils
+import java.io.BufferedInputStream
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 
 /**
  * The platform half of an IKEv2 session. The tunnel itself is built by Android's own
@@ -46,11 +51,39 @@ object IkeV2Manager {
     fun buildProfile(config: ProfileItem): Ikev2VpnProfile {
         val builder = Ikev2VpnProfile.Builder(config.server.orEmpty(), localIdentity(config))
         val username = config.username?.takeIf { it.isNotBlank() }
-        if (username != null) {
-            builder.setAuthUsernamePassword(username, config.password.orEmpty(), null)
+        val ca = caCertificate(config)
+        if (config.ikev2AuthMode == "psk") {
+            builder.setAuthPsk(config.password.orEmpty().toByteArray(Charsets.UTF_8))
+        } else if (username != null) {
+            builder.setAuthUsernamePassword(username, config.password.orEmpty(), ca)
         }
         return builder.build()
     }
+
+    /** The profile's own trust anchor for the gateway certificate, or null for system trust. */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun caCertificate(config: ProfileItem): X509Certificate? =
+        config.ikev2CaCert?.takeIf { it.isNotBlank() }?.let { encoded ->
+            runCatching {
+                val der = Base64.decode(encoded, Base64.NO_WRAP)
+                CertificateFactory.getInstance("X.509")
+                    .generateCertificate(der.inputStream()) as X509Certificate
+            }.getOrNull()
+        }
+
+    /**
+     * Reads a PEM or DER certificate file picked by the user. Returns the certificate
+     * and its base64 DER form for storage, or null when the file is not a certificate.
+     */
+    fun readCaCertificate(context: Context, uri: Uri): Pair<X509Certificate, String>? =
+        runCatching {
+            val der = context.contentResolver.openInputStream(uri)?.use { input ->
+                val factory = CertificateFactory.getInstance("X.509")
+                // A PEM file can carry several blocks; the first certificate is the CA.
+                factory.generateCertificates(BufferedInputStream(input)).first() as X509Certificate
+            }
+            der?.let { it to Base64.encodeToString(it.encoded, Base64.NO_WRAP) }
+        }.getOrNull()
 
     /**
      * The consent intent when the profile has never been approved, or null when the

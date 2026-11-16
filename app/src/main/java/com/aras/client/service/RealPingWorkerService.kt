@@ -9,6 +9,7 @@ import com.aras.client.core.CoreServiceManager
 import com.aras.client.core.HelperProcessSupport
 import com.aras.client.core.IkeV2Manager
 import com.aras.client.dto.RealPingEvent
+import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.enums.EConfigType
 import com.aras.client.extension.isComplexType
 import com.aras.client.extension.isNotNullEmpty
@@ -130,18 +131,40 @@ class RealPingWorkerService(
         val ipAddress: String? = null,
     )
 
+    /**
+     * The last delay each IKEv2 profile actually measured. An IKEv2 profile without a
+     * live platform session cannot be probed at all — and the solo-test flow wipes the
+     * stored result before dispatching — so the probe reports this instead of a hollow
+     * -1 that makes a working profile look broken.
+     */
+    private val ikev2LastDelays = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    private fun rememberIkev2Delay(guid: String, config: ProfileItem, delayMillis: Long) {
+        if (config.configType == EConfigType.IKEV2 && delayMillis > 0) {
+            ikev2LastDelays[guid] = delayMillis
+            MmkvManager.encodeServerLastMeasuredDelay(guid, delayMillis)
+        }
+    }
+
     private suspend fun startRealPing(guid: String): PingResult {
         val retFailure = PingResult(-1L)
 
         val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
         // IKEv2 has no core outbound to probe: without a live platform session the
-        // only thing a probe could measure is the OS direct route, and presenting
-        // that as the gateway's delay would be wrong. While the session is up, the
-        // probe's direct traffic rides the tunnel and reads the real RTT.
+        // only measurable path is the gateway's plain TCP door, and when even that
+        // is filtered the honest answer is the last measured delay, not a -1 that
+        // would make a working profile look broken.
         if (config.configType == EConfigType.IKEV2 &&
             !(guid == MmkvManager.getSelectServer() && IkeV2Manager.isActive())
         ) {
-            return retFailure
+            val tcp = startTcping(guid)
+            val result = if (tcp != null && tcp.delayMillis >= 0) tcp
+                else PingResult(
+                    ikev2LastDelays[guid]
+                        ?: MmkvManager.decodeServerLastMeasuredDelay(guid)
+                )
+            rememberIkev2Delay(guid, config, result.delayMillis)
+            return result
         }
         // The profile the tunnel is running right now is measured through that tunnel —
         // the same instance and endpoints the bottom bar uses, so the card and the bar
@@ -149,7 +172,10 @@ class RealPingWorkerService(
         // which is a different set of decisions than the live tunnel makes.
         if (guid == MmkvManager.getSelectServer()) {
             val live = CoreServiceManager.measureLiveTunnelDelay()
-            if (live >= 0) return PingResult(live)
+            if (live >= 0) {
+                rememberIkev2Delay(guid, config, live)
+                return PingResult(live)
+            }
         }
         val chain = CoreConfigContextBuilder.resolveChainProfiles(context, guid)
 
@@ -179,12 +205,17 @@ class RealPingWorkerService(
             }
             try {
                 val first = measureOnce(configResult.content)
-                if (first.delayMillis >= 0 || !helperChain) return@run first
+                if (first.delayMillis >= 0 || !helperChain) {
+                    rememberIkev2Delay(guid, config, first.delayMillis)
+                    return@run first
+                }
                 // A helper that has just come up can lose the first probe while its
                 // listener settles; a second try is what turns a cold -1 into a delay.
                 delay(400L)
                 val second = measureOnce(configResult.content)
-                if (second.delayMillis >= 0) second else first
+                val picked = if (second.delayMillis >= 0) second else first
+                rememberIkev2Delay(guid, config, picked.delayMillis)
+                picked
             } finally {
                 HelperProcessSupport.release(helpers)
             }
@@ -234,7 +265,6 @@ class RealPingWorkerService(
             || config.configType == EConfigType.MASQUE
             || config.configType == EConfigType.AETHER
             || config.configType == EConfigType.MIERU
-            || config.configType == EConfigType.IKEV2
             || config.configType.isCarrierOnly
             || config.alpn?.split(',')?.all { it.trim().startsWith("h3") } == true
         ) {
@@ -242,7 +272,20 @@ class RealPingWorkerService(
         }
 
         val url = config.server.orEmpty()
-        val port = config.serverPort?.toIntOrNull() ?: return null
-        return PingResult(SpeedtestManager.socketConnectTime(url, port, 1000))
+        // IKEv2 speaks UDP only (serverPort is the cosmetic "500" of IKE), so no TCP
+        // door exists to open — but the refusal RST to TCP 500 travels the same path
+        // as any IKE packet, which makes its timing a genuine round trip to the
+        // gateway rather than a hollow failure.
+        val port = if (config.configType == EConfigType.IKEV2) {
+            500
+        } else {
+            config.serverPort?.toIntOrNull() ?: return null
+        }
+        val connectTime = if (config.configType == EConfigType.IKEV2) {
+            SpeedtestManager.socketRoundTripTime(url, port, 1000)
+        } else {
+            SpeedtestManager.socketConnectTime(url, port, 1000)
+        }
+        return PingResult(connectTime)
     }
 }

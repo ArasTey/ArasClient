@@ -45,6 +45,10 @@ object Ikev2Fmt : FmtBase() {
         config.ikev2LocalId = query["identity"]?.trim()?.ifEmpty { null }
             ?: config.username?.takeIf { it.isNotBlank() && Utils.isDomainName(it) && !Utils.isPureIpAddress(it) }
         config.ikev2RemoteId = query["remote_id"]?.trim()?.ifEmpty { null }
+        config.ikev2AuthMode = query["auth"]?.trim()?.lowercase()?.takeIf { it == "psk" }
+        // A private CA travels as base64 DER. Whitespace or padding quirks from
+        // hand-written links are tolerated by the strict-decoder's input filter.
+        config.ikev2CaCert = query["ca"]?.trim()?.replace("\n", "")?.ifEmpty { null }
         config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty())
             .ifEmpty { defaultRemarks(config) }
         return config
@@ -54,6 +58,8 @@ object Ikev2Fmt : FmtBase() {
         val query = linkedMapOf<String, String>()
         config.ikev2LocalId?.takeIf { it.isNotBlank() }?.let { query["identity"] = it }
         config.ikev2RemoteId?.takeIf { it.isNotBlank() }?.let { query["remote_id"] = it }
+        if (config.ikev2AuthMode == "psk") query["auth"] = "psk"
+        config.ikev2CaCert?.takeIf { it.isNotBlank() }?.let { query["ca"] = it }
 
         val userInfo = when {
             config.username.isNullOrBlank() && config.password.isNullOrBlank() -> null

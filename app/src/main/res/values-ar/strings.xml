@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">ArasClient</string>
+    <string name="sub_traffic_unlimited">غير محدود</string>
     <string name="app_widget_name">اتصال / قطع</string>
     <string name="app_tile_name">آراس: اتصال / قطع</string>
     <string name="app_tile_first_use">أول استخدام لهذه الميزة، يرجى استخدام التطبيق لإضافة خادم</string>
