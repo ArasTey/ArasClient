@@ -210,6 +210,7 @@ jobs:
         env:
           CORE_REF: ${{ steps.refs.outputs.core_ref }}
           BINDINGS_REF_OUT: ${{ steps.refs.outputs.bindings_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Both repositories are public and are cloned by the build. Probing them
@@ -230,13 +231,30 @@ jobs:
             if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
               # ls-remote never lists bare commits, so ask the API whether the
               # object exists; otherwise the failure surfaces at core checkout,
-              # after the toolchain is already installed.
-              if code=$(curl -fsSL -o /dev/null -w '%{http_code}' "https://api.github.com/repos/$repo/commits/$ref") && [ "$code" = "200" ]; then
-                echo "ok (commit): $repo@$ref"
-                return 0
-              fi
-              echo "::error::$repo has no commit $ref"
-              exit 1
+              # after the toolchain is already installed. The call is made with
+              # the job token and a 403 is retried: unauthenticated requests get
+              # rate-limited all day long, and a 403 is not a missing commit —
+              # that misread failed run 45040752080 on a perfectly healthy SHA.
+              code=""
+              for attempt in 1 2 3 4; do
+                code=$(curl -sS -o /dev/null -w '%{http_code}' \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  "https://api.github.com/repos/$repo/commits/$ref" 2>/dev/null) || code=000
+                if [ "$code" = "200" ]; then
+                  echo "ok (commit): $repo@$ref"
+                  return 0
+                fi
+                # 404 and 422 both mean the object is genuinely absent (422 is
+                # what the API answers for a commit that does not exist).
+                if [ "$code" = "404" ] || [ "$code" = "422" ]; then
+                  echo "::error::$repo has no commit $ref"
+                  exit 1
+                fi
+                sleep $((attempt * 5))
+              done
+              echo "::warning::could not verify $repo@$ref (GitHub API answered ${code:-nothing} after retries); leaving the check to the core checkout"
+              return 0
             fi
             echo "::error::$repo has no tag or branch named '$ref'. Publish it (git tag -a \"$ref\" && git push --tags) or fix the pin in this workflow's env block."
             exit 1
