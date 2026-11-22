@@ -723,8 +723,8 @@ class MainViewModel(
 
     fun removeSubscription(subId: String) {
         if (subId.isEmpty() || FreeSubManager.isFreeSubId(subId)) return
-        if (uiState.value.isTesting || (uiState.value.isRunning &&
-                uiState.value.selectedGuid in MmkvManager.decodeServerList(subId))) {
+        if (uiState.value.isRunning &&
+                uiState.value.selectedGuid in MmkvManager.decodeServerList(subId)) {
             toast(R.string.toast_action_not_allowed)
             return
         }
@@ -751,10 +751,6 @@ class MainViewModel(
     }
 
     fun importConfigViaSub(subId: String = uiState.value.selectedGroupId) {
-        if (_uiState.value.isTesting) {
-            toast(R.string.toast_action_not_allowed)
-            return
-        }
         launchLoading {
             withContext(ioDispatcher) {
                 try {
@@ -1119,6 +1115,7 @@ class MainViewModel(
             it.copy(
                 isTesting = false,
                 testingGuids = emptySet(),
+                pingTargetGroupId = "",
                 requestServiceStart = false,
                 status = if (it.isRunning) MainStatus.Connected else MainStatus.Disconnected
             )
@@ -1172,6 +1169,7 @@ class MainViewModel(
             it.copy(
                 isTesting = true,
                 testingGuids = round.candidates.toSet(),
+                pingTargetGroupId = groupId,
                 status = MainStatus.Testing,
             )
         }
@@ -1348,6 +1346,12 @@ class MainViewModel(
                     it.copy(
                         isTesting = stillTesting,
                         testingGuids = (ongoing?.candidates?.toSet() ?: emptySet()) + soloTestGuids,
+                        pingTargetGroupId = when {
+                            ongoing != null -> ongoing.groupId
+                            stillTesting && round == null -> it.pingTargetGroupId
+                            stillTesting -> ""
+                            else -> ""
+                        },
                         status = when {
                             stillTesting -> MainStatus.Testing
                             it.isRunning -> MainStatus.Connected

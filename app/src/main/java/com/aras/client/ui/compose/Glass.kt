@@ -137,6 +137,24 @@ val LightGlassPalette = GlassPalette(
 
 val LocalGlassPalette = compositionLocalOf { DarkGlassPalette }
 
+/**
+ * Smart ping colour, shared by the server card chip and its gauge so both agree.
+ * The bands are the user's: 0-300 green, 300-600 pale green, 600-1000 yellow,
+ * 1000-1600 orange, 1600+ red, and a failed ping (-1) reads as a darker red than
+ * the slow-but-alive band so a dead server never masquerades as a merely laggy one.
+ */
+fun smartPingColor(delayMillis: Long, palette: GlassPalette): Color {
+    val dark = palette.isDark
+    return when {
+        delayMillis < 0L -> if (dark) Color(0xFFB23B36) else Color(0xFF7A1410)
+        delayMillis <= 300L -> palette.pingGood
+        delayMillis <= 600L -> if (dark) Color(0xFF9BE6B4) else Color(0xFF3F9D63)
+        delayMillis <= 1000L -> palette.pingMid
+        delayMillis <= 1600L -> if (dark) Color(0xFFF59E5B) else Color(0xFFC2681B)
+        else -> palette.pingBad
+    }
+}
+
 fun Modifier.glassPanel(
     palette: GlassPalette,
     shape: Shape = RoundedCornerShape(16.dp),

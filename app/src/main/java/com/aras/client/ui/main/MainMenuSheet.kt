@@ -57,6 +57,7 @@ enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRe
     UserAssets(R.drawable.ic_file_24dp, R.string.title_user_asset_setting),
     Export(R.drawable.ic_share_24dp, R.string.title_export),
     Settings(R.drawable.ic_settings_24dp, R.string.title_settings),
+    Theme(R.drawable.ic_theme_24dp, R.string.menu_tile_theme),
     Promotion(R.drawable.ic_promotion_24dp, R.string.title_pref_promotion),
     Logcat(R.drawable.ic_logcat_24dp, R.string.title_logcat),
     CheckUpdate(R.drawable.ic_check_update_24dp, R.string.update_check_for_update),
@@ -66,7 +67,6 @@ enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRe
 
 private data class MenuTileStyle(
     val destination: MainDestination,
-    val accent: Color,
     @StringRes val subtitleRes: Int,
 )
 
@@ -79,39 +79,32 @@ private data class MenuSection(
 
 @Composable
 private fun menuSections(): List<MenuSection> {
-    // Keep the hub in the app's blue/grey family: one accent for actions and a
-    // neutral ink for utilities, instead of a different hue per tile.
-    val palette = LocalGlassPalette.current
-    val accent = palette.accent
-    val neutral = palette.faint
-
-    fun item(destination: MainDestination, tint: Color, subtitleRes: Int) =
-        MenuTileStyle(destination, tint, subtitleRes)
+    fun item(destination: MainDestination, subtitleRes: Int) = MenuTileStyle(destination, subtitleRes)
 
     return listOf(
         MenuSection(
             R.string.menu_section_manage,
             listOf(
-                item(MainDestination.Subscriptions, accent, R.string.menu_sub_subscriptions),
-                item(MainDestination.PerAppProxy, accent, R.string.menu_sub_per_app),
-                item(MainDestination.Routing, accent, R.string.menu_sub_routing),
+                item(MainDestination.Subscriptions, R.string.menu_sub_subscriptions),
+                item(MainDestination.PerAppProxy, R.string.menu_sub_per_app),
+                item(MainDestination.Routing, R.string.menu_sub_routing),
             ),
             prominent = true
         ),
         MenuSection(
             R.string.menu_section_files_tools,
             listOf(
-                item(MainDestination.UserAssets, accent, R.string.menu_sub_assets),
-                item(MainDestination.Export, accent, R.string.menu_sub_export),
-                item(MainDestination.Settings, neutral, R.string.menu_sub_settings),
+                item(MainDestination.Theme, R.string.menu_sub_theme),
+                item(MainDestination.Settings, R.string.menu_sub_settings),
+                item(MainDestination.Export, R.string.menu_sub_export),
             )
         ),
         MenuSection(
             R.string.menu_section_system,
             listOf(
-                item(MainDestination.Logcat, neutral, R.string.menu_sub_logcat),
-                item(MainDestination.CheckUpdate, accent, R.string.menu_sub_check_update),
-                item(MainDestination.BackupRestore, accent, R.string.menu_sub_backup),
+                item(MainDestination.UserAssets, R.string.menu_sub_assets),
+                item(MainDestination.CheckUpdate, R.string.menu_sub_check_update),
+                item(MainDestination.BackupRestore, R.string.menu_sub_backup),
             )
         ),
     )
@@ -155,7 +148,7 @@ fun MainMenuSheet(
                 .fillMaxWidth()
                 // Cap the content so the sheet never needs internal scroll
                 // chasing; everything below scrolls inside this column.
-                .heightIn(max = 620.dp)
+                .heightIn(max = 760.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
         ) {
@@ -204,7 +197,6 @@ fun MainMenuSheet(
                             iconRes = item.destination.iconRes,
                             title = stringResource(item.destination.labelRes),
                             subtitle = stringResource(item.subtitleRes),
-                            accent = item.accent,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),
@@ -218,8 +210,15 @@ fun MainMenuSheet(
                 Spacer(Modifier.height(12.dp))
             }
 
-            Spacer(Modifier.height(6.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // Log is a utility, not a destination tile — one full-width bar.
+            WideActionRow(
+                iconRes = MainDestination.Logcat.iconRes,
+                label = stringResource(R.string.menu_log),
+                onClick = {
+                    onDismiss()
+                    onNavigate(MainDestination.Logcat)
+                }
+            )
             Spacer(Modifier.height(10.dp))
 
             // Contact & support
@@ -271,11 +270,12 @@ private fun MenuTileCard(
     @DrawableRes iconRes: Int,
     title: String,
     subtitle: String,
-    accent: Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val palette = LocalGlassPalette.current
+    // Every tile icon shares one accent so the hub reads as a single family.
+    val accent = palette.accent
     val tileFill = if (palette.isDark) Color(0x14FFFFFF) else Color(0xF2FFFFFF)
     val tileShape = RoundedCornerShape(18.dp)
     Column(
@@ -321,6 +321,42 @@ private fun MenuTileCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun WideActionRow(
+    @DrawableRes iconRes: Int,
+    label: String,
+    onClick: () -> Unit,
+) {
+    val palette = LocalGlassPalette.current
+    val fill = if (palette.isDark) Color(0x14FFFFFF) else Color(0xF2FFFFFF)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(fill)
+            .border(0.7.dp, palette.hairline, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = palette.accent,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

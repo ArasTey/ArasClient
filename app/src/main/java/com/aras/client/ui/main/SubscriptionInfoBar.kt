@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -42,13 +43,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aras.client.AppConfig
 import com.aras.client.R
 import com.aras.client.dto.entities.SubscriptionItem
 import com.aras.client.extension.withLatinDigits
 import com.aras.client.handler.MmkvManager
+import com.aras.client.ui.compose.CardCornerRadius
 import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.glassPanel
+import com.aras.client.util.JalaliDate
 import com.aras.client.util.Utils
 import java.time.Instant
 import java.time.ZoneId
@@ -63,16 +67,19 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SubscriptionInfoBar(
     groupId: String,
+    mainViewModel: MainViewModel,
     modifier: Modifier = Modifier,
     onEditSubscription: (() -> Unit)? = null,
     onUpdateSubscription: (() -> Unit)? = null,
     onPingSubscription: (() -> Unit)? = null,
+    onCancelPingSubscription: (() -> Unit)? = null,
     onSortSubscription: (() -> Unit)? = null,
     onRemoveSubscription: (() -> Unit)? = null,
     onCopySubscriptionUrl: (() -> Unit)? = null,
     isProtectedSubscription: Boolean = false,
 ) {
     if (groupId.isEmpty()) return
+    val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
     val showInfo = MmkvManager.decodeSettingsBool(AppConfig.PREF_SHOW_SUB_INFO, true)
     // Shown by default and switchable in the bar itself: it is the subscription's
     // own word to the user, not something to keep hidden behind a settings screen.
@@ -181,12 +188,7 @@ fun SubscriptionInfoBar(
             }
             if (hasInfo) TrafficExpiryBar(current)
             if (bannerText != null || hasInfo) {
-                Spacer(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(LocalGlassPalette.current.hairline)
-                )
+                Spacer(Modifier.fillMaxWidth().height(1.dp).background(LocalGlassPalette.current.hairline))
             }
             SubscriptionActions(
                 groupId = groupId,
@@ -195,6 +197,11 @@ fun SubscriptionInfoBar(
                 onEdit = onEditSubscription.takeUnless { isProtectedSubscription },
                 onUpdate = onUpdateSubscription,
                 onPing = onPingSubscription,
+                // The gauge turns into a stop button while its own round runs:
+                // a tap then cancels the ping instead of restarting it.
+                onCancelPing = onCancelPingSubscription,
+                pinging = onCancelPingSubscription != null &&
+                        uiState.pingTargetGroupId == groupId && uiState.isTesting,
                 onSort = onSortSubscription,
                 onRemove = onRemoveSubscription.takeUnless { isProtectedSubscription },
                 onCopy = onCopySubscriptionUrl.takeUnless { isProtectedSubscription },
@@ -212,10 +219,10 @@ fun SubscriptionInfoBar(
                         )
                     }
                 } else null,
-                // Without traffic/announcement the actions are the whole panel, so
-                // they collapse into a compact pill instead of spreading across a
-                // full-width empty slab.
-                modifier = if (framed) Modifier else Modifier.align(Alignment.CenterHorizontally),
+                // The actions always span the full width and spread evenly, so the
+                // gap between icons grows when there are few and tightens when
+                // there are many; the pill only differs in drawing its own chrome.
+                modifier = Modifier,
                 compact = !framed
             )
         }
@@ -230,6 +237,8 @@ private fun SubscriptionActions(
     onEdit: (() -> Unit)?,
     onUpdate: (() -> Unit)?,
     onPing: (() -> Unit)?,
+    onCancelPing: (() -> Unit)? = null,
+    pinging: Boolean = false,
     onSort: (() -> Unit)?,
     onRemove: (() -> Unit)?,
     onCopy: (() -> Unit)?,
@@ -249,19 +258,20 @@ private fun SubscriptionActions(
     val supportBlue = if (palette.isDark) Color(0xFF7FA8FF) else Color(0xFF2F6FE4)
     Row(
         modifier = modifier
+            .fillMaxWidth()
             .then(
                 if (compact) {
                     Modifier.glassPanel(
                         palette = palette,
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(CardCornerRadius),
                         fill = if (palette.isDark) Color(0x1FCFE9F5) else Color(0xC9F7FCFF),
                         borderColor = if (palette.isDark) Color(0x3DCFE9F5) else Color(0xE0FFFFFF)
                     ).padding(horizontal = 4.dp, vertical = 1.dp)
                 } else {
-                    Modifier.fillMaxWidth()
+                    Modifier
                 }
             ),
-        horizontalArrangement = if (compact) Arrangement.spacedBy(2.dp) else Arrangement.SpaceEvenly,
+        horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
         onEdit?.let {
@@ -271,7 +281,16 @@ private fun SubscriptionActions(
             SubBarAction(R.drawable.ic_check_update_24dp, R.string.sub_bar_update, tint = palette.accent, onClick = it)
         }
         onPing?.let {
-            SubBarAction(R.drawable.ic_speedtest_24dp, R.string.title_ping_selected_subscription, tint = pingAmber, onClick = it)
+            if (pinging && onCancelPing != null) {
+                SubBarAction(
+                    R.drawable.ic_stop_24dp,
+                    R.string.sub_bar_stop_ping,
+                    tint = palette.danger,
+                    onClick = onCancelPing,
+                )
+            } else {
+                SubBarAction(R.drawable.ic_speedtest_24dp, R.string.title_ping_selected_subscription, tint = pingAmber, onClick = it)
+            }
         }
         onSort?.let {
             SubBarAction(R.drawable.ic_outline_filter_alt_24, R.string.title_sort_by_test_results, tint = palette.accent, onClick = it)
@@ -336,6 +355,9 @@ private fun SubscriptionActions(
 @Composable
 private fun TrafficExpiryBar(sub: SubscriptionItem) {
     val palette = LocalGlassPalette.current
+    // The configuration locale, not Locale.getDefault(): a per-app language pick
+    // is what the user actually sees, and on older APIs it never reaches the VM default.
+    val appLocale = LocalConfiguration.current.locales.get(0) ?: Locale.getDefault()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -361,7 +383,7 @@ private fun TrafficExpiryBar(sub: SubscriptionItem) {
             if (sub.expireAt > 0) {
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = expiryLabel(sub.expireAt),
+                    text = expiryLabel(sub.expireAt, appLocale),
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 9.sp,
                     maxLines = 1,
@@ -484,15 +506,25 @@ private fun expireMillis(expireAt: Long): Long =
  * panel's own page, and how long is left. The year only shows when it is not
  * this one, which is what keeps the line short.
  */
-private fun expiryLabel(expireAt: Long, now: Long = System.currentTimeMillis()): String {
+private fun expiryLabel(
+    expireAt: Long,
+    locale: Locale,
+    now: Long = System.currentTimeMillis(),
+): String {
     val millis = expireMillis(expireAt)
     val zone = ZoneId.systemDefault()
     val expiry = Instant.ofEpochMilli(millis).atZone(zone)
     val today = Instant.ofEpochMilli(now).atZone(zone)
-    val pattern = if (expiry.year == today.year) "d MMM" else "d MMM yyyy"
-    val date = DateTimeFormatter.ofPattern(pattern, Locale.getDefault())
-        .format(expiry)
-        .withLatinDigits()
+    // A Persian UI reads its dates in the Solar Hijri (Shamsi) calendar; every
+    // other locale keeps the Gregorian formatter it already knows.
+    val date = if (locale.language == "fa") {
+        JalaliDate.formatShort(millis, now)
+    } else {
+        val pattern = if (expiry.year == today.year) "d MMM" else "d MMM yyyy"
+        DateTimeFormatter.ofPattern(pattern, locale)
+            .format(expiry)
+            .withLatinDigits()
+    }
     if (millis <= now) return date
     return "$date · ${expirySummary(millis, now)}"
 }

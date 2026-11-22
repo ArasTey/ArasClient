@@ -177,7 +177,6 @@
     <string name="title_pref_is_booted">开机时自动连接</string>
     <string name="summary_pref_is_booted">开机时自动连接选择的服务器，可能会不成功</string>
 
-
     <string name="subscription_updater_job_tips">任务将在后台运行，在通知中会显示进度信息</string>
     <string name="title_pref_auto_test_after_update_subscription">更新订阅后自动测试</string>
     <string name="summary_pref_auto_test_after_update_subscription">自动测试需要比较长的时间，开启后任务将在后台运行；不开启则在当前页面运行</string>
@@ -228,7 +227,6 @@
 
     <string name="title_pref_vpn_mtu">VPN MTU (默认 1500)</string>
 
-
     <string name="title_pref_domestic_dns">直连 DNS（可选）</string>
     <string name="summary_pref_domestic_dns" translatable="false">DNS</string>
 
@@ -265,12 +263,8 @@
     <string name="title_pref_confirm_remove">删除配置确认</string>
     <string name="summary_pref_confirm_remove">删除配置是否需要用户二次确认</string>
 
-
     <string name="title_pref_append_http_proxy">将 HTTP 代理添加到 VPN</string>
     <string name="summary_pref_append_http_proxy">浏览器和部分受支持的应用将直接使用 HTTP 代理，而不经过虚拟网卡（Android 10+）。</string>
-
-    <string name="title_pref_double_column_display">启用双列显示</string>
-    <string name="summary_pref_double_column_display">配置列表以双列显示，允许在屏幕上显示更多内容。</string>
 
     <string name="title_pref_group_all_display">显示“全部”组标签页</string>
     <string name="summary_pref_group_all_display">在一个标签页中汇总所有订阅组的配置。</string>
@@ -300,9 +294,6 @@
     <string name="title_mode_help">点此查看更多帮助</string>
     <string name="title_language">语言</string>
     <string name="title_ui_settings">用户界面设置</string>
-    <string name="title_pref_ui_mode_night">深色模式</string>
-    <string name="title_pref_dynamic_color">开启莫奈取色</string>
-    <string name="summary_pref_dynamic_color">仅在 Android 12+ 设备上工作</string>
     <string name="title_pref_use_hev_tunnel">启用 Hev TUN 功能</string>
     <string name="summary_pref_use_hev_tunnel">选择启用后 TUN 将使用 hev-socks5-tunnel 否则使用 xray-core</string>
     <string name="title_pref_hev_tunnel_loglevel">Hev TUN 日志级别</string>
@@ -472,12 +463,6 @@
         <item>禁用</item>
         <item>OkHttp</item>
         <item>WebView</item>
-    </string-array>
-
-    <string-array name="ui_mode_night">
-        <item>跟随系统</item>
-        <item>浅色</item>
-        <item>深色</item>
     </string-array>
 
     <string name="routing_preset_china_whitelist">绕过大陆 (Whitelist)</string>

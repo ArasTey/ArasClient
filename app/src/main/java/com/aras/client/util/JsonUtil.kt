@@ -86,7 +86,11 @@ object JsonUtil {
         if (src == null)
             return null
         try {
-            return JsonParser.parseString(src).getAsJsonObject()
+            // Panels send no headers at all, which arrives as the literal "null"; that
+            // is an absent value, not a parse failure, and getAsJsonObject would raise
+            // a stack trace on every update for it.
+            val element = JsonParser.parseString(src)
+            return if (element.isJsonObject) element.asJsonObject else null
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to parse JSON string", e)
             return null

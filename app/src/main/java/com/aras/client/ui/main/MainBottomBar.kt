@@ -46,6 +46,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aras.client.R
+import com.aras.client.ui.compose.CardCornerRadius
 import com.aras.client.ui.compose.GlassPalette
 import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.NeonConnectButton
@@ -97,23 +99,31 @@ fun MainBottomBar(
         label = "connectPulseAlpha"
     )
     // The bar carries its own type scale: a larger system font must not break
-    // the one-line layout of the name, address and traffic figures.
-    var titleSize by remember(displayText) { mutableStateOf(12.sp) }
+    // the one-line layout of the name, address and traffic figures. FittingBarText
+    // below owns the per-string shrink, so nothing here keeps a size state.
+
+    // The connect card must read as just another config card, so it takes the exact
+    // same fill token they do (surfaceContainerLow) rather than a hardcoded colour —
+    // that keeps it identical in light, dark AND dynamic (Material You) themes. The
+    // region beside/below it stays transparent so the Scaffold background shows through,
+    // and the list is clipped above the bar (see MainScreen) so nothing scrolls into it.
+    val panelFill = MaterialTheme.colorScheme.surfaceContainerLow
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .glassPanel(
                     palette = palette,
-                    shape = RoundedCornerShape(28.dp),
-                    fill = if (palette.isDark) Color(0xFA171F27) else Color(0xFDFEFFFF),
-                    borderColor = if (palette.isDark) Color(0x42FFFFFF) else Color(0xF2FFFFFF)
+                    shape = RoundedCornerShape(CardCornerRadius),
+                    fill = panelFill,
+                    borderColor = Color.Transparent,
+                    borderWidth = 0.dp
                 )
                 .clickable(onClick = { onAction(MainAction.TestCurrentServer) })
         ) {
@@ -153,20 +163,14 @@ fun MainBottomBar(
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
+                    FittingBarText(
                         text = displayText,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontSize = titleSize,
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                        onTextLayout = { layout ->
-                            if (layout.didOverflowWidth && titleSize.value > 9f) {
-                                titleSize = (titleSize.value - 0.5f).sp
-                            }
-                        },
+                        maxFontSize = 12f,
+                        minFontSize = 8f,
                         modifier = Modifier.semantics { contentDescription = displayText }
                     )
                     // Null requests the disconnected hint; empty explicitly hides the subtitle.
@@ -177,14 +181,12 @@ fun MainBottomBar(
                             if (subtitle.isNotEmpty()) {
                                 // The country takes the squeeze; the address is short
                                 // and must stay whole.
-                                Text(
+                                FittingBarText(
                                     text = subtitle,
                                     style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 10.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
+                                    maxFontSize = 10.5f,
+                                    minFontSize = 7.5f,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
@@ -201,15 +203,14 @@ fun MainBottomBar(
                                 }
                                 // Language-neutral, so it is pinned LTR: inside the RTL
                                 // bar the address would otherwise read reversed.
-                                Text(
+                                FittingBarText(
                                     text = compactAddress(subtitleIp),
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         textDirection = TextDirection.Ltr
                                     ),
-                                    fontSize = 10.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    softWrap = false
+                                    maxFontSize = 10.5f,
+                                    minFontSize = 7.5f
                                 )
                             }
                         }
@@ -237,11 +238,13 @@ fun MainBottomBar(
                     Spacer(Modifier.width(8.dp))
                 }
 
-                NeonConnectButton(
-                    isRunning = isRunning,
-                    isConnecting = isConnecting,
-                    onClick = { onAction(MainAction.ToggleService) },
-                )
+                Box {
+                    NeonConnectButton(
+                        isRunning = isRunning,
+                        isConnecting = isConnecting,
+                        onClick = { onAction(MainAction.ToggleService) },
+                    )
+                }
             }
         }
     }
@@ -306,8 +309,7 @@ private fun SessionStatsRow(palette: GlassPalette) {
 }
 
 @Composable
-private fun SessionStat(iconRes: Int, value: String, tint: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun SessionStat(iconRes: Int, value: String, tint: Color) {    Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             painter = painterResource(iconRes),
             contentDescription = null,
@@ -315,14 +317,53 @@ private fun SessionStat(iconRes: Int, value: String, tint: Color) {
             modifier = Modifier.size(13.dp)
         )
         Spacer(Modifier.width(4.dp))
-        Text(
+        FittingBarText(
             text = value,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace,
+            style = TextStyle(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.Monospace,
+            ),
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            softWrap = false
+            maxFontSize = 11f,
+            minFontSize = 8f
         )
     }
+}
+
+/**
+ * A line of the connect panel that never loses its tail. Cutting a status message,
+ * a long config name or an address with an ellipsis reads as a bug, so this shrinks
+ * its own face until the line fits and only takes a second line once the smallest
+ * allowed size is reached. The bar is measured the same way in the single-column and
+ * the two-column server layouts, so one rule covers both.
+ */
+@Composable
+private fun FittingBarText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    maxFontSize: Float,
+    minFontSize: Float,
+    modifier: Modifier = Modifier,
+) {
+    var fontSize by remember(text) { mutableFloatStateOf(maxFontSize) }
+    var wrapped by remember(text) { mutableStateOf(false) }
+    Text(
+        text = text,
+        style = style.copy(fontSize = fontSize.sp, color = color),
+        maxLines = if (wrapped) 2 else 1,
+        softWrap = wrapped,
+        overflow = TextOverflow.Clip,
+        onTextLayout = { layout ->
+            if (layout.didOverflowWidth) {
+                when {
+                    fontSize > minFontSize ->
+                        fontSize = (fontSize - 0.5f).coerceAtLeast(minFontSize)
+                    !wrapped -> wrapped = true
+                }
+            }
+        },
+        modifier = modifier
+    )
 }

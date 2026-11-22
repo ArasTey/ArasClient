@@ -184,7 +184,15 @@ class CoreVpnService : VpnService(), ServiceControl {
             return false
         }
 
-        runTun2socks()
+        // Hev forwards the TUN to the core's local SOCKS, so it must be up before the
+        // core starts. A broken native binding surfaces as an UnsatisfiedLinkError,
+        // which is an Error: left uncaught it ends the service process with the
+        // interface already established, so the session looks up and carries nothing.
+        if (!runTun2socks()) {
+            stopAllService()
+            return false
+        }
+
         return true
     }
 
@@ -359,24 +367,31 @@ class CoreVpnService : VpnService(), ServiceControl {
      * Runs the tun2socks process.
      * Starts the tun2socks process with the appropriate parameters.
      */
-    private fun runTun2socks() {
+    private fun runTun2socks(): Boolean {
         // The TUN has exactly one reader. Everything the app serves — including
         // WireGuard and AmneziaWG — is dialled by the core, which listens on the
         // local SOCKS inbound that tun2socks forwards to. A second reader of the
         // same descriptor would drain the packets before the tunnel saw them,
         // and the connection would show as up while carrying nothing.
-        if (SettingsManager.isUsingHevTun()) {
+        if (!SettingsManager.isUsingHevTun()) {
+            tun2SocksService = null
+            return true
+        }
+
+        return try {
             tun2SocksService = TProxyService(
                 context = applicationContext,
                 vpnInterface = mInterface,
                 isRunningProvider = { isRunning },
                 restartCallback = { runTun2socks() }
             )
-        } else {
+            tun2SocksService?.startTun2Socks()
+            true
+        } catch (e: Throwable) {
             tun2SocksService = null
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: tun2socks could not start", e)
+            false
         }
-
-        tun2SocksService?.startTun2Socks()
     }
 
     private fun stopAllService(isForced: Boolean = true) {
@@ -425,7 +440,6 @@ class CoreVpnService : VpnService(), ServiceControl {
     }
 
     fun tryLockStart(): Boolean {
-        LogUtil.w(AppConfig.TAG, "StartCore-VPN: tryLockStart: ${isStartingLock.get()}")
         return isStartingLock.compareAndSet(false, true)
     }
 

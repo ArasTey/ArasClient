@@ -12,14 +12,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -82,6 +84,7 @@ import com.aras.client.ui.compose.LocalGlassPalette
 import com.aras.client.ui.compose.ReorderableGridItem
 import com.aras.client.ui.compose.ReorderableListItem
 import com.aras.client.ui.compose.glassSelectionRing
+import com.aras.client.ui.compose.smartPingColor
 import com.aras.client.ui.compose.verticalScrollbar
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
@@ -119,6 +122,7 @@ fun GroupPagerPage(
     onEditSubscription: (() -> Unit)? = null,
     onUpdateSubscription: (() -> Unit)? = null,
     onPingSubscription: (() -> Unit)? = null,
+    onCancelPingSubscription: (() -> Unit)? = null,
     onSortSubscription: (() -> Unit)? = null,
     onRemoveSubscription: (() -> Unit)? = null,
     onCopySubscriptionUrl: (() -> Unit)? = null,
@@ -136,9 +140,11 @@ fun GroupPagerPage(
     Column {
         SubscriptionInfoBar(
             groupId = groupId,
+            mainViewModel = mainViewModel,
             onEditSubscription = onEditSubscription,
             onUpdateSubscription = onUpdateSubscription,
             onPingSubscription = onPingSubscription,
+            onCancelPingSubscription = onCancelPingSubscription,
             onSortSubscription = onSortSubscription,
             onRemoveSubscription = onRemoveSubscription,
             onCopySubscriptionUrl = onCopySubscriptionUrl,
@@ -544,7 +550,7 @@ fun ServerListItem(
     } else {
         SolidColor(MaterialTheme.colorScheme.surfaceContainerLow)
     }
-    val pingColor = if (testDelayMillis < 0L) palette.pingBad else palette.pingGood
+    val pingColor = smartPingColor(testDelayMillis, palette)
     // `isTesting` is now this card's own round, so a neighbour that has never been
     // measured keeps its gauge instead of pulsing along.
     val pinging = isTesting && testDelayMillis == 0L
@@ -575,14 +581,20 @@ fun ServerListItem(
             .background(cardBrush)
             .clickable(onClick = onClick)
             .then(dragModifier)
+            // Both columns of the narrow card are stretched to the taller one, so the
+            // chip row and the gauge share a bottom line.
+            .then(if (doubleColumnDisplay) Modifier.height(IntrinsicSize.Max) else Modifier)
             .padding(start = 10.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        // The two-column card stacks ⋮ / flag / gauge down its right edge, so its
+        // columns must start at the same top line; the wide card centers instead.
+        verticalAlignment = if (doubleColumnDisplay) Alignment.Top else Alignment.CenterVertically
     ) {
 
         // Title, address, chips
         Column(
             Modifier
                 .weight(1f)
+                .then(if (doubleColumnDisplay) Modifier.fillMaxHeight() else Modifier)
         ) {
             Text(
                 remarks,
@@ -648,41 +660,37 @@ fun ServerListItem(
                     }
                 }
             } else {
-                Text(
-                    typeDescription,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = typeTint,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .background(typeTint.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 7.dp, vertical = 2.dp)
-                )
-                if (countryIso != null || testResult.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (countryIso != null) {
-                            FlagIcon(iso = countryIso)
-                        }
-                        if (testResult.isNotBlank()) {
-                            Text(
-                                testResult,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = pingColor,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f, fill = false)
-                                    .widthIn(min = 56.dp)
-                                    .background(pingColor.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            )
-                        }
+                // Narrow card: one chip row at the bottom, protocol then delay, so the
+                // flag and the gauge can own the right edge above it. The slack sits in
+                // the middle, keeping the chip row on the gauge's line.
+                Spacer(modifier = Modifier.weight(1f))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        typeDescription,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = typeTint,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .background(typeTint.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                    if (testResult.isNotBlank()) {
+                        Text(
+                            testResult,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = pingColor,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier
+                                .background(pingColor.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }
@@ -691,10 +699,18 @@ fun ServerListItem(
         Spacer(Modifier.size(4.dp))
 
         // Actions
-        Column(horizontalAlignment = Alignment.End) {
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = if (doubleColumnDisplay) Modifier.fillMaxHeight() else Modifier
+        ) {
             Row {
                 if (doubleColumnDisplay) {
-                    CircularActionIcon(R.drawable.ic_more_vert_24dp, stringResource(R.string.acc_more), onMore)
+                    // Nudge the ⋮ a little above the title line so it clears the
+                    // top edge of the narrow card; the gauge already rides lower
+                    // onto the chip baseline, and this keeps the two balanced.
+                    Box(modifier = Modifier.offset(y = (-4).dp)) {
+                        CircularActionIcon(R.drawable.ic_more_vert_24dp, stringResource(R.string.acc_more), onMore)
+                    }
                 } else {
                     if (!isProtected) {
                         CircularActionIcon(R.drawable.ic_share_24dp, stringResource(R.string.title_configuration_share), onShare)
@@ -703,29 +719,53 @@ fun ServerListItem(
                     CircularActionIcon(R.drawable.ic_delete_24dp, stringResource(R.string.acc_delete), onRemove)
                 }
             }
-            // Single-server test button under the delete icon; it pulses only while
-            // this card's own measurement runs, so a press clearly did something.
-            if (pinging) {
-                IconButton(
-                    onClick = onTest,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                ) {
+            if (doubleColumnDisplay) {
+                // The right edge is one column: ⋮ on the title line, gauge on the
+                // chip line, and the flag dropped into the lower-middle. The 2:1
+                // split matches the reference, where the gap above the flag is
+                // larger than the one below it, so all three share the edge with
+                // even breathing room instead of the flag crowding the gauge.
+                Spacer(Modifier.weight(2f))
+                // The flag slot is always 13.dp tall so a card's height never changes
+                // when its country resolves; that reflow is what made the two-column
+                // rows jump during a ping and the connected card read taller than its
+                // neighbours. 7.dp end padding + 17.dp width keeps the flag's centre on
+                // the ⋮/gauge vertical line, so the three read as one column.
+                Box(modifier = Modifier.height(13.dp)) {
+                    if (countryIso != null) {
+                        FlagIcon(iso = countryIso, modifier = Modifier.padding(end = 7.dp), width = 17.dp, height = 13.dp)
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+            }
+            // Single-server test button: it pulses only while this card's own round
+            // runs, so a press clearly did something. The narrow card keeps the same
+            // 32.dp box as the ⋮ so the two glyphs share one vertical line, but draws
+            // a bigger gauge glyph nudged down onto the chip baseline.
+            val gaugeGlyph = if (doubleColumnDisplay) 24.dp else 18.dp
+            val gaugeShift = if (doubleColumnDisplay) 4.dp else 0.dp
+            IconButton(
+                onClick = onTest,
+                modifier = Modifier
+                    .size(32.dp)
+                    .offset(y = gaugeShift)
+                    .clip(CircleShape)
+            ) {
+                if (pinging) {
                     PingingDots(
                         color = palette.amber,
                         contentDescription = stringResource(R.string.connection_test_testing)
                     )
+                } else {
+                    Icon(
+                        painterResource(R.drawable.ic_speedtest_24dp),
+                        contentDescription = stringResource(R.string.title_test_single),
+                        modifier = Modifier.size(gaugeGlyph),
+                        // The same warm accent the subscription bar's speed-test icon
+                        // carries, so the two are recognised as one action.
+                        tint = palette.amber
+                    )
                 }
-            } else {
-                CircularActionIcon(
-                    R.drawable.ic_speedtest_24dp,
-                    stringResource(R.string.title_test_single),
-                    onTest,
-                    // The same warm accent the subscription bar's speed-test icon
-                    // carries, so the two are recognised as one action.
-                    tint = palette.amber
-                )
             }
         }
     }

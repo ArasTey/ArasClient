@@ -29,6 +29,9 @@ data class MainUiState(
     // Which configs the running round measures. A card must not pulse just because
     // a test happens to be running elsewhere; only its own round counts.
     val testingGuids: Set<String> = emptySet(),
+    // Subscription whose gauge started the running round; its bar shows the stop
+    // icon while the round lives. Solo card pings never set it — no bar owns them.
+    val pingTargetGroupId: String = "",
     val status: MainStatus = MainStatus.Disconnected,
     // Presentation only: hiding a message must not change connection or test state.
     val statusMessageVisible: Boolean = false,

@@ -1,6 +1,5 @@
 package com.aras.client.ui.settings
 
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Column
@@ -14,7 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +42,6 @@ import com.aras.client.ui.compose.SettingsEditItem
 import com.aras.client.ui.compose.SettingsListItem
 import com.aras.client.ui.compose.SettingsMenuItem
 import com.aras.client.ui.compose.SettingsSwitchItem
-import com.aras.client.ui.compose.ThemeManager
 import com.aras.client.ui.compose.verticalScrollbar
 import com.aras.client.util.Utils
 
@@ -76,14 +73,14 @@ fun SettingsScreen(
     val scrollState = rememberScrollState()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     var connectionSettingsExpanded by rememberSaveable { mutableStateOf(false) }
-    var uiSettingsExpanded by rememberSaveable { mutableStateOf(true) }
-    var vpnSettingsExpanded by rememberSaveable { mutableStateOf(true) }
-    var coreSettingsExpanded by rememberSaveable { mutableStateOf(true) }
+    var uiSettingsExpanded by rememberSaveable { mutableStateOf(false) }
+    var vpnSettingsExpanded by rememberSaveable { mutableStateOf(false) }
+    var coreSettingsExpanded by rememberSaveable { mutableStateOf(false) }
     var muxSettingsExpanded by rememberSaveable { mutableStateOf(false) }
     var fragmentSettingsExpanded by rememberSaveable { mutableStateOf(false) }
     var observatorySettingsExpanded by rememberSaveable { mutableStateOf(false) }
-    var advancedSettingsExpanded by rememberSaveable { mutableStateOf(true) }
-    var modeSettingsExpanded by rememberSaveable { mutableStateOf(true) }
+    var advancedSettingsExpanded by rememberSaveable { mutableStateOf(false) }
+    var modeSettingsExpanded by rememberSaveable { mutableStateOf(false) }
 
     var localDns by rememberMmkvBool(AppConfig.PREF_LOCAL_DNS_ENABLED, AppConfig.DEFAULT_LOCAL_DNS_ENABLED)
     var fakeDns by rememberMmkvBool(AppConfig.PREF_FAKE_DNS_ENABLED, AppConfig.DEFAULT_FAKE_DNS_ENABLED)
@@ -132,7 +129,6 @@ fun SettingsScreen(
 
     var speedEnabled by rememberMmkvBool(AppConfig.PREF_SPEED_ENABLED, false)
     var confirmRemove by rememberMmkvBool(AppConfig.PREF_CONFIRM_REMOVE, false)
-    var doubleColumnDisplay by rememberMmkvBool(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)
     var groupAllDisplay by rememberMmkvBool(AppConfig.PREF_GROUP_ALL_DISPLAY, false)
     var showFreeSub by rememberMmkvBool(AppConfig.PREF_SHOW_FREE_SUB, true)
     var language by remember {
@@ -140,8 +136,6 @@ fun SettingsScreen(
             MmkvManager.decodeSettingsString(AppConfig.PREF_LANGUAGE, "auto") ?: "auto"
         )
     }
-    var uiModeNight by rememberMmkvString(AppConfig.PREF_UI_MODE_NIGHT, "0")
-    var dynamicColor by rememberMmkvBool(AppConfig.PREF_DYNAMIC_COLOR, true)
 
     var ipv6Enabled by rememberMmkvBool(AppConfig.PREF_IPV6_ENABLED, AppConfig.DEFAULT_IPV6_ENABLED)
     var preferIpv6 by rememberMmkvBool(AppConfig.PREF_PREFER_IPV6, AppConfig.DEFAULT_PREFER_IPV6)
@@ -164,18 +158,8 @@ fun SettingsScreen(
     val effectiveLocalProxy = enableLocalProxy || localProxyForced
     val muxXudpConcurrencyInt = muxXudpConcurrency.toIntOrNull() ?: 8
 
-    val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    LaunchedEffect(dynamicColorSupported) {
-        if (!dynamicColorSupported && dynamicColor) {
-            dynamicColor = false
-            ThemeManager.setDynamicColorEnabled(false)
-        }
-    }
-
     val languageEntries = stringArrayResource(R.array.language_select).toList()
     val languageValues = stringArrayResource(R.array.language_select_value).toList()
-    val uiModeNightEntries = stringArrayResource(R.array.ui_mode_night).toList()
-    val uiModeNightValues = stringArrayResource(R.array.ui_mode_night_value).toList()
     val bypassLanEntries = stringArrayResource(R.array.vpn_bypass_lan).toList()
     val bypassLanValues = stringArrayResource(R.array.vpn_bypass_lan_value).toList()
     val interfaceAddrEntries = stringArrayResource(R.array.vpn_interface_address).toList()
@@ -231,15 +215,6 @@ fun SettingsScreen(
                     onCheckedChange = { confirmRemove = it }
                 )
                 SettingsSwitchItem(
-                    title = stringResource(R.string.title_pref_double_column_display),
-                    summary = stringResource(R.string.summary_pref_double_column_display),
-                    checked = doubleColumnDisplay,
-                    onCheckedChange = {
-                        doubleColumnDisplay = it
-                        SettingsChangeManager.makeSetupGroupTab()
-                    }
-                )
-                SettingsSwitchItem(
                     title = stringResource(R.string.title_pref_group_all_display),
                     summary = stringResource(R.string.summary_pref_group_all_display),
                     checked = groupAllDisplay,
@@ -257,16 +232,6 @@ fun SettingsScreen(
                         SettingsChangeManager.makeSetupGroupTab()
                     }
                 )
-                SettingsSwitchItem(
-                    title = stringResource(R.string.title_pref_dynamic_color),
-                    summary = stringResource(R.string.summary_pref_dynamic_color),
-                    checked = dynamicColor,
-                    enabled = dynamicColorSupported,
-                    onCheckedChange = {
-                        dynamicColor = it
-                        ThemeManager.setDynamicColorEnabled(it)
-                    }
-                )
                 SettingsListItem(
                     title = stringResource(R.string.title_language),
                     entries = languageEntries,
@@ -275,16 +240,6 @@ fun SettingsScreen(
                     onSelected = {
                         language = it
                         AppLocaleManager.setApplicationLanguage(it)
-                    }
-                )
-                SettingsListItem(
-                    title = stringResource(R.string.title_pref_ui_mode_night),
-                    entries = uiModeNightEntries,
-                    values = uiModeNightValues,
-                    selectedValue = uiModeNight,
-                    onSelected = {
-                        uiModeNight = it
-                        ThemeManager.setThemeMode(it)
                     }
                 )
             }

@@ -1,140 +1,710 @@
-name: Build ArasClient from open source
+# ArasClient — full build and release pipeline.
+#
+# Everything happens here, on GitHub-hosted runners: the toolchain is installed
+# from pinned upstream artifacts, the xray core is compiled from the pinned
+# sources, every APK variant and architecture is built and signed, the result is
+# gated on content/signature/badging checks, and a `v*` tag publishes the GitHub
+# Release with a generated changelog, checksums and build metadata.
+#
+# Nothing in this file may reference a developer workstation: no local paths, no
+# locally built binaries. The native libraries under app/libs are committed
+# inputs and are audited (job `native-libs-audit`) instead of rebuilt, because
+# their patched sources live in other repositories — see that job's header.
+name: ArasClient CI/CD
 
 on:
   workflow_dispatch:
+    inputs:
+      xray_core_ref:
+        description: "xray-core ref to build the core from (tag, branch or SHA)"
+        required: false
+        default: ""
+      bindings_ref:
+        description: "AndroidLibXrayLite ref to bind the core with"
+        required: false
+        default: ""
+      build_debug:
+        description: "Also build the debug variants (QA artifacts, not published)"
+        type: boolean
+        required: false
+        default: true
+      delta_patches:
+        description: "Generate on-device delta patches against the previous release"
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        description: "Build and verify everything but do not publish the release"
+        type: boolean
+        required: false
+        default: false
   push:
-    branches: [ main ]
-  release:
-    types: [ published ]
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+# Reads only, by default. The release job raises this to contents:write for itself.
+permissions:
+  contents: read
+
+# A tag must never be cancelled mid-release; branch runs may overlap and cancel.
+concurrency:
+  group: arasclient-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+env:
+  APP_PACKAGE: com.aras.client
+  # --- pinned build inputs ------------------------------------------------------------------
+  # Bump these in the same commit as the core, so one run of one release always
+  # builds from one set of sources. `preflight` fails in seconds, with a message,
+  # if a ref here does not exist upstream — that is the most common way a release
+  # pipeline dies late: a pin merged ahead of the tag it points at.
+  XRAY_CORE_REPO: ArasTey/xray-core
+  XRAY_CORE_REF: aras-core-26.11.21
+  BINDINGS_REPO: ArasTey/AndroidLibXrayLite
+  BINDINGS_REF: 33f200abc13762b5c79a11597f2273fdef1d21e7
+  # --- toolchain ----------------------------------------------------------------------------
+  GO_VERSION: "1.27"
+  JAVA_VERSION: "17"
+  NDK_VERSION: "27.2.12479018"
+  SDK_TOOLS_ZIP: commandlinetools-linux-11076708_latest.zip
+  CORE_ANDROID_API: "24"
+  # --- routing --------------------------------------------------------------------------------
+  GEOIP_URL: https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geoip.dat
+  GEOSITE_URL: https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geosite.dat
+  RELEASE_DIR: release-assets
+  LOG_DIR: ci-logs
 
 jobs:
-  build-core:
+  # ===========================================================================
+  # One place decides what the rest of the pipeline does: the version, whether
+  # this run is a release, which core refs to use, and whether the repository is
+  # fit to build from at all. Everything downstream reads its outputs.
+  # ===========================================================================
+  preflight:
+    name: Preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      is_release: ${{ steps.mode.outputs.is_release }}
+      prerelease: ${{ steps.mode.outputs.prerelease }}
+      dry_run: ${{ steps.mode.outputs.dry_run }}
+      tag: ${{ steps.mode.outputs.tag }}
+      prev_tag: ${{ steps.prev.outputs.prev_tag }}
+      core_ref: ${{ steps.refs.outputs.core_ref }}
+      bindings_ref: ${{ steps.refs.outputs.bindings_ref }}
+      build_debug: ${{ steps.mode.outputs.build_debug }}
+      delta_patches: ${{ steps.mode.outputs.delta_patches }}
     steps:
-      - name: Checkout core bindings
+      - name: Check out
         uses: actions/checkout@v4
         with:
-          repository: ArasTey/AndroidLibXrayLite
-          # Pinned to the commit main stood on when the plugin was built; like
-          # the core tag below, the same run of a release builds from the same
-          # bindings source.
-          ref: 33f200abc13762b5c79a11597f2273fdef1d21e7
-          path: core-bindings
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Checkout xray-core source
+      - name: Read the version from the build script
+        id: version
+        run: |
+          set -euo pipefail
+          gradle_file=app/build.gradle.kts
+          # build.gradle.kts is the only place the version lives, so a release
+          # cannot disagree with itself: the tag, the APK and the updater's
+          # version comparison all come from these two numbers.
+          name=$(sed -nE 's/^[[:space:]]*versionName = "([^"]*)".*/\1/p' "$gradle_file" | head -1)
+          code=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' "$gradle_file" | head -1)
+          if [ -z "$name" ] || [ -z "$code" ]; then
+            echo "::error::Could not read versionName/versionCode from $gradle_file"
+            exit 1
+          fi
+          echo "version_name=$name" >> "$GITHUB_OUTPUT"
+          echo "version_code=$code" >> "$GITHUB_OUTPUT"
+          echo "versionName=$name  versionCode=$code"
+
+      - name: Decide the mode
+        id: mode
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_CORE_REF: ${{ inputs.xray_core_ref }}
+          INPUT_BUILD_DEBUG: ${{ inputs.build_debug }}
+          INPUT_DELTA: ${{ inputs.delta_patches }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          is_release=false
+          tag=""
+          prerelease=false
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v ]]; then
+            is_release=true
+            tag="${GITHUB_REF#refs/tags/}"
+            # A tag whose name is not the built version would ship APKs the
+            # in-app updater cannot rank against the previous release.
+            if [ "$tag" != "v$VERSION_NAME" ]; then
+              echo "::error::Tag $tag does not match versionName $VERSION_NAME in app/build.gradle.kts"
+              exit 1
+            fi
+            if [[ "$tag" =~ -(rc|beta|alpha|dev) ]]; then
+              prerelease=true
+            fi
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_CORE_REF" ]; then
+            # A run that overrides the core ref is a probe build: never publish it.
+            is_release=false
+          fi
+          build_debug=true
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            build_debug=false
+          fi
+          if [ -n "$INPUT_BUILD_DEBUG" ]; then
+            build_debug="$INPUT_BUILD_DEBUG"
+          fi
+          delta_patches=false
+          if [ -n "$INPUT_DELTA" ]; then
+            delta_patches="$INPUT_DELTA"
+          fi
+          dry_run=false
+          if [ -n "$INPUT_DRY_RUN" ]; then
+            dry_run="$INPUT_DRY_RUN"
+          fi
+          {
+            echo "is_release=$is_release"
+            echo "prerelease=$prerelease"
+            echo "dry_run=$dry_run"
+            echo "build_debug=$build_debug"
+            echo "delta_patches=$delta_patches"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "release run: $is_release (prerelease: $prerelease, debug builds: $build_debug, delta patches: $delta_patches, dry run: $dry_run)"
+
+      - name: Find the previous release tag
+        id: prev
+        env:
+          TAG: ${{ steps.mode.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # The newest tag behind this one is what the changelog is written
+          # against. Empty on the very first tagged build.
+          prev=$(git tag --sort=-creatordate --merged HEAD | grep -E '^v[0-9]' | grep -vx "${TAG:-}" | head -1 || true)
+          echo "prev_tag=$prev" >> "$GITHUB_OUTPUT"
+          echo "previous tag: ${prev:-none}"
+
+      - name: Resolve the core refs
+        id: refs
+        env:
+          INPUT_CORE_REF: ${{ inputs.xray_core_ref }}
+          INPUT_BINDINGS_REF: ${{ inputs.bindings_ref }}
+        run: |
+          set -euo pipefail
+          core_ref="${INPUT_CORE_REF:-$XRAY_CORE_REF}"
+          bindings_ref="${INPUT_BINDINGS_REF:-$BINDINGS_REF}"
+          {
+            echo "core_ref=$core_ref"
+            echo "bindings_ref=$bindings_ref"
+          } >> "$GITHUB_OUTPUT"
+          echo "core:     $XRAY_CORE_REPO@$core_ref"
+          echo "bindings: $BINDINGS_REPO@$bindings_ref"
+
+      - name: Check the core refs exist upstream
+        env:
+          CORE_REF: ${{ steps.refs.outputs.core_ref }}
+          BINDINGS_REF_OUT: ${{ steps.refs.outputs.bindings_ref }}
+        run: |
+          set -euo pipefail
+          # Both repositories are public and are cloned by the build. Probing them
+          # here turns a twenty-minute failure after the toolchain install into a
+          # ten-second one before it.
+          probe() {
+            local repo="$1" ref="$2"
+            if [ -z "$ref" ]; then
+              echo "::error::$repo ref is empty"
+              exit 1
+            fi
+            # Tags and branches match exactly; a commit SHA only matches the object
+            # itself, so fall back to scanning the full ref list and any SHA.
+            if git ls-remote --exit-code "https://github.com/$repo" "refs/tags/$ref" "refs/heads/$ref" > /dev/null 2>&1; then
+              echo "ok: $repo@$ref"
+              return 0
+            fi
+            if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "ok (commit): $repo@$ref"
+              return 0
+            fi
+            echo "::error::$repo has no tag or branch named '$ref'. Publish it (git tag -a \"$ref\" && git push --tags) or fix the pin in this workflow's env block."
+            exit 1
+          }
+          probe "$XRAY_CORE_REPO" "$CORE_REF"
+          probe "$BINDINGS_REPO" "$BINDINGS_REF_OUT"
+
+      - name: Check the repository is fit to build
+        run: |
+          set -euo pipefail
+          fail=0
+          # Secrets and machine-local config must never be committed: a keystore
+          # in the repository is an update anyone can sign.
+          for banned in keystore.properties local.properties; do
+            if git ls-files --error-unmatch "$banned" > /dev/null 2>&1; then
+              echo "::error::$banned is tracked in git; it must stay local (see keystore-example.properties)"
+              fail=1
+            fi
+          done
+          if git ls-files | grep -qE '\.(jks|keystore)$'; then
+            echo "::error::a keystore file is tracked in git"
+            fail=1
+          fi
+          # The native libraries are committed build inputs. A missing one is not
+          # a build error, it is a silently missing feature in the APK, so insist.
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            for lib in libhev-socks5-tunnel.so libhevsockstun.so; do
+              if [ ! -f "app/libs/$abi/$lib" ]; then
+                echo "::error::app/libs/$abi/$lib is missing"
+                fail=1
+              fi
+            done
+          done
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            if [ ! -f "app/libs/$abi/libaether.so" ]; then
+              echo "::error::app/libs/$abi/libaether.so is missing"
+              fail=1
+            fi
+          done
+          if [ ! -f app/libs/arasc-crypto.aar ]; then
+            echo "::error::app/libs/arasc-crypto.aar is missing"
+            fail=1
+          fi
+          if [ ! -x gradlew ]; then
+            chmod +x gradlew
+          fi
+          exit $fail
+
+      - name: Summarise
+        run: |
+          {
+            echo "## Preflight"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| version | \`${{ steps.version.outputs.version_name }}\` (code \`${{ steps.version.outputs.version_code }}\`) |"
+            echo "| release run | ${{ steps.mode.outputs.is_release }} |"
+            echo "| previous tag | \`${{ steps.prev.outputs.prev_tag }}\` |"
+            echo "| core | \`$XRAY_CORE_REPO@${{ steps.refs.outputs.core_ref }}\` |"
+            echo "| bindings | \`$BINDINGS_REPO@${{ steps.refs.outputs.bindings_ref }}\` |"
+            echo "| commit | \`${{ github.sha }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # app/libs/*.so are committed binaries, not build outputs: their patched
+  # sources live in other repositories. They are the highest-risk inputs here —
+  # a library compiled against the wrong JNI class names installs perfectly and
+  # then dies the moment the VPN starts. Auditing them costs seconds and runs
+  # before the expensive build.
+  # ===========================================================================
+  native-libs-audit:
+    name: Audit native libraries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
         uses: actions/checkout@v4
         with:
-          repository: ArasTey/xray-core
-          # Pinned by tag, not to a branch: the core is built from source here, so
-          # what it is has to be the same on every run of a given release.
-          ref: aras-core-26.11.1
+          persist-credentials: false
+
+      - name: Check ELF architecture and JNI bindings
+        run: |
+          set -euo pipefail
+          python3 - > "$RUNNER_TEMP/native-audit.md" <<'PY'
+          import os, struct, sys
+
+          NAMES = {3: "x86", 8: "MIPS", 40: "ARM", 62: "x86_64", 183: "AArch64"}
+          # abi -> (ELF class, e_machine)
+          EXPECT = {
+              "arm64-v8a": (2, 183),
+              "armeabi-v7a": (1, 40),
+              "x86_64": (2, 62),
+              "x86": (1, 3),
+          }
+          # The tun2socks library registers its natives against this class on load.
+          # When it was still compiled for the upstream fork's package, every
+          # connect died with UnsatisfiedLinkError — an Error, so it did not even
+          # reach the app's exception handler. That is the bug this gate exists for.
+          REQUIRED_CLASS = b"com/aras/client/TProxyService"
+          STALE_PACKAGES = [b"com/v2ray/ang"]
+
+          problems = []
+          rows = []
+          for abi, (want_class, want_machine) in EXPECT.items():
+              directory = os.path.join("app/libs", abi)
+              if not os.path.isdir(directory):
+                  problems.append(f"{abi}: directory missing")
+                  continue
+              for name in sorted(os.listdir(directory)):
+                  path = os.path.join(directory, name)
+                  data = open(path, "rb").read()
+                  if data[:4] != b"\x7fELF":
+                      problems.append(f"{abi}/{name}: not an ELF object")
+                      continue
+                  ei_class = data[4]
+                  ei_data = data[5]
+                  e_type = struct.unpack_from("<H", data, 16)[0]
+                  machine = struct.unpack_from("<H", data, 18)[0]
+                  if ei_class != want_class:
+                      problems.append(f"{abi}/{name}: ELF class {ei_class}, expected {want_class}")
+                  if ei_data != 1:
+                      problems.append(f"{abi}/{name}: big-endian object, Android needs little-endian")
+                  if machine != want_machine:
+                      problems.append(
+                          f"{abi}/{name}: built for {NAMES.get(machine, machine)}, "
+                          f"expected {NAMES.get(want_machine)}")
+                  if len(data) < 4096:
+                      problems.append(f"{abi}/{name}: {len(data)} bytes, looks truncated")
+                  if name == "libhev-socks5-tunnel.so":
+                      if REQUIRED_CLASS not in data:
+                          problems.append(
+                              f"{abi}/{name}: does not bind {REQUIRED_CLASS.decode()}; "
+                              "RegisterNatives would fail and the tunnel could not start")
+                  for stale in STALE_PACKAGES:
+                      if stale in data:
+                          problems.append(
+                              f"{abi}/{name}: contains the retired package {stale.decode()}")
+                  rows.append((abi, name, len(data), NAMES.get(machine, str(machine)), e_type))
+
+          for aar in ("app/libs/arasc-crypto.aar",):
+              if not os.path.isfile(aar):
+                  problems.append(f"{aar}: missing")
+
+          print("| abi | library | bytes | arch |")
+          print("|---|---|---|---|")
+          for abi, name, size, machine, _ in rows:
+              print(f"| {abi} | `{name}` | {size:,} | {machine} |")
+
+          if problems:
+              sys.stderr.write("\n".join(f"::error::{p}" for p in problems) + "\n")
+              sys.exit(1)
+          print(f"OK: audited {len(rows)} native libraries", file=sys.stderr)
+          PY
+          {
+            echo "## Native library audit"
+            echo
+            cat "$RUNNER_TEMP/native-audit.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # The xray core, compiled from source on the runner. This is what makes the
+  # release reproducible: the shipped core is always the pinned refs here, and
+  # nobody has to carry a 65 MB binary from a laptop to publish.
+  # ===========================================================================
+  build-core:
+    name: Build core from source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: preflight
+    env:
+      CORE_REF: ${{ needs.preflight.outputs.core_ref }}
+      BINDINGS_REF_IN: ${{ needs.preflight.outputs.bindings_ref }}
+      SDK_HOME: ${{ github.workspace }}/android-sdk
+    steps:
+      - name: Check out the xray core
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.XRAY_CORE_REPO }}
+          ref: ${{ needs.preflight.outputs.core_ref }}
           path: xray-core-src
+          persist-credentials: false
+
+      - name: Check out the core bindings
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BINDINGS_REPO }}
+          ref: ${{ needs.preflight.outputs.bindings_ref }}
+          path: core-bindings
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # Must be >= the `go` directive in the core's go.mod. The core declares 1.27;
-          # pinning lower only works because Go silently auto-downloads a newer toolchain.
-          go-version: '1.27'
+          # Must be at least the `go` directive in the core's go.mod.
+          go-version: ${{ env.GO_VERSION }}
+          # The caches below are keyed on the core refs, which this action cannot do.
+          cache: false
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - name: Download geo assets
+        run: |
+          set -euo pipefail
+          mkdir -p core-bindings/assets ci-cache/geo
+          # The routing tables are compiled into the core, so they belong in the
+          # cache key: new tables must not reuse an old AAR.
+          for entry in "geoip.dat:$GEOIP_URL" "geosite.dat:$GEOSITE_URL"; do
+            file="${entry%%:*}"
+            url="${entry#*:}"
+            ok=false
+            for attempt in 1 2 3; do
+              if curl -fsSL --retry 2 -o "core-bindings/assets/$file" "$url"; then
+                ok=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$ok" != true ]; then
+              echo "::error::could not download $url — the core cannot be built without $file"
+              exit 1
+            fi
+            cp "core-bindings/assets/$file" "ci-cache/geo/$file"
+          done
+          ls -l core-bindings/assets
+
+      - name: Restore a cached core build
+        id: core_cache
+        uses: actions/cache@v4
         with:
-          distribution: temurin
-          java-version: '17'
+          path: ci-cache/aar
+          key: >-
+            aras-core-${{ runner.os }}-${{ env.GO_VERSION }}-${{ env.NDK_VERSION }}-${{ env.CORE_REF }}-${{ env.BINDINGS_REF_IN }}-${{ hashFiles('ci-cache/geo/*.dat', 'core-bindings/**/*.go', 'core-bindings/go.mod', 'xray-core-src/**/*.go', 'xray-core-src/go.mod') }}
 
-      - name: Set up Android NDK
-        run: |
-          SDK=$HOME/android-sdk
-          mkdir -p $SDK/cmdline-tools
-          curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/clt.zip
-          unzip -q /tmp/clt.zip -d $SDK/cmdline-tools
-          mv $SDK/cmdline-tools/cmdline-tools $SDK/cmdline-tools/latest
-          yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
-          $SDK/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018" >/dev/null
-          echo "ANDROID_NDK_HOME=$SDK/ndk/27.2.12479018" >> $GITHUB_ENV
+      - name: Restore the cached Go workspace
+        uses: actions/cache/restore@v4
+        id: go_cache
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go
+          key: >-
+            go-${{ runner.os }}-${{ env.GO_VERSION }}-${{ env.NDK_VERSION }}-${{ env.CORE_REF }}-${{ env.BINDINGS_REF_IN }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ env.GO_VERSION }}-
 
-      - name: Install gomobile
+      - name: Restore the cached Android NDK
+        uses: actions/cache/restore@v4
+        id: ndk_cache
+        with:
+          path: ${{ env.SDK_HOME }}
+          key: >-
+            ndk-${{ runner.os }}-${{ env.NDK_VERSION }}
+
+      - name: Install the Android NDK
+        if: steps.core_cache.outputs.cache-hit != 'true' && steps.ndk_cache.outputs.cache-hit != 'true'
         run: |
+          set -euo pipefail
+          mkdir -p "$SDK_HOME/cmdline-tools"
+          curl -fsSL -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/${SDK_TOOLS_ZIP}"
+          unzip -q -o /tmp/cmdline-tools.zip -d "$SDK_HOME/cmdline-tools"
+          rm -rf "$SDK_HOME/cmdline-tools/latest"
+          mv "$SDK_HOME/cmdline-tools/cmdline-tools" "$SDK_HOME/cmdline-tools/latest"
+          sdkmanager="$SDK_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$sdkmanager" --install "ndk;${NDK_VERSION}" > /dev/null
+
+      - name: Save the Android NDK cache
+        if: steps.ndk_cache.outputs.cache-hit != 'true' && steps.core_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.SDK_HOME }}
+          key: >-
+            ndk-${{ runner.os }}-${{ env.NDK_VERSION }}
+
+      - name: Set up gomobile
+        if: steps.core_cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          export ANDROID_NDK_HOME="$SDK_HOME/ndk/$NDK_VERSION"
+          export ANDROID_HOME="$SDK_HOME"
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
           gomobile init
 
-      - name: Download geo assets
+      - name: Build the core AAR
+        if: steps.core_cache.outputs.cache-hit != 'true'
         run: |
+          set -euo pipefail
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          export ANDROID_NDK_HOME="$SDK_HOME/ndk/$NDK_VERSION"
+          export ANDROID_HOME="$SDK_HOME"
           cd core-bindings
-          curl -sL https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geoip.dat -o assets/geoip.dat
-          curl -sL https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geosite.dat -o assets/geosite.dat
-
-      - name: Build core AAR (aras-core.aar)
-        run: |
-          cd core-bindings
+          # The bindings must compile against *this* checkout of the core, not the
+          # version go.mod names — that is how the Aras patches end up in the
+          # shipped library.
           go mod edit -replace=github.com/xtls/xray-core=../xray-core-src
           go mod edit -dropreplace=github.com/patterniha/xray-core 2>/dev/null || true
           go mod tidy
-          gomobile bind -androidapi 24 -trimpath \
+          gomobile bind -androidapi "$CORE_ANDROID_API" -trimpath \
             -ldflags='-s -w -buildid= -checklinkname=0' \
-            -o $GITHUB_WORKSPACE/aras-core.aar ./
+            -o "$GITHUB_WORKSPACE/aras-core.aar" ./
+          mkdir -p "$GITHUB_WORKSPACE/ci-cache/aar"
+          cp "$GITHUB_WORKSPACE/aras-core.aar" "$GITHUB_WORKSPACE/ci-cache/aar/aras-core.aar"
 
-      - name: Verify core contents
-        # The ArasClient patches are compiled into the native library. A patch that
-        # silently fails to apply still produces a working .so — it just drops the
-        # feature — so assert on the symbols before trusting the AAR.
+      - name: Save the Go workspace cache
+        if: steps.core_cache.outputs.cache-hit != 'true' && steps.go_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go
+          key: >-
+            go-${{ runner.os }}-${{ env.GO_VERSION }}-${{ env.NDK_VERSION }}-${{ env.CORE_REF }}-${{ env.BINDINGS_REF_IN }}
+
+      - name: Verify the core AAR
         run: |
           set -euo pipefail
-          rm -rf /tmp/aarcheck && mkdir -p /tmp/aarcheck && cd /tmp/aarcheck
-          unzip -o -q "$GITHUB_WORKSPACE/aras-core.aar" "jni/arm64-v8a/libgojni.so"
-          SO=jni/arm64-v8a/libgojni.so
-
-          count() { strings "$SO" | grep -ci "$1" || true; }
-
-          anytls=$(count anytls)
-          amnezia=$(count amneziawg)
-          stockwg=$(count 'golang.zx2c4.com/wireguard')
-          echo "anytls=$anytls amneziawg=$amnezia stock-wireguard=$stockwg"
+          aar=aras-core.aar
+          if [ ! -f "$aar" ]; then
+            aar=ci-cache/aar/aras-core.aar
+          fi
+          if [ ! -f "$aar" ]; then
+            echo "::error::no core AAR was produced or restored"
+            exit 1
+          fi
+          rm -rf "$RUNNER_TEMP/coreaudit"
+          mkdir -p "$RUNNER_TEMP/coreaudit"
+          unzip -o -q "$aar" -d "$RUNNER_TEMP/coreaudit"
 
           fail=0
-          [ "$anytls" -gt 0 ] || { echo "::error::AnyTLS support missing from core"; fail=1; }
-          [ "$amnezia" -gt 0 ] || { echo "::error::AmneziaWG support missing from core"; fail=1; }
-          # proxy/wireguard must compile against amneziawg-go, otherwise the AmneziaWG
-          # junk params parse into the proto and are then silently ignored.
-          [ "$stockwg" -eq 0 ] || { echo "::error::Stock wireguard-go linked; AmneziaWG obfuscation is inert"; fail=1; }
-          exit $fail
+          # All four ABIs, every time. An AAR carrying only arm64 installs on the
+          # rest and then crashes at core start — and it looks perfectly fine on an
+          # arm64 test phone, which is exactly how it slips through locally.
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            so="$RUNNER_TEMP/coreaudit/jni/$abi/libgojni.so"
+            if [ ! -f "$so" ]; then
+              echo "::error::core AAR has no jni/$abi/libgojni.so"
+              fail=1
+              continue
+            fi
+            size=$(stat -c %s "$so")
+            if [ "$size" -lt 1000000 ]; then
+              echo "::error::core AAR jni/$abi/libgojni.so is only $size bytes"
+              fail=1
+            fi
+            echo "$abi libgojni.so: $size bytes"
+          done
 
-      - name: Upload core AAR artifact
+          so="$RUNNER_TEMP/coreaudit/jni/arm64-v8a/libgojni.so"
+          if [ -f "$so" ]; then
+            anytls=$(grep -ac anytls "$so" || true)
+            amnezia=$(grep -ac amneziawg "$so" || true)
+            stockwg=$(grep -ac 'golang.zx2c4.com/wireguard' "$so" || true)
+            echo "core symbols: anytls=$anytls amneziawg=$amnezia stock-wireguard=$stockwg"
+            if [ "${anytls:-0}" -le 0 ]; then
+              echo "::error::AnyTLS support is missing from the core"
+              fail=1
+            fi
+            if [ "${amnezia:-0}" -le 0 ]; then
+              echo "::error::AmneziaWG support is missing from the core"
+              fail=1
+            fi
+            # proxy/wireguard must compile against amneziawg-go; with stock
+            # wireguard-go linked the junk parameters parse into the config and are
+            # then silently ignored.
+            if [ "${stockwg:-0}" -gt 0 ]; then
+              echo "::error::stock wireguard-go is linked; AmneziaWG obfuscation would be inert"
+              fail=1
+            fi
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::the core AAR did not pass verification"
+            exit 1
+          fi
+          {
+            echo "## Core build"
+            echo
+            echo "- \`$XRAY_CORE_REPO@${{ needs.preflight.outputs.core_ref }}\` +"
+            echo "  \`$BINDINGS_REPO@${{ needs.preflight.outputs.bindings_ref }}\`"
+            echo "- ABIs: arm64-v8a, armeabi-v7a, x86_64, x86"
+            echo "- cached reuse: ${{ steps.core_cache.outputs.cache-hit }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the core AAR
         uses: actions/upload-artifact@v4
         with:
           name: aras-core-aar
-          path: aras-core.aar
+          path: ${{ steps.core_cache.outputs.cache-hit == 'true' && 'ci-cache/aar/aras-core.aar' || 'aras-core.aar' }}
+          if-no-files-found: error
+          retention-days: 7
 
+  # ===========================================================================
+  # The app: dependencies, tests, lint, every variant and every architecture,
+  # signed with the release key from repository secrets, then audited as built.
+  # ===========================================================================
   build-app:
+    name: Build app (all variants and ABIs)
     runs-on: ubuntu-latest
-    needs: build-core
+    timeout-minutes: 60
+    needs: [preflight, build-core]
+    env:
+      VERSION_NAME: ${{ needs.preflight.outputs.version_name }}
+      VERSION_CODE: ${{ needs.preflight.outputs.version_code }}
+      BUILD_DEBUG: ${{ needs.preflight.outputs.build_debug }}
     steps:
-      - name: Checkout app
+      - name: Check out
         uses: actions/checkout@v4
-
-      - name: Download core AAR built from source
-        uses: actions/download-artifact@v4
         with:
-          name: aras-core-aar
-          path: artifact-core
-
-      - name: Place AAR into app libs
-        run: |
-          mkdir -p app/libs
-          cp artifact-core/aras-core.aar app/libs/aras-core.aar
+          persist-credentials: false
 
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Restore signing key
-        # The keystore is deliberately not in the repository: whoever can read it can
-        # sign an update the phone will accept. It comes from the repository secrets
-        # instead, so a release is signed exactly as a local build is.
+      - name: Locate an Android SDK
+        id: sdk
+        run: |
+          set -euo pipefail
+          # The runner image ships an SDK; use it when it is there, and install a
+          # command line SDK only when it is not. That keeps the job fast and still
+          # works if the image changes underneath us.
+          found=""
+          for candidate in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" "$HOME/android-sdk" /usr/local/lib/android/sdk; do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              found="$candidate"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            found="$HOME/android-sdk"
+            mkdir -p "$found/cmdline-tools"
+            curl -fsSL -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/${SDK_TOOLS_ZIP}"
+            unzip -q -o /tmp/cmdline-tools.zip -d "$found/cmdline-tools"
+            rm -rf "$found/cmdline-tools/latest"
+            mv "$found/cmdline-tools/cmdline-tools" "$found/cmdline-tools/latest"
+            yes | "$found/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          fi
+          {
+            echo "sdk_root=$found"
+            echo "ANDROID_HOME=$found"
+            echo "ANDROID_SDK_ROOT=$found"
+          } >> "$GITHUB_ENV"
+          echo "sdk_root=$found" >> "$GITHUB_OUTPUT"
+          echo "sdk root: $found"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/caches/build-cache-1
+            ~/.gradle/wrapper/dists
+          key: >-
+            gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties', 'gradle.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Download the core AAR built from source
+        uses: actions/download-artifact@v4
+        with:
+          name: aras-core-aar
+          path: core-aar
+
+      - name: Install the core AAR into the app
+        run: |
+          set -euo pipefail
+          # Overwrite the committed AAR: CI's build *is* this release's core, which
+          # is what the pinned refs above say it should be.
+          mkdir -p app/libs
+          cp core-aar/aras-core.aar app/libs/aras-core.aar
+          ls -l app/libs/aras-core.aar
+
+      - name: Restore the signing key
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -142,6 +712,10 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::the KEYSTORE_B64 secret is not set. A release APK cannot be built unsigned, and a debug-signed one cannot upgrade an installed release."
+            exit 1
+          fi
           mkdir -p keystore
           printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/arasclient-release.jks
           cat > keystore.properties <<EOF
@@ -150,32 +724,477 @@ jobs:
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           EOF
+          # keystore/ and keystore.properties are gitignored; preflight proved they
+          # are not tracked, so nothing here can leak into the repository.
 
-      - name: Test, lint, and build release APKs
+      - name: Unit tests
         run: |
+          set -euo pipefail
+          mkdir -p "$LOG_DIR"
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest :app:lintVitalRelease :app:assembleRelease --no-daemon
+          ./gradlew --no-daemon --console=plain --stacktrace :app:testDebugUnitTest 2>&1 \
+            | tee "$LOG_DIR/unit-tests.log"
 
-      - name: Upload APK artifacts
+      - name: Lint (fatal issues only)
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --console=plain --stacktrace :app:lintVitalRelease 2>&1 \
+            | tee "$LOG_DIR/lint.log"
+
+      - name: Build debug variants
+        if: env.BUILD_DEBUG == 'true'
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --console=plain --stacktrace :app:assembleDebug 2>&1 \
+            | tee "$LOG_DIR/assemble-debug.log"
+
+      - name: Build release APKs (every ABI plus universal)
+        run: |
+          set -euo pipefail
+          # No ABI_FILTERS property, so app/build.gradle.kts enables the split
+          # outputs *and* the universal APK: four per-architecture files plus one
+          # that installs anywhere.
+          ./gradlew --no-daemon --console=plain --stacktrace :app:assembleRelease 2>&1 \
+            | tee "$LOG_DIR/assemble-release.log"
+
+      - name: Third-party license report
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --console=plain :app:licenseReleaseReport 2>&1 \
+            | tee "$LOG_DIR/license-report.log" || true
+
+      - name: Collect and verify the release artifacts
+        id: artifacts
+        run: |
+          set -euo pipefail
+          build_tools=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -1)
+          if [ -z "${build_tools:-}" ] || [ ! -x "$build_tools/apksigner" ]; then
+            echo "::error::no apksigner under $ANDROID_HOME/build-tools; the Gradle build did not install a build-tools package"
+            exit 1
+          fi
+          echo "using build-tools: $build_tools"
+          apksigner="$build_tools/apksigner"
+          if command -v "$build_tools/aapt2" > /dev/null; then
+            aapt="$build_tools/aapt2"
+          elif [ -x "$build_tools/aapt" ]; then
+            aapt="$build_tools/aapt"
+          else
+            echo "::error::no aapt/aapt2 in $build_tools; cannot read the APK manifest"
+            exit 1
+          fi
+
+          apk_dir=app/build/outputs/apk/release
+          out="$RELEASE_DIR"
+          rm -rf "$out"
+          mkdir -p "$out"
+          abis="arm64-v8a armeabi-v7a x86_64 x86"
+          fail=0
+
+          for abi in $abis universal; do
+            apk="$apk_dir/ArasClient_${VERSION_NAME}_${abi}.apk"
+            if [ ! -f "$apk" ]; then
+              echo "::error::missing release APK: $apk"
+              fail=1
+              continue
+            fi
+            cp "$apk" "$out/"
+            echo "built $abi: $(stat -c %s "$apk") bytes"
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::not every expected variant was produced (missing files above)"
+            exit 1
+          fi
+
+          echo "### Signature" >> "$GITHUB_STEP_SUMMARY"
+          fingerprints=""
+          for apk in "$out"/*.apk; do
+            if ! info=$("$apksigner" verify --print-certs --verbose "$apk" 2>&1); then
+              echo "::error::$(basename "$apk") fails APK signature verification"
+              echo "$info"
+              fail=1
+              continue
+            fi
+            sha=$(printf '%s' "$info" | sed -nE 's/.*SHA-256 digest: ([0-9a-fA-F]+).*/\1/p' | head -1)
+            dn=$(printf '%s' "$info" | sed -nE "s/.*certificate DN: (.*)/\1/p" | head -1)
+            if printf '%s' "$dn" | grep -qi 'android debug'; then
+              echo "::error::$(basename "$apk") is signed with a debug certificate ($dn)"
+              fail=1
+            fi
+            if [ -z "$sha" ]; then
+              echo "::error::could not read the signing certificate of $(basename "$apk")"
+              fail=1
+            fi
+            echo "$(basename "$apk"): $dn / $sha"
+            fingerprints="${fingerprints}${sha}"$'\n'
+          done
+          signer_count=$(printf '%s' "$fingerprints" | sed '/^$/d' | sort -u | wc -l)
+          if [ "${signer_count:-0}" -ne 1 ]; then
+            echo "::error::the release APKs are not all signed by one certificate (found $signer_count)"
+            fail=1
+          fi
+          signer_sha=$(printf '%s' "$fingerprints" | sed '/^$/d' | head -1)
+          echo "signer_sha256=$signer_sha" >> "$GITHUB_OUTPUT"
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "### Contents" >> "$GITHUB_STEP_SUMMARY"
+          for abi in $abis universal; do
+            apk="$out/ArasClient_${VERSION_NAME}_${abi}.apk"
+            if [ "$abi" = "universal" ]; then
+              inside="$abis"
+            else
+              inside="$abi"
+            fi
+            entries=$(unzip -Z1 "$apk")
+            for one in $inside; do
+              if ! printf '%s\n' "$entries" | grep -qx "lib/$one/libgojni.so"; then
+                echo "::error::$(basename "$apk") has no lib/$one/libgojni.so: the core is missing from that ABI"
+                fail=1
+              fi
+              for lib in libhev-socks5-tunnel.so libhevsockstun.so; do
+                if ! printf '%s\n' "$entries" | grep -qx "lib/$one/$lib"; then
+                  echo "::error::$(basename "$apk") is missing lib/$one/$lib"
+                  fail=1
+                fi
+              done
+              if unzip -o -q "$apk" "lib/$one/libhev-socks5-tunnel.so" -d "$RUNNER_TEMP/apkcheck" 2>/dev/null; then
+                so="$RUNNER_TEMP/apkcheck/lib/$one/libhev-socks5-tunnel.so"
+                if ! grep -a 'com/aras/client/TProxyService' "$so" > /dev/null; then
+                  echo "::error::$(basename "$apk") carries a lib/$one tunnel library bound to the wrong JNI class; connecting would fail"
+                  fail=1
+                fi
+                if grep -a 'com/v2ray/ang' "$so" > /dev/null; then
+                  echo "::error::$(basename "$apk") still references the retired com/v2ray/ang package in lib/$one"
+                  fail=1
+                fi
+              fi
+            done
+            rm -rf "$RUNNER_TEMP/apkcheck"
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::artifact content verification failed"
+            exit 1
+          fi
+
+          # Checksums and the manifest of what this run produced. Written here, in
+          # the same job, so the numbers describe the bytes that are published.
+          : > "$out/SHA256SUMS.txt"
+          echo "### Manifest" >> "$GITHUB_STEP_SUMMARY"
+          for abi in $abis universal; do
+            apk="$out/ArasClient_${VERSION_NAME}_${abi}.apk"
+            badging=$("$aapt" dump badging "$apk" 2>/dev/null || true)
+            package=$(printf '%s' "$badging" | sed -nE "s/^package: name='([^']*)'.*/\1/p" | head -1)
+            version=$(printf '%s' "$badging" | sed -nE "s/.*[[:space:]]versionName='([^']*)'.*/\1/p" | head -1)
+            code=$(printf '%s' "$badging" | sed -nE "s/.*[[:space:]]versionCode='([0-9]+)'.*/\1/p" | head -1)
+            if [ -n "$package" ]; then
+              if [ "$package" != "$APP_PACKAGE" ]; then
+                echo "::error::$abi: applicationId is $package, expected $APP_PACKAGE"
+                fail=1
+              fi
+              if [ "$version" != "$VERSION_NAME" ]; then
+                echo "::error::$abi: versionName is $version, expected $VERSION_NAME"
+                fail=1
+              fi
+              if [ "$abi" = "universal" ] && [ "${code:-0}" != "${VERSION_CODE:-0}" ]; then
+                echo "::error::universal versionCode is $code, expected $VERSION_CODE (the ABI builds use $VERSION_CODE + 1..4 by design)"
+                fail=1
+              fi
+            fi
+            size=$(stat -c %s "$apk")
+            printf '%s  %s\n' "$(sha256sum "$apk" | awk '{print $1}')" "$(basename "$apk")" >> "$out/SHA256SUMS.txt"
+            echo "| \`$(basename "$apk")\` | $size bytes | $code |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::APK metadata verification failed"
+            exit 1
+          fi
+          (cd "$out" && sha256sum -c SHA256SUMS.txt > /dev/null)
+
+          cat > "$out/build-info.json" <<JSON
+          {
+            "versionName": "$VERSION_NAME",
+            "versionCode": $VERSION_CODE,
+            "applicationId": "$APP_PACKAGE",
+            "tag": "${{ needs.preflight.outputs.tag }}",
+            "commit": "${{ github.sha }}",
+            "refName": "${{ github.ref_name }}",
+            "event": "${{ github.event_name }}",
+            "coreRepo": "$XRAY_CORE_REPO",
+            "coreRef": "${{ needs.preflight.outputs.core_ref }}",
+            "bindingsRepo": "$BINDINGS_REPO",
+            "bindingsRef": "${{ needs.preflight.outputs.bindings_ref }}",
+            "go": "$GO_VERSION",
+            "jdk": "$JAVA_VERSION",
+            "ndk": "$NDK_VERSION",
+            "runnerImage": "${{ runner.image_version }}",
+            "signerSha256": "$signer_sha",
+            "runId": "${{ github.run_id }}",
+            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          JSON
+          cat "$out/build-info.json"
+          echo "all release artifacts built and verified"
+
+      - name: Publish release assets
         uses: actions/upload-artifact@v4
         with:
-          name: apks
-          path: app/build/outputs/apk/release/*.apk
+          name: release-assets
+          path: ${{ env.RELEASE_DIR }}
+          if-no-files-found: error
+          retention-days: 14
 
+      - name: Publish debug assets
+        if: env.BUILD_DEBUG == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-assets
+          path: app/build/outputs/apk/debug
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publish build reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            ${{ env.LOG_DIR }}
+            app/build/reports
+            app/build/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ===========================================================================
+  # Publish. The changelog is written from the commits since the previous tag,
+  # the metadata from what this run actually built, and the assets are confirmed
+  # from the release itself rather than from the local directory.
+  # ===========================================================================
   release:
+    name: Publish GitHub release
     runs-on: ubuntu-latest
-    needs: build-app
-    if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 20
+    needs: [preflight, native-libs-audit, build-core, build-app]
+    if: needs.preflight.outputs.is_release == 'true'
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.preflight.outputs.tag }}
+      VERSION_NAME: ${{ needs.preflight.outputs.version_name }}
+      PREV_TAG: ${{ needs.preflight.outputs.prev_tag }}
+      DRY_RUN: ${{ needs.preflight.outputs.dry_run }}
+      PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+      DELTA_PATCHES: ${{ needs.preflight.outputs.delta_patches }}
     steps:
-      - name: Download APKs
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the built assets
         uses: actions/download-artifact@v4
         with:
-          name: apks
-          path: apks
+          name: release-assets
+          path: ${{ env.RELEASE_DIR }}
 
-      - name: Attach to release
-        uses: softprops/action-gh-release@v2
+      - name: List what this run built
+        run: |
+          set -euo pipefail
+          ls -l "$RELEASE_DIR"
+          cat "$RELEASE_DIR/SHA256SUMS.txt"
+
+      - name: Generate delta patches against the previous release
+        if: env.DELTA_PATCHES == 'true'
+        run: |
+          set -euo pipefail
+          # The in-app updater can apply an ARASDLT1 patch instead of re-downloading
+          # a whole APK. Off by default: every published release so far has shipped
+          # plain APKs, and the app falls back to the full download when no patch is
+          # attached.
+          if [ -z "$PREV_TAG" ]; then
+            echo "::warning::no previous tag, so there is nothing to patch from"
+            exit 0
+          fi
+          python3 -m pip install --quiet bsdiff4
+          prev_version="${PREV_TAG#v}"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86 universal; do
+            new="$RELEASE_DIR/ArasClient_${VERSION_NAME}_${abi}.apk"
+            if [ ! -f "$new" ]; then
+              echo "::warning::no $abi APK in this run, skipping its patch"
+              continue
+            fi
+            rm -rf /tmp/old
+            if ! gh release download "$PREV_TAG" -p "ArasClient_${prev_version}_${abi}.apk" -D /tmp/old > /dev/null 2>&1; then
+              echo "::warning::$PREV_TAG has no ArasClient_${prev_version}_${abi}.apk, skipping its patch"
+              continue
+            fi
+            out="$RELEASE_DIR/ArasClient_${VERSION_NAME}_${abi}_from_${prev_version}.patch"
+            python3 tools/make_delta_patch.py "/tmp/old/ArasClient_${prev_version}_${abi}.apk" "$new" "$out"
+            printf '%s  %s\n' "$(sha256sum "$out" | awk '{print $1}')" "$(basename "$out")" >> "$RELEASE_DIR/SHA256SUMS.txt"
+          done
+
+      - name: Write the release notes
+        env:
+          CORE_REF: ${{ needs.preflight.outputs.core_ref }}
+          BINDINGS_REF: ${{ needs.preflight.outputs.bindings_ref }}
+          VERSION_CODE: ${{ needs.preflight.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          signer=$(python3 -c "import json;print(json.load(open('$RELEASE_DIR/build-info.json'))['signerSha256'])")
+          {
+            echo "# ArasClient $VERSION_NAME"
+            echo
+            echo "These APKs were compiled and signed by this workflow run, from the"
+            echo "pinned sources — not copied off a developer machine. Take the file"
+            echo "that matches your phone; the universal build installs anywhere and is"
+            echo "the largest."
+            echo
+            echo "## What changed"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "Since \`$PREV_TAG\`:"
+              echo
+              git log --no-merges --pretty=format:'- %s (`%h`)' "$PREV_TAG..HEAD"
+              echo
+            else
+              echo "Recent history:"
+              echo
+              git log --no-merges -n 40 --pretty=format:'- %s (`%h`)'
+              echo
+            fi
+            echo
+            echo "## Install"
+            echo
+            echo "1. Download the APK for your architecture (\`arm64-v8a\` fits most modern phones)."
+            echo "2. Allow installs from unknown sources for the app you downloaded with."
+            echo "3. Install. An existing ArasClient is upgraded in place: the signing key has not changed."
+            echo
+            echo "The in-app updater downloads these same files, so a release without"
+            echo "its assets leaves people on the old version until they are attached."
+            echo
+            echo "## Build information"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| versionName | \`$VERSION_NAME\` |"
+            echo "| versionCode | \`$VERSION_CODE\` (per-ABI builds use +1..+4) |"
+            echo "| commit | \`${{ github.sha }}\` |"
+            echo "| xray core | \`$XRAY_CORE_REPO@$CORE_REF\` |"
+            echo "| core bindings | \`$BINDINGS_REPO@$BINDINGS_REF\` |"
+            echo "| Go / JDK / NDK | \`$GO_VERSION\` / \`$JAVA_VERSION\` / \`$NDK_VERSION\` |"
+            echo "| signing certificate | \`$signer\` |"
+            echo "| build run | [$GITHUB_RUN_ID](${{ github.server_url }}/${{ github.repository }}/actions/runs/$GITHUB_RUN_ID) |"
+            echo
+            echo "## Checksums"
+            echo
+            echo '```'
+            cat "$RELEASE_DIR/SHA256SUMS.txt"
+            echo '```'
+          } > release-notes.md
+          cp release-notes.md "$RELEASE_DIR/release-notes.md"
+          cat release-notes.md
+
+      - name: Publish
+        if: env.DRY_RUN != 'true'
+        run: |
+          set -euo pipefail
+          flags=(--target "${{ github.sha }}" --title "ArasClient $VERSION_NAME" --notes-file release-notes.md)
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # Re-running a release must not duplicate it: edit and clobber in place.
+            gh release edit "$TAG" --notes-file release-notes.md --prerelease="$PRERELEASE" || true
+            gh release upload "$TAG" "$RELEASE_DIR"/* --clobber
+          else
+            gh release create "$TAG" "${flags[@]}" "$RELEASE_DIR"/*
+          fi
+          echo "released $TAG from ${{ github.sha }}"
+
+      - name: Confirm the published assets
+        if: env.DRY_RUN != 'true'
+        run: |
+          set -euo pipefail
+          expected=$(find "$RELEASE_DIR" -maxdepth 1 -type f | wc -l)
+          attempt=0
+          actual=0
+          while [ "$attempt" -lt 12 ]; do
+            actual=$(gh release view "$TAG" --json assets --jq '.assets | length' 2>/dev/null || echo 0)
+            if [ "${actual:-0}" -ge "$expected" ]; then
+              break
+            fi
+            echo "waiting for the assets to attach: $actual of $expected"
+            attempt=$((attempt + 1))
+            sleep 15
+          done
+          if [ "${actual:-0}" -lt "$expected" ]; then
+            echo "::error::the release was created with $actual of $expected assets attached"
+            exit 1
+          fi
+          gh release view "$TAG" --json name,tagName,isPrerelease,url,assets --jq '"\(.tagName)  prerelease=\(.isPrerelease)  \(.url)\n" + (.assets[] | "  \(.name)  \(.size) bytes")'
+
+      - name: Summary
+        run: |
+          {
+            echo "## Release $TAG"
+            echo
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "Dry run: everything built and verified, nothing published."
+            else
+              echo "- [$VERSION_NAME](${{ github.server_url }}/${{ github.repository }}/releases/tag/$TAG) published from run \`$GITHUB_RUN_ID\`"
+            fi
+            echo "- assets: $(find "$RELEASE_DIR" -maxdepth 1 -type f -printf '%f ' )"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # Failure path: name the job that broke and quote the part of the log that
+  # says why, instead of leaving the reader to dig through a green-labelled DAG.
+  # ===========================================================================
+  diagnose:
+    name: Failure diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [preflight, native-libs-audit, build-core, build-app, release]
+    if: failure()
+    steps:
+      - name: Fetch the build reports
+        uses: actions/download-artifact@v4
         with:
-          files: apks/*.apk
+          name: build-reports
+          path: failure-reports
+        continue-on-error: true
+
+      - name: Summarise what broke
+        run: |
+          set -euo pipefail
+          {
+            echo "## The pipeline did not finish"
+            echo
+            echo "| job | outcome |"
+            echo "|---|---|"
+            echo "| preflight | \`${{ needs.preflight.result }}\` |"
+            echo "| native-libs-audit | \`${{ needs.native-libs-audit.result }}\` |"
+            echo "| build-core | \`${{ needs.build-core.result }}\` |"
+            echo "| build-app | \`${{ needs.build-app.result }}\` |"
+            echo "| release | \`${{ needs.release.result }}\` |"
+            echo
+            echo "Nothing was published. Full logs:"
+            echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+          found=0
+          for log in $(find failure-reports -name '*.log' -type f 2>/dev/null | sort); do
+            if grep -qE 'BUILD FAILED|FAILURE:|^e: |error:|::error::' "$log"; then
+              found=1
+              echo
+              echo "===== ${log##*/} ====="
+              # The lines around the first real error, not the whole transcript:
+              # "What went wrong" is the section Gradle writes for exactly this.
+              grep -nE -B 2 -A 12 'What went wrong|BUILD FAILED|^e: |error:|::error::' "$log" | head -120
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No Gradle log was published, so the failure is in the job steps"
+            echo "themselves — open the run link above and look at the first red step."
+          fi

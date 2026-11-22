@@ -157,7 +157,7 @@ class ServerAetherActivity : BaseServerActivity() {
                     ) { fingerprintEntries.first() },
                     options = fingerprintEntries,
                     onValueChange = { picked ->
-                        fingerprintValues.indexOf(picked).takeIf { it >= 0 }
+                        fingerprintEntries.indexOf(picked).takeIf { it >= 0 }
                             ?.let { uiState.aetherFingerprint = fingerprintValues[it] }
                     },
                 )

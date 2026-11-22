@@ -177,7 +177,6 @@
     <string name="title_pref_is_booted">চালুর সময় স্বয়ংক্রিয় সংযোগ</string>
     <string name="summary_pref_is_booted">চালুর সময় নির্বাচিত সার্ভারে স্বয়ংক্রিয়ভাবে সংযোগ করে; সংযোগ ব্যর্থ হতে পারে</string>
 
-
     <string name="subscription_updater_job_tips">কাজটি ব্যাকগ্রাউন্ডে চলবে এবং অগ্রগতির তথ্য বিজ্ঞপ্তিতে দেখানো হবে।</string>
     <string name="title_pref_auto_test_after_update_subscription">সাবস্ক্রিপশন আপডেটের পর স্বয়ংক্রিয় পরীক্ষা</string>
     <string name="summary_pref_auto_test_after_update_subscription">স্বয়ংক্রিয় পরীক্ষায় অনেক সময় লাগে। চালু থাকলে কাজটি ব্যাকগ্রাউন্ডে চলবে; অন্যথায় বর্তমান পৃষ্ঠায় চলবে।</string>
@@ -228,7 +227,6 @@
 
     <string name="title_pref_vpn_mtu">VPN MTU (ডিফল্ট 1500)</string>
 
-
     <string name="title_pref_domestic_dns">সরাসরি DNS (ঐচ্ছিক)</string>
     <string name="summary_pref_domestic_dns" translatable="false">DNS</string>
 
@@ -265,12 +263,8 @@
     <string name="title_pref_confirm_remove">কনফিগারেশন ফাইল মুছে ফেলার নিশ্চিতকরণ</string>
     <string name="summary_pref_confirm_remove">কনফিগারেশন ফাইল মুছে ফেলার জন্য ব্যবহারকারীর দ্বিতীয় নিশ্চিতকরণের প্রয়োজন</string>
 
-
     <string name="title_pref_append_http_proxy">VPN-এ HTTP প্রক্সি যুক্ত করুন</string>
     <string name="summary_pref_append_http_proxy">ভার্চুয়াল NIC ডিভাইসের মধ্য দিয়ে না গিয়ে ব্রাউজার ও কিছু সমর্থিত অ্যাপ সরাসরি HTTP প্রক্সি ব্যবহার করবে (Android 10+)</string>
-
-    <string name="title_pref_double_column_display">দুই কলামে প্রদর্শন চালু করুন</string>
-    <string name="summary_pref_double_column_display">প্রোফাইল তালিকা দুই কলামে দেখায়, ফলে পর্দায় আরও বিষয়বস্তু দেখা যায়।</string>
 
     <string name="title_pref_group_all_display">“সব” গ্রুপ ট্যাব দেখান</string>
     <string name="summary_pref_group_all_display">সব সাবস্ক্রিপশন গ্রুপের কনফিগ একটি ট্যাবে দেখান।</string>
@@ -300,9 +294,6 @@
     <string name="title_mode_help">আরো সাহায্যের জন্য ক্লিক করুন</string>
     <string name="title_language">ভাষা</string>
     <string name="title_ui_settings">ইউআই সেটিংস</string>
-    <string name="title_pref_ui_mode_night">ইউআই মোড সেটিংস</string>
-    <string name="title_pref_dynamic_color">ডায়নামিক রঙ চালু করুন</string>
-    <string name="summary_pref_dynamic_color">শুধুমাত্র Android 12+ ডিভাইসে কাজ করে</string>
     <string name="title_pref_use_hev_tunnel">Hev TUN সুবিধা চালু করুন</string>
     <string name="summary_pref_use_hev_tunnel">চালু থাকলে TUN hev-socks5-tunnel ব্যবহার করবে; অন্যথায় xray-core ব্যবহার করবে।</string>
     <string name="title_pref_hev_tunnel_loglevel">Hev TUN লগ স্তর</string>
@@ -472,12 +463,6 @@
         <item>নিষ্ক্রিয়</item>
         <item>OkHttp</item>
         <item>WebView</item>
-    </string-array>
-
-    <string-array name="ui_mode_night">
-        <item>সিস্টেম অনুসরণ করুন</item>
-        <item>লাইট</item>
-        <item>ডার্ক</item>
     </string-array>
 
     <string name="routing_preset_china_whitelist">চায়না হোয়াইটলিস্ট</string>

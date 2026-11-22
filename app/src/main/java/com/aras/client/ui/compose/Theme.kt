@@ -2,7 +2,6 @@ package com.aras.client.ui.compose
 
 import android.app.Activity
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -129,36 +128,58 @@ val toastInfoBg = Color(0xB33F51B5) // Indigo Blue
 val toastIconCircleBg = Color(0x33FFFFFF) // Semi-transparent White
 val toastTextColor = Color.White // White
 
-object ThemeManager {
-    private val _themeMode = MutableStateFlow(
-        MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT, "0") ?: "0"
-    )
-    val themeMode: StateFlow<String> = _themeMode.asStateFlow()
+// The app owns its theme outright: four fixed choices, never derived from the
+// device's light/dark or Material You settings. Dark Dynamic is the default for
+// everyone, on every launch.
+enum class AppThemeMode(val code: String) {
+    DARK_DYNAMIC("dark_dynamic"),
+    DARK_NORMAL("dark_normal"),
+    LIGHT_DYNAMIC("light_dynamic"),
+    LIGHT_NORMAL("light_normal");
 
-    private val _dynamicColorEnabled = MutableStateFlow(
-        MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, false)
-    )
-    val dynamicColorEnabled: StateFlow<Boolean> = _dynamicColorEnabled.asStateFlow()
+    val isDark: Boolean get() = this == DARK_DYNAMIC || this == DARK_NORMAL
+    val isDynamic: Boolean get() = this == DARK_DYNAMIC || this == LIGHT_DYNAMIC
 
-    fun setThemeMode(mode: String) {
-        MmkvManager.encodeSettings(AppConfig.PREF_UI_MODE_NIGHT, mode)
-        _themeMode.value = mode
-    }
-
-    fun setDynamicColorEnabled(enabled: Boolean) {
-        MmkvManager.encodeSettings(AppConfig.PREF_DYNAMIC_COLOR, enabled)
-        _dynamicColorEnabled.value = enabled
-    }
-
-    fun refresh() {
-        _themeMode.value =
-            MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT, "0") ?: "0"
-        _dynamicColorEnabled.value =
-            MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, false)
+    companion object {
+        fun fromCode(code: String?): AppThemeMode =
+            entries.firstOrNull { it.code == code } ?: DARK_DYNAMIC
     }
 }
 
+object ThemeManager {
+    private fun readTheme(): AppThemeMode = AppThemeMode.fromCode(
+        MmkvManager.decodeSettingsString(AppConfig.PREF_APP_THEME, AppThemeMode.DARK_DYNAMIC.code)
+    )
+
+    private val _theme = MutableStateFlow(readTheme())
+    val theme: StateFlow<AppThemeMode> = _theme.asStateFlow()
+
+    fun setTheme(mode: AppThemeMode) {
+        MmkvManager.encodeSettings(AppConfig.PREF_APP_THEME, mode.code)
+        _theme.value = mode
+    }
+
+    fun refresh() {
+        _theme.value = readTheme()
+    }
+}
+
+// Latin/English UI text (and the forced Latin digits) uses Inter
+// (github.com/rsms/inter, v4.1, OFL-1.1). Persian text uses Dastkhat
+// (github.com/dastyar-io/dastkhat-font, OFL-1.1). Compose resolves a FontFamily
+// per glyph in list order, so putting Inter first means it wins for every Latin
+// glyph it carries while Persian glyphs — which Inter lacks — fall through to
+// Dastkhat. Vazirmatn stays last as the per-weight fallback for any rare glyph
+// neither Inter nor Dastkhat carries, so nothing renders as tofu.
 private val AppFontFamily = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+    Font(R.font.dastkhat_regular, FontWeight.Normal),
+    Font(R.font.dastkhat_medium, FontWeight.Medium),
+    Font(R.font.dastkhat_semibold, FontWeight.SemiBold),
+    Font(R.font.dastkhat_bold, FontWeight.Bold),
     Font(R.font.vazirmatn_regular, FontWeight.Normal),
     Font(R.font.vazirmatn_medium, FontWeight.Medium),
     Font(R.font.vazirmatn_semibold, FontWeight.SemiBold),
@@ -187,25 +208,23 @@ val AppTypography = Typography(
 
 @Composable
 fun resolveDarkTheme(): Boolean {
-    val mode by ThemeManager.themeMode.collectAsState()
-    return when (mode) {
-        "1" -> false
-        "2" -> true
-        else -> isSystemInDarkTheme()
-    }
+    val mode by ThemeManager.theme.collectAsState()
+    return mode.isDark
 }
 
 val LocalDarkTheme = compositionLocalOf { false }
 
 @Composable
 fun AppTheme(
-    darkTheme: Boolean = resolveDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val dynamicColor by ThemeManager.dynamicColorEnabled.collectAsState()
+    val mode by ThemeManager.theme.collectAsState()
+    val darkTheme = mode.isDark
     val context = LocalContext.current
+    // Dynamic needs Android 12+; on anything older a dynamic choice silently
+    // falls back to the fixed Aras palette for its light/dark half.
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        mode.isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
 

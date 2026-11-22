@@ -18,8 +18,7 @@ object SettingsChangeManager {
         AppConfig.PREF_DOUBLE_COLUMN_DISPLAY,
         AppConfig.PREF_GROUP_ALL_DISPLAY,
         AppConfig.PREF_LANGUAGE,
-        AppConfig.PREF_UI_MODE_NIGHT,
-        AppConfig.PREF_DYNAMIC_COLOR,
+        AppConfig.PREF_APP_THEME,
         AppConfig.PREF_IS_BOOTED,
         // What the subscription panels' headers render on screen: pure display.
         AppConfig.PREF_SHOW_SUB_INFO,

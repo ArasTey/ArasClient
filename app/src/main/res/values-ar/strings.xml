@@ -189,7 +189,6 @@
     <string name="title_pref_is_booted">الاتصال تلقائياً عند بدء التشغيل</string>
     <string name="summary_pref_is_booted">الاتصال تلقائياً بالخادم المحدد عند بدء التشغيل؛ قد لا تنجح المحاولة</string>
 
-
     <string name="subscription_updater_job_tips">ستعمل المهمة في الخلفية، وسيُعرض تقدمها في الإشعار.</string>
     <string name="title_pref_auto_test_after_update_subscription">اختبار تلقائي بعد تحديث الاشتراك</string>
     <string name="summary_pref_auto_test_after_update_subscription">يستغرق الاختبار التلقائي وقتاً طويلاً. عند تمكينه، ستعمل المهمة في الخلفية؛ وإلا فستعمل في الصفحة الحالية.</string>
@@ -240,7 +239,6 @@
 
     <string name="title_pref_vpn_mtu">قيمة MTU لشبكة VPN (الافتراضي 1500)</string>
 
-
     <string name="title_pref_domestic_dns">DNS المباشر (اختياري)</string>
     <string name="summary_pref_domestic_dns" translatable="false">DNS</string>
 
@@ -277,12 +275,8 @@
     <string name="title_pref_confirm_remove">تأكيد حذف ملف التكوين</string>
     <string name="summary_pref_confirm_remove">ما إذا كان حذف ملف التكوين يتطلب تأكيدًا ثانيًا من قبل المستخدم</string>
 
-
     <string name="title_pref_append_http_proxy">إضافة وكيل HTTP إلى شبكة VPN</string>
     <string name="summary_pref_append_http_proxy">سيُستخدم وكيل HTTP مباشرةً من المتصفح وبعض التطبيقات المدعومة من دون المرور بواجهة NIC الافتراضية (Android 10+)</string>
-
-    <string name="title_pref_double_column_display">تمكين العرض بعمودين</string>
-    <string name="summary_pref_double_column_display">عرض قائمة التكوينات في عمودين لإظهار محتوى أكبر على الشاشة.</string>
 
     <string name="title_pref_group_all_display">إظهار علامة تبويب «الكل»</string>
     <string name="summary_pref_group_all_display">جمع تكوينات جميع مجموعات الاشتراك في علامة تبويب واحدة.</string>
@@ -312,9 +306,6 @@
     <string name="title_mode_help">انقر هنا للحصول على مزيد من المساعدة</string>
     <string name="title_language">اللغة</string>
     <string name="title_ui_settings">إعدادات واجهة المستخدم</string>
-    <string name="title_pref_ui_mode_night">إعدادات وضع واجهة المستخدم ليلاً</string>
-    <string name="title_pref_dynamic_color">تفعيل الألوان الديناميكية</string>
-    <string name="summary_pref_dynamic_color">يعمل فقط على أندرويد 12+</string>
     <string name="title_pref_show_free_sub">إظهار مجموعة الاشتراك المجاني</string>
     <string name="summary_pref_show_free_sub">إظهار تبويب مجموعة «المجاني» على الشاشة الرئيسية. إيقافه يخفي التبويبات فقط ويبقي الإعدادات تتحدث.</string>
     <string name="title_pref_use_hev_tunnel">تمكين ميزة Hev TUN</string>
@@ -515,12 +506,6 @@
         <item>تعطيل</item>
         <item>OkHttp</item>
         <item>WebView</item>
-    </string-array>
-
-    <string-array name="ui_mode_night">
-        <item>اتبع النظام</item>
-        <item>فاتح</item>
-        <item>داكن</item>
     </string-array>
 
     <string name="routing_preset_china_whitelist">القائمة البيضاء للصين</string>

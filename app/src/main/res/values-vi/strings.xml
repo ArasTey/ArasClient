@@ -177,7 +177,6 @@
     <string name="title_pref_is_booted">Tự động kết nối khi khởi động</string>
     <string name="summary_pref_is_booted">Tự động kết nối với máy chủ đã chọn khi khởi động; thao tác này có thể không thành công</string>
 
-
     <string name="subscription_updater_job_tips">Tác vụ sẽ chạy trong nền và thông tin tiến độ sẽ hiển thị trong thông báo.</string>
     <string name="title_pref_auto_test_after_update_subscription">Tự động kiểm tra sau khi cập nhật đăng ký</string>
     <string name="summary_pref_auto_test_after_update_subscription">Quá trình kiểm tra tự động mất nhiều thời gian. Nếu bật, tác vụ sẽ chạy trong nền; nếu không, tác vụ sẽ chạy trên trang hiện tại.</string>
@@ -228,7 +227,6 @@
 
     <string name="title_pref_vpn_mtu">VPN MTU (mặc định 1500)</string>
 
-
     <string name="title_pref_domestic_dns">DNS cho kết nối trực tiếp (không bắt buộc)</string>
     <string name="summary_pref_domestic_dns" translatable="false">DNS</string>
 
@@ -265,12 +263,8 @@
     <string name="title_pref_confirm_remove">Xác nhận xóa tệp cấu hình</string>
     <string name="summary_pref_confirm_remove">Yêu cầu xác nhận từ người dùng khi thực hiện xóa tệp cấu hình.</string>
 
-
     <string name="title_pref_append_http_proxy">Thêm proxy HTTP vào VPN</string>
     <string name="summary_pref_append_http_proxy">Proxy HTTP sẽ được trình duyệt hoặc một số ứng dụng hỗ trợ dùng trực tiếp mà không đi qua thiết bị NIC ảo (Android 10+)</string>
-
-    <string name="title_pref_double_column_display">Bật hiển thị hai cột</string>
-    <string name="summary_pref_double_column_display">Danh sách hồ sơ được hiển thị thành hai cột để màn hình chứa được nhiều nội dung hơn.</string>
 
     <string name="title_pref_group_all_display">Hiển thị thẻ nhóm “Tất cả”</string>
     <string name="summary_pref_group_all_display">Gộp cấu hình từ mọi nhóm đăng ký vào một thẻ.</string>
@@ -300,9 +294,6 @@
     <string name="title_mode_help">Nhấn vào đây nếu bạn cần trợ giúp!</string>
     <string name="title_language">Ngôn ngữ</string>
     <string name="title_ui_settings">Cài đặt UI</string>
-    <string name="title_pref_ui_mode_night">Cài đặt chế độ UI</string>
-    <string name="title_pref_dynamic_color">Bật màu động</string>
-    <string name="summary_pref_dynamic_color">Chỉ hoạt động trên Android 12+</string>
     <string name="title_pref_use_hev_tunnel">Dùng Hev TUN</string>
     <string name="summary_pref_use_hev_tunnel">Khi bật, TUN sẽ dùng hev-socks5-tunnel; nếu không, TUN sẽ dùng xray-core.</string>
     <string name="title_pref_hev_tunnel_loglevel">Mức nhật ký Hev TUN</string>
@@ -472,12 +463,6 @@
         <item>Tắt</item>
         <item>OkHttp</item>
         <item>WebView</item>
-    </string-array>
-
-    <string-array name="ui_mode_night">
-        <item>Theo hệ thống</item>
-        <item>Sáng</item>
-        <item>Tối</item>
     </string-array>
 
     <string name="routing_preset_china_whitelist">Danh sách trắng Trung Quốc</string>

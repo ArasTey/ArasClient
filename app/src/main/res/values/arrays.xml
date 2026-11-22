@@ -284,10 +284,11 @@
         <item>skip</item>
     </string-array>
 
-    <string-array name="ui_mode_night_value" translatable="false">
-        <item>0</item>
-        <item>1</item>
-        <item>2</item>
+    <string-array name="app_theme_value" translatable="false">
+        <item>dark_dynamic</item>
+        <item>dark_normal</item>
+        <item>light_dynamic</item>
+        <item>light_normal</item>
     </string-array>
 
     <string-array name="outbound_tag" translatable="false">

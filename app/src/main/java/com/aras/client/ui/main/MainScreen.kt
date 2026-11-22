@@ -2,6 +2,7 @@ package com.aras.client.ui.main
 
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -31,8 +33,10 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.aras.client.AppConfig
 import com.aras.client.dto.entities.ProfileItem
 import com.aras.client.R
+import com.aras.client.handler.MmkvManager
 import com.aras.client.ui.compose.LocalAppSnackbar
 import com.aras.client.ui.compose.QRCodeDialog
 import com.aras.client.ui.compose.ToastType
@@ -252,7 +256,10 @@ fun MainScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = innerPadding.calculateTopPadding())
+                        .padding(
+                            top = innerPadding.calculateTopPadding(),
+                            bottom = innerPadding.calculateBottomPadding()
+                        )
                 ) {
                     updateAnnouncement?.let { announcement ->
                         UpdateAnnouncementBanner(
@@ -312,6 +319,8 @@ fun MainScreen(
                             else { -> mainViewModel.importConfigViaSub(group.id) },
                             onPingSubscription = if (group.id.isEmpty()) null
                             else { { onAction(MainAction.PingSelectedSubscription) } },
+                            onCancelPingSubscription = if (group.id.isEmpty()) null
+                            else { { onAction(MainAction.CancelTesting) } },
                             onSortSubscription = if (group.id.isEmpty()) null
                             else { { onAction(MainAction.SortSubscriptionByTestResults(group.id)) } },
                             onRemoveSubscription = if (group.id.isEmpty() ||
@@ -324,7 +333,10 @@ fun MainScreen(
                                 start = 12.dp,
                                 top = 4.dp,
                                 end = 12.dp,
-                                bottom = 120.dp
+                                // The list viewport is already clipped above the floating bar,
+                                // so only a small gap is needed here — the last card stops short
+                                // of the bar instead of sliding under it.
+                                bottom = 8.dp
                             )
                         )
                     }

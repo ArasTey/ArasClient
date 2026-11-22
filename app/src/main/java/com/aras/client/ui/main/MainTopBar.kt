@@ -179,7 +179,8 @@ fun MainTopBar(
                         contentDescription = stringResource(R.string.acc_add),
                         tint = ink.copy(alpha = 0.72f),
                         glyphSize = 18.dp,
-                        modifier = Modifier.onGloballyPositioned { importAnchor = anchorOf(it) },
+                        modifier = Modifier
+                            .onGloballyPositioned { importAnchor = anchorOf(it) },
                         onClick = { showImportMenu = true }
                     )
                     TopBarGlyph(

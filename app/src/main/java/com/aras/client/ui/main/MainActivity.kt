@@ -65,6 +65,7 @@ import com.aras.client.ui.server.ServerVlessActivity
 import com.aras.client.ui.server.ServerVmessActivity
 import com.aras.client.ui.server.ServerWireguardActivity
 import com.aras.client.ui.settings.SettingsActivity
+import com.aras.client.ui.settings.ThemeActivity
 import com.aras.client.ui.subscription.SubSettingActivity
 import com.aras.client.ui.subscription.SubscriptionEditorResult
 import com.aras.client.ui.userasset.UserAssetActivity
@@ -373,6 +374,7 @@ class MainActivity : HelperBaseComponentActivity() {
             MainDestination.Routing -> Intent(this, RoutingSettingActivity::class.java)
             MainDestination.UserAssets -> Intent(this, UserAssetActivity::class.java)
             MainDestination.Settings -> Intent(this, SettingsActivity::class.java)
+            MainDestination.Theme -> Intent(this, ThemeActivity::class.java)
             MainDestination.Logcat -> Intent(this, LogcatActivity::class.java)
             MainDestination.CheckUpdate -> Intent(this, CheckUpdateActivity::class.java)
             MainDestination.BackupRestore -> Intent(this, BackupActivity::class.java)
