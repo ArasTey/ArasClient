@@ -1095,6 +1095,30 @@ jobs:
         run: |
           set -euo pipefail
           signer=$(python3 -c "import json;print(json.load(open('$RELEASE_DIR/build-info.json'))['signerSha256'])")
+          # A git log is not a changelog — CI commits would bury the user-facing
+          # changes. When CHANGELOG.md carries a section for this version it is
+          # printed as-is; the git log is only the fallback.
+          section=""
+          if [ -f CHANGELOG.md ]; then
+            section=$(awk -v ver="$VERSION_NAME" '
+              BEGIN { found = 0 }
+              !found {
+                if (match($0, /^#+/)) {
+                  level = RLENGTH
+                  rest = substr($0, RLENGTH + 1)
+                  gsub(/^[[:space:]]+|[[:space:]]+$/, "", rest)
+                  gsub(/^\[|\]$/, "", rest)
+                  sub(/^v/, "", rest)
+                  if (rest == ver) { found = 1; hlevel = level }
+                }
+                next
+              }
+              {
+                if (match($0, /^#+/) && RLENGTH <= hlevel) exit
+                if (skip && $0 == "") { skip = 0; next }
+                print
+              }' CHANGELOG.md)
+          fi
           {
             echo "# ArasClient $VERSION_NAME"
             echo
@@ -1105,7 +1129,14 @@ jobs:
             echo
             echo "## What changed"
             echo
-            if [ -n "$PREV_TAG" ]; then
+            if [ -n "$section" ]; then
+              if [ -n "$PREV_TAG" ]; then
+                echo "Since \`$PREV_TAG\`:"
+                echo
+              fi
+              printf '%s\n' "$section"
+              echo
+            elif [ -n "$PREV_TAG" ]; then
               echo "Since \`$PREV_TAG\`:"
               echo
               git log --no-merges --pretty=format:'- %s (`%h`)' "$PREV_TAG..HEAD"
