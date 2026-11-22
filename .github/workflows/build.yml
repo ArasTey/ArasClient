@@ -228,8 +228,15 @@ jobs:
               return 0
             fi
             if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "ok (commit): $repo@$ref"
-              return 0
+              # ls-remote never lists bare commits, so ask the API whether the
+              # object exists; otherwise the failure surfaces at core checkout,
+              # after the toolchain is already installed.
+              if code=$(curl -fsSL -o /dev/null -w '%{http_code}' "https://api.github.com/repos/$repo/commits/$ref") && [ "$code" = "200" ]; then
+                echo "ok (commit): $repo@$ref"
+                return 0
+              fi
+              echo "::error::$repo has no commit $ref"
+              exit 1
             fi
             echo "::error::$repo has no tag or branch named '$ref'. Publish it (git tag -a \"$ref\" && git push --tags) or fix the pin in this workflow's env block."
             exit 1
@@ -473,16 +480,18 @@ jobs:
           restore-keys: |
             go-${{ runner.os }}-${{ env.GO_VERSION }}-
 
-      - name: Restore the cached Android NDK
+      - name: Restore the cached Android SDK
         uses: actions/cache/restore@v4
-        id: ndk_cache
+        id: sdk_cache
         with:
           path: ${{ env.SDK_HOME }}
+          # The key names every component that lives in this directory: an SDK
+          # cached before the platform was installed must not be reused.
           key: >-
-            ndk-${{ runner.os }}-${{ env.NDK_VERSION }}
+            android-sdk-${{ runner.os }}-${{ env.SDK_TOOLS_ZIP }}-${{ env.NDK_VERSION }}-${{ env.CORE_ANDROID_API }}
 
-      - name: Install the Android NDK
-        if: steps.core_cache.outputs.cache-hit != 'true' && steps.ndk_cache.outputs.cache-hit != 'true'
+      - name: Install the Android SDK and NDK
+        if: steps.core_cache.outputs.cache-hit != 'true' && steps.sdk_cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           mkdir -p "$SDK_HOME/cmdline-tools"
@@ -490,17 +499,28 @@ jobs:
           unzip -q -o /tmp/cmdline-tools.zip -d "$SDK_HOME/cmdline-tools"
           rm -rf "$SDK_HOME/cmdline-tools/latest"
           mv "$SDK_HOME/cmdline-tools/cmdline-tools" "$SDK_HOME/cmdline-tools/latest"
+          export ANDROID_HOME="$SDK_HOME"
+          export ANDROID_SDK_ROOT="$SDK_HOME"
           sdkmanager="$SDK_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
-          "$sdkmanager" --install "ndk;${NDK_VERSION}" > /dev/null
+          yes | "$sdkmanager" --sdk_root="$SDK_HOME" --licenses > /dev/null 2>&1 || true
+          # gomobile bind resolves $ANDROID_HOME/platforms/android-N *before* it
+          # compiles anything. Installing only the NDK is not enough — that exact
+          # gap failed run 45038317697 with "failed to find android SDK platform".
+          "$sdkmanager" --sdk_root="$SDK_HOME" --install \
+            "platform-tools" \
+            "platforms;android-${CORE_ANDROID_API}" \
+            "ndk;${NDK_VERSION}" > /dev/null
+          test -d "$SDK_HOME/platforms/android-${CORE_ANDROID_API}"
+          test -d "$SDK_HOME/ndk/$NDK_VERSION"
+          ls "$SDK_HOME/platforms"
 
-      - name: Save the Android NDK cache
-        if: steps.ndk_cache.outputs.cache-hit != 'true' && steps.core_cache.outputs.cache-hit != 'true'
+      - name: Save the Android SDK cache
+        if: steps.sdk_cache.outputs.cache-hit != 'true' && steps.core_cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ env.SDK_HOME }}
           key: >-
-            ndk-${{ runner.os }}-${{ env.NDK_VERSION }}
+            android-sdk-${{ runner.os }}-${{ env.SDK_TOOLS_ZIP }}-${{ env.NDK_VERSION }}-${{ env.CORE_ANDROID_API }}
 
       - name: Set up gomobile
         if: steps.core_cache.outputs.cache-hit != 'true'
@@ -634,6 +654,7 @@ jobs:
       VERSION_NAME: ${{ needs.preflight.outputs.version_name }}
       VERSION_CODE: ${{ needs.preflight.outputs.version_code }}
       BUILD_DEBUG: ${{ needs.preflight.outputs.build_debug }}
+      IS_RELEASE: ${{ needs.preflight.outputs.is_release }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -705,6 +726,7 @@ jobs:
           ls -l app/libs/aras-core.aar
 
       - name: Restore the signing key
+        id: signing
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -712,9 +734,17 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          # Fork pull requests do not receive repository secrets. A release run
+          # must hard-fail without the key; any other run degrades to
+          # debug-only builds so external contributors still get CI.
           if [ -z "$KEYSTORE_B64" ]; then
-            echo "::error::the KEYSTORE_B64 secret is not set. A release APK cannot be built unsigned, and a debug-signed one cannot upgrade an installed release."
-            exit 1
+            if [ "$IS_RELEASE" = "true" ]; then
+              echo "::error::the KEYSTORE_B64 secret is not set. A release APK cannot be built unsigned, and a debug-signed one cannot upgrade an installed release."
+              exit 1
+            fi
+            echo "::warning::no signing key available (fork pull request); building debug variants only"
+            echo "has_signing=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           mkdir -p keystore
           printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/arasclient-release.jks
@@ -726,6 +756,7 @@ jobs:
           EOF
           # keystore/ and keystore.properties are gitignored; preflight proved they
           # are not tracked, so nothing here can leak into the repository.
+          echo "has_signing=true" >> "$GITHUB_OUTPUT"
 
       - name: Unit tests
         run: |
@@ -749,6 +780,7 @@ jobs:
             | tee "$LOG_DIR/assemble-debug.log"
 
       - name: Build release APKs (every ABI plus universal)
+        if: steps.signing.outputs.has_signing == 'true'
         run: |
           set -euo pipefail
           # No ABI_FILTERS property, so app/build.gradle.kts enables the split
@@ -765,6 +797,7 @@ jobs:
 
       - name: Collect and verify the release artifacts
         id: artifacts
+        if: steps.signing.outputs.has_signing == 'true'
         run: |
           set -euo pipefail
           build_tools=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -1)
@@ -937,6 +970,7 @@ jobs:
           echo "all release artifacts built and verified"
 
       - name: Publish release assets
+        if: steps.signing.outputs.has_signing == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-assets
